@@ -1,0 +1,8 @@
+spring:
+  datasource:
+    hikari:
+      # Mỗi @Transactional giữ 1 connection suốt vòng đời giao dịch - pool phải
+      # đủ lớn hơn số luồng đồng thời dùng trong test concurrency, nếu không
+      # một số luồng sẽ phải xếp hàng chờ connection thay vì thật sự chạy đua
+      # ở tầng DB, khiến test không còn phản ánh đúng race condition cần kiểm chứng.
+      maximum-pool-size: 20

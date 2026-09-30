@@ -1,0 +1,100 @@
+spring:
+  application:
+    name: kanji-mastery-backend
+
+  datasource:
+    # Cổng 5433 vì máy dev có sẵn PostgreSQL native chiếm cổng 5432 mặc định.
+    url: jdbc:postgresql://localhost:5433/kanji_mastery_db
+    username: kanji_user
+    password: kanji_password
+    hikari:
+      maximum-pool-size: 10
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  cache:
+    type: redis
+
+server:
+  port: 8080
+  # Lấy IP thật của người dùng từ header X-Forwarded-For do nginx ghi đè (Tomcat RemoteIpValve).
+  # Tomcat chỉ tin header này khi request đến từ địa chỉ mạng nội bộ (mặc định 10/8, 172.16/12,
+  # 192.168/16, 127/8...), tức là từ container nginx. Backend chỉ mở cổng cho 127.0.0.1 nên máy khác
+  # không gọi thẳng vào để tự đặt header được.
+  forward-headers-strategy: native
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-change-this-super-secret-key-min-32-bytes-long!!}
+    access-token-expiration-ms: 900000       # 15 phút
+    refresh-token-expiration-ms: 604800000   # 7 ngày
+  auth:
+    # Đặt false khi đưa app lên mạng để người lạ không tự tạo tài khoản được.
+    registration-enabled: ${REGISTRATION_ENABLED:true}
+  rate-limit:
+    login:              # theo IP
+      limit: 5
+      window-seconds: 60
+    register:           # theo IP
+      limit: 3
+      window-seconds: 60
+    quiz:               # theo tài khoản
+      limit: 30
+      window-seconds: 60
+    login-lock:         # sai mật khẩu 10 lần trong 15 phút -> khoá tài khoản đó 15 phút, dù đổi IP
+      max-failures: 10
+      window-seconds: 900
+      lock-seconds: 900
+  exam:
+    duration-seconds: 1800        # 30 phút làm bài
+    default-question-count: 20
+    session-buffer-seconds: 1800  # TTL Redis Hash = duration + buffer, tránh mất dữ liệu
+    reconciliation-interval-ms: 90000
+  ai:
+    # Để trống thì tính năng sinh câu ví dụ tự tắt (quiz vẫn chạy được, chỉ không có câu ngữ cảnh).
+    # Nhiều key/model phân tách bằng dấu phẩy. Hạn mức miễn phí tính theo project + model,
+    # nên model đầu hết lượt/quá tải thì tự chuyển sang model sau.
+    gemini-api-key: ${GEMINI_API_KEY:}
+    model: ${GEMINI_MODEL:gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-flash-lite-latest}
+    # Trần số request Gemini mỗi ngày (theo giờ UTC) cho cả hệ thống. Vượt trần thì trắc nghiệm vẫn chạy,
+    # chỉ không sinh câu ví dụ mới cho tới ngày hôm sau. Đặt 0 để bỏ giới hạn.
+    daily-request-limit: ${GEMINI_DAILY_LIMIT:100}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+logging:
+  level:
+    com.kanjimastery.backend: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: jdbc:postgresql://postgres:5432/kanji_mastery_db
+  data:
+    redis:
+      host: redis

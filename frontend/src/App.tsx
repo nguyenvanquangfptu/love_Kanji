@@ -1,0 +1,46 @@
+import { Navigate, Route, Routes } from 'react-router-dom'
+import { ProtectedRoute } from '@/routes/ProtectedRoute'
+import { AdminRoute } from '@/routes/AdminRoute'
+import { AppLayout, FocusLayout } from '@/components/AppLayout'
+import { LoginPage } from '@/pages/LoginPage'
+import { RegisterPage } from '@/pages/RegisterPage'
+import { FlashcardPage } from '@/pages/FlashcardPage'
+import { ExamSetupPage } from '@/pages/ExamSetupPage'
+import { ExamWorkspacePage } from '@/pages/ExamWorkspacePage'
+import { ExamResultPage } from '@/pages/ExamResultPage'
+import { AdminKanjiPage } from '@/pages/AdminKanjiPage'
+import { StudyBrowsePage } from '@/pages/StudyBrowsePage'
+import { StudyVocabListPage } from '@/pages/StudyVocabListPage'
+import { StudyFlashcardPage } from '@/pages/StudyFlashcardPage'
+import { StudyQuizPage } from '@/pages/StudyQuizPage'
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AppLayout />}>
+          <Route index element={<Navigate to="/study" replace />} />
+          <Route path="study" element={<StudyBrowsePage />} />
+          <Route path="study/vocab" element={<StudyVocabListPage />} />
+          <Route path="flashcards" element={<FlashcardPage />} />
+          <Route path="exam" element={<ExamSetupPage />} />
+          <Route path="exam/:attemptId/result" element={<ExamResultPage />} />
+          <Route element={<AdminRoute />}>
+            <Route path="admin/kanji" element={<AdminKanjiPage />} />
+          </Route>
+        </Route>
+
+        <Route element={<FocusLayout />}>
+          <Route path="study/flashcards" element={<StudyFlashcardPage />} />
+          <Route path="study/quiz" element={<StudyQuizPage />} />
+          <Route path="exam/:attemptId" element={<ExamWorkspacePage />} />
+        </Route>
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  )
+}

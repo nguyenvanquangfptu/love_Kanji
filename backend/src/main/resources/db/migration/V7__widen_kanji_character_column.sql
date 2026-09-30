@@ -1,0 +1,1 @@
+ALTER TABLE kanji ALTER COLUMN character TYPE VARCHAR(20);

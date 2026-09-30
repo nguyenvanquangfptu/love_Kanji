@@ -1,0 +1,41 @@
+# Backend (Maven / Java)
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+!*/lombok*.jar
+
+# Frontend (sẽ thêm ở Giai đoạn 5)
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Bản backup database (chứa cả tài khoản người dùng - không commit)
+backups/
+
+# Env / secrets
+.env
+*.env.local
+
+# Bản sao lưu mã nguồn tạm
+backend_src_backup_*/
+
+# Cài đặt Claude Code riêng từng máy
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Tài liệu & công cụ cá nhân - không đưa lên repo
+CommitRule.md
+k_ho_ch_tri_n_khai_d_n_spring_boot.md
+db-backup/

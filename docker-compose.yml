@@ -1,0 +1,99 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: kanji_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: kanji_mastery_db
+      POSTGRES_USER: kanji_user
+      POSTGRES_PASSWORD: kanji_password
+    ports:
+      # Map sang 5433 ở host vì máy đã có sẵn một PostgreSQL native chiếm cổng 5432.
+      # Chỉ mở cho chính máy này (127.0.0.1) - máy khác trong mạng LAN không kết nối thẳng vào DB được.
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - kanji_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: kanji_redis
+    restart: unless-stopped
+    ports:
+      # Redis không đặt mật khẩu, nên chỉ mở cho chính máy này.
+      - "127.0.0.1:6379:6379"
+    command: ["redis-server", "--notify-keyspace-events", "Ex"]
+    volumes:
+      - redisdata:/data
+    networks:
+      - kanji_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: kanji_backend
+    restart: unless-stopped
+    ports:
+      # Chỉ mở cho chính máy này (Swagger, Vite dev server). Người dùng khác đi qua nginx ở cổng 3000,
+      # nên không ai gọi thẳng backend để tự đặt header X-Forwarded-For giả được.
+      - "127.0.0.1:8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      JWT_SECRET: ${JWT_SECRET:?Cần đặt JWT_SECRET - xem .env.example}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_DAILY_LIMIT: ${GEMINI_DAILY_LIMIT:-100}
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - kanji_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: kanji_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - kanji_net
+
+  # Tự backup database định kỳ ra thư mục trên máy thật (mặc định ./backups).
+  # Backup tay: docker exec kanji_db_backup backup [nhãn] - khôi phục: xem README, mục "Sao lưu & khôi phục".
+  db-backup:
+    build:
+      context: ./db-backup
+    container_name: kanji_db_backup
+    restart: unless-stopped
+    environment:
+      PGHOST: postgres
+      PGUSER: kanji_user
+      PGPASSWORD: kanji_password
+      PGDATABASE: kanji_mastery_db
+      TZ: Asia/Ho_Chi_Minh
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+    volumes:
+      - type: bind
+        source: ${BACKUP_DIR:-./backups}
+        target: /backups
+        bind:
+          create_host_path: true
+    depends_on:
+      - postgres
+    networks:
+      - kanji_net
+
+volumes:
+  pgdata:
+  redisdata:
+
+networks:
+  kanji_net:
+    driver: bridge
