@@ -6,11 +6,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.Instant;
 import java.util.List;
@@ -63,10 +66,29 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.BAD_REQUEST, "Dữ liệu đầu vào không hợp lệ", request, fieldErrors);
     }
 
+    /** Tham số sai kiểu (vd. ?tagId=abc) hoặc body không phải JSON hợp lệ - lỗi của request, không phải của server. */
+    @ExceptionHandler({MethodArgumentTypeMismatchException.class, HttpMessageNotReadableException.class})
+    public ResponseEntity<ApiErrorResponse> handleUnreadableInput(Exception ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "Dữ liệu đầu vào không hợp lệ", request, null);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleGeneric(Exception ex, HttpServletRequest request) {
+        // Lỗi Spring MVC tự mang mã 4xx (đường dẫn không tồn tại, sai phương thức, thiếu tham số...): giữ nguyên mã đó.
+        if (ex instanceof ErrorResponse errorResponse && errorResponse.getStatusCode().is4xxClientError()) {
+            HttpStatus status = HttpStatus.valueOf(errorResponse.getStatusCode().value());
+            return build(status, clientErrorMessage(status), request, null);
+        }
         log.error("Lỗi hệ thống không xác định tại {}", request.getRequestURI(), ex);
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "Đã xảy ra lỗi hệ thống, vui lòng thử lại sau", request, null);
+    }
+
+    private static String clientErrorMessage(HttpStatus status) {
+        return switch (status) {
+            case NOT_FOUND -> "Không tìm thấy đường dẫn yêu cầu";
+            case METHOD_NOT_ALLOWED -> "Phương thức không được hỗ trợ cho đường dẫn này";
+            default -> "Yêu cầu không hợp lệ";
+        };
     }
 
     private ResponseEntity<ApiErrorResponse> build(HttpStatus status, String message, HttpServletRequest request, List<String> fieldErrors) {
