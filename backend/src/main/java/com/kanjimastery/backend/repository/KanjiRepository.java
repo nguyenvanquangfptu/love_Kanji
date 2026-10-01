@@ -44,6 +44,10 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
             """)
     List<Kanji> findAllByFilters(@Param("level") String level, @Param("tagId") Long tagId);
 
+    /** Từ thuộc các bài có tên bắt đầu bằng {@code prefix} (vd. "N5-%") - một từ có thể nằm ở bài của nhiều cấp độ. */
+    @Query("SELECT DISTINCT k FROM Kanji k JOIN k.tags t WHERE t.name LIKE :prefix")
+    List<Kanji> findAllByTagNamePrefix(@Param("prefix") String prefix);
+
     /** Gọi từ luồng nền sau khi request quiz đã trả về, nên tự mở transaction riêng. */
     @Transactional
     @Modifying

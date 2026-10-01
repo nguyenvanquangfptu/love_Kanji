@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -106,6 +107,21 @@ class QuizServiceTest {
 
         verify(kanjiRepository).saveExampleSentenceIfAbsent(2L, "のどが渇く。");
         verify(rateLimiter, never()).increment(startsWith("sentence:failures:"), any());
+    }
+
+    @Test
+    void generate_shouldCapQuestionCount_forAWholeLevel() {
+        givenQuizAllowed();
+        List<Kanji> level = IntStream.rangeClosed(1, 80)
+                .mapToObj(i -> word((long) i, "語" + i, "ご" + i, null))
+                .toList();
+        when(kanjiRepository.findAllByTagNamePrefix("N3-%")).thenReturn(level);
+
+        assertThat(quizService.generate("taro", null, "n3", 1000)).hasSize(50);
+    }
+
+    private void givenQuizAllowed() {
+        when(rateLimiter.tryAcquire("ratelimit:quiz:taro", 30, Duration.ofSeconds(60))).thenReturn(true);
     }
 
     private void givenLessonWithGeminiAnswer(Optional<Map<Long, String>> answer) {

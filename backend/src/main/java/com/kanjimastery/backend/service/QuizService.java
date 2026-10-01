@@ -36,7 +36,7 @@ import java.util.stream.Collectors;
 
 /**
  * Sinh bộ câu hỏi trắc nghiệm ôn tập (không lưu kết quả, không ảnh hưởng lịch SRS) từ
- * danh sách từ vựng đã lọc theo tag/cấp độ. Câu hỏi có câu ví dụ theo kiểu đề JLPT
+ * danh sách từ vựng đã lọc theo tag (một bài) hoặc cấp độ (cả cấp độ). Câu hỏi có câu ví dụ theo kiểu đề JLPT
  * (問題1 漢字読み / 問題2 表記) khi đã sinh được câu ví dụ cho từ đó.
  */
 @Slf4j
@@ -44,6 +44,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class QuizService {
 
+    private static final int DEFAULT_QUESTIONS = 10;
+    /** Trắc nghiệm cả cấp độ có hàng nghìn từ - chặn số câu mỗi lượt để một request không dựng quá nhiều câu hỏi. */
+    private static final int MAX_QUESTIONS = 50;
     /** Thời gian tối đa chờ AI sinh câu ví dụ cho một lượt tạo quiz - quá hạn thì dùng câu hỏi không có ngữ cảnh. */
     private static final long SENTENCE_BUDGET_MS = 15_000;
     /** Số từ tối đa trong một request sinh câu (một request cho cả bài để tiết kiệm hạn mức). */
@@ -74,15 +77,18 @@ public class QuizService {
         }
 
         String normalizedLevel = StringUtils.hasText(level) ? level.toUpperCase() : null;
-        List<Kanji> pool = kanjiRepository.findAllByFilters(normalizedLevel, tagId);
+        // Cả cấp độ = mọi bài của cấp đó (N5-01..N5-25), không theo cột jlpt_level: từ như 意味 ghi N3 nhưng cũng học ở bài N5.
+        List<Kanji> pool = tagId == null && normalizedLevel != null
+                ? kanjiRepository.findAllByTagNamePrefix(normalizedLevel + "-%")
+                : kanjiRepository.findAllByFilters(normalizedLevel, tagId);
         if (pool.isEmpty()) {
             throw new BadRequestException("Không có từ vựng nào phù hợp bộ lọc đã chọn");
         }
 
         List<Kanji> shuffledPool = new ArrayList<>(pool);
         Collections.shuffle(shuffledPool);
-        int questionCount = Math.min(size == null || size < 1 ? 10 : size, shuffledPool.size());
-        List<Kanji> selected = shuffledPool.subList(0, questionCount);
+        int requested = size == null || size < 1 ? DEFAULT_QUESTIONS : Math.min(size, MAX_QUESTIONS);
+        List<Kanji> selected = shuffledPool.subList(0, Math.min(requested, shuffledPool.size()));
 
         Map<Long, String> newSentences = generateMissingSentences(selected, pool);
 
