@@ -32,6 +32,8 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
 
     boolean existsByCharacter(String character);
 
+    List<Kanji> findAllByCharacterIn(Collection<String> characters);
+
     long countByIdIn(Collection<Long> ids);
 
     long countByTags_Id(Long tagId);

@@ -16,6 +16,7 @@ import org.springframework.util.StringUtils;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -29,7 +30,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -37,16 +38,21 @@ import java.util.stream.Collectors;
 /**
  * Sinh bộ câu hỏi trắc nghiệm ôn tập (không lưu kết quả, không ảnh hưởng lịch SRS) từ
  * danh sách từ vựng đã lọc theo tag (một bài) hoặc cấp độ (cả cấp độ). Câu hỏi có câu ví dụ theo kiểu đề JLPT
- * (問題1 漢字読み / 問題2 表記) khi đã sinh được câu ví dụ cho từ đó.
+ * (問題1 漢字読み / 問題2 表記) khi đã sinh được câu ví dụ cho từ đó. Đáp án nhiễu là chữ Hán trông gần giống
+ * hoặc cách đọc bẫy trường âm/âm ngắt/âm đục ({@link QuizDistractorGenerator}), thiếu mới bù bằng từ khác trong bài.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class QuizService {
 
+    private static final String KANJI_TO_READING = "KANJI_TO_READING";
+    private static final String READING_TO_KANJI = "READING_TO_KANJI";
+    private static final String MEANING = "MEANING";
     private static final int DEFAULT_QUESTIONS = 10;
     /** Trắc nghiệm cả cấp độ có hàng nghìn từ - chặn số câu mỗi lượt để một request không dựng quá nhiều câu hỏi. */
     private static final int MAX_QUESTIONS = 50;
+    private static final int DISTRACTOR_COUNT = 3;
     /** Thời gian tối đa chờ AI sinh câu ví dụ cho một lượt tạo quiz - quá hạn thì dùng câu hỏi không có ngữ cảnh. */
     private static final long SENTENCE_BUDGET_MS = 15_000;
     /** Số từ tối đa trong một request sinh câu (một request cho cả bài để tiết kiệm hạn mức). */
@@ -60,6 +66,7 @@ public class QuizService {
     private final SentenceGenerationService sentenceGenerationService;
     private final RateLimiterService rateLimiter;
     private final RateLimitProperties rateLimitProperties;
+    private final QuizDistractorGenerator distractorGenerator;
     private final ExecutorService sentenceExecutor = Executors.newFixedThreadPool(4);
     /** Từ đang được sinh câu ở một request khác - tránh gửi trùng khi người học mở quiz liên tục. */
     private final Set<Long> sentencesInFlight = ConcurrentHashMap.newKeySet();
@@ -92,14 +99,50 @@ public class QuizService {
 
         Map<Long, String> newSentences = generateMissingSentences(selected, pool);
 
+        List<PlannedQuestion> plans = selected.stream().map(this::plan).toList();
+        Map<String, String> existingWordReadings = readingsOfExistingWords(plans);
+
         List<QuizQuestionResponse> questions = new ArrayList<>();
-        for (Kanji kanji : selected) {
+        for (PlannedQuestion plan : plans) {
+            Kanji kanji = plan.kanji();
             String sentence = StringUtils.hasText(kanji.getExampleSentence())
                     ? kanji.getExampleSentence()
                     : newSentences.get(kanji.getId());
-            questions.add(buildQuestion(kanji, sentence, pool));
+            questions.add(buildQuestion(plan, sentence, pool, existingWordReadings));
         }
         return questions;
+    }
+
+    /** Hướng hỏi của một câu và các đáp án nhiễu gần đúng cho hướng đó (chưa lọc từ đồng âm). */
+    private record PlannedQuestion(Kanji kanji, String direction, List<String> nearMisses) {
+    }
+
+    private PlannedQuestion plan(Kanji kanji) {
+        if (!StringUtils.hasText(kanji.getReading())) {
+            return new PlannedQuestion(kanji, MEANING, List.of());
+        }
+        return ThreadLocalRandom.current().nextBoolean()
+                ? new PlannedQuestion(kanji, KANJI_TO_READING,
+                        distractorGenerator.trapReadings(kanji.getReading(), kanji.getCharacter()))
+                : new PlannedQuestion(kanji, READING_TO_KANJI,
+                        distractorGenerator.lookAlikeSpellings(kanji.getCharacter()));
+    }
+
+    /**
+     * Cách đọc của những cách viết nhiễu trùng với một từ có thật trong kho (vd. thay 会 cho 合 ra 会う) -
+     * một truy vấn cho cả bài. Dùng để bỏ đáp án nhiễu đọc giống hệt đáp án đúng, vì khi đó cả hai đều "đúng".
+     */
+    private Map<String, String> readingsOfExistingWords(List<PlannedQuestion> plans) {
+        Set<String> spellings = plans.stream()
+                .filter(plan -> READING_TO_KANJI.equals(plan.direction()))
+                .flatMap(plan -> plan.nearMisses().stream())
+                .collect(Collectors.toSet());
+        if (spellings.isEmpty()) {
+            return Map.of();
+        }
+        return kanjiRepository.findAllByCharacterIn(spellings).stream()
+                .filter(word -> StringUtils.hasText(word.getReading()))
+                .collect(Collectors.toMap(Kanji::getCharacter, Kanji::getReading, (first, second) -> first));
     }
 
     /**
@@ -179,30 +222,37 @@ public class QuizService {
         return skipped;
     }
 
-    private QuizQuestionResponse buildQuestion(Kanji kanji, String exampleSentence, List<Kanji> pool) {
+    private QuizQuestionResponse buildQuestion(PlannedQuestion plan, String exampleSentence, List<Kanji> pool,
+                                               Map<String, String> existingWordReadings) {
+        Kanji kanji = plan.kanji();
+        String direction = plan.direction();
         String reading = kanji.getReading();
 
-        String direction;
-        Function<Kanji, String> optionExtractor;
         String correctAnswer;
-
-        if (StringUtils.hasText(reading)) {
-            direction = ThreadLocalRandom.current().nextBoolean() ? "KANJI_TO_READING" : "READING_TO_KANJI";
-            if ("KANJI_TO_READING".equals(direction)) {
-                optionExtractor = Kanji::getReading;
-                correctAnswer = reading;
-            } else {
-                optionExtractor = Kanji::getCharacter;
+        List<String> nearMisses;
+        List<String> fallback;
+        switch (direction) {
+            case READING_TO_KANJI -> {
                 correctAnswer = kanji.getCharacter();
+                nearMisses = plan.nearMisses().stream()
+                        .filter(spelling -> !reading.equals(existingWordReadings.get(spelling)))
+                        .toList();
+                fallback = spellingFallback(kanji, pool);
             }
-        } else {
-            direction = "MEANING";
-            optionExtractor = Kanji::getMeaning;
-            correctAnswer = kanji.getMeaning();
+            case KANJI_TO_READING -> {
+                correctAnswer = reading;
+                nearMisses = plan.nearMisses();
+                fallback = readingFallback(kanji, pool);
+            }
+            default -> {
+                correctAnswer = kanji.getMeaning();
+                nearMisses = List.of();
+                fallback = otherWords(kanji, pool).stream().map(Kanji::getMeaning).toList();
+            }
         }
 
-        List<String> choices = buildChoices(kanji, pool, optionExtractor, correctAnswer);
-        String prompt = "READING_TO_KANJI".equals(direction) ? reading : kanji.getCharacter();
+        List<String> choices = buildChoices(correctAnswer, nearMisses, fallback);
+        String prompt = READING_TO_KANJI.equals(direction) ? reading : kanji.getCharacter();
 
         return QuizQuestionResponse.builder()
                 .kanjiId(kanji.getId())
@@ -225,7 +275,7 @@ public class QuizService {
         if (!StringUtils.hasText(exampleSentence) || !exampleSentence.contains(kanji.getCharacter())) {
             return null;
         }
-        if (!"READING_TO_KANJI".equals(direction)) {
+        if (!READING_TO_KANJI.equals(direction)) {
             return exampleSentence;
         }
         // Cách đọc dạng "み(る)" (chữ Hán đơn kèm đuôi) không thay thẳng vào câu được.
@@ -235,15 +285,15 @@ public class QuizService {
         return exampleSentence.replaceFirst(Pattern.quote(kanji.getCharacter()), Matcher.quoteReplacement(kanji.getReading()));
     }
 
-    private List<String> buildChoices(Kanji kanji, List<Kanji> pool, Function<Kanji, String> optionExtractor, String correctAnswer) {
+    /** Ưu tiên đáp án nhiễu gần đúng, thiếu mới bù bằng {@code fallback}. */
+    private static List<String> buildChoices(String correctAnswer, List<String> nearMisses, List<String> fallback) {
         Set<String> distractors = new LinkedHashSet<>();
-        List<Kanji> others = pool.stream().filter(k -> !k.getId().equals(kanji.getId())).collect(Collectors.toList());
-        Collections.shuffle(others);
-        for (Kanji other : others) {
-            if (distractors.size() >= 3) break;
-            String value = optionExtractor.apply(other);
-            if (StringUtils.hasText(value) && !value.equals(correctAnswer)) {
-                distractors.add(value);
+        for (List<String> source : List.of(nearMisses, fallback)) {
+            for (String value : source) {
+                if (distractors.size() >= DISTRACTOR_COUNT) break;
+                if (StringUtils.hasText(value) && !value.equals(correctAnswer)) {
+                    distractors.add(value);
+                }
             }
         }
 
@@ -251,5 +301,51 @@ public class QuizService {
         choices.add(correctAnswer);
         Collections.shuffle(choices);
         return choices;
+    }
+
+    /**
+     * Bù cho câu hỏi chọn cách viết: từ khác trong bài có chữ Hán, không đọc giống đáp án (以外 cho いがい của 意外
+     * cũng "đúng"). Ưu tiên từ cùng độ dài có chung một chữ Hán hoặc cùng đuôi okurigana (厚い với 高い, không phải 交番).
+     */
+    private static List<String> spellingFallback(Kanji kanji, List<Kanji> pool) {
+        String word = kanji.getCharacter();
+        Set<Integer> wordKanji = word.codePoints().filter(QuizDistractorGenerator::isKanji).boxed().collect(Collectors.toSet());
+        int lastChar = word.codePointBefore(word.length());
+        boolean kanaEnding = !QuizDistractorGenerator.isKanji(lastChar);
+        return rankBySimilarity(otherWords(kanji, pool).stream()
+                        .filter(other -> other.getCharacter().codePoints().anyMatch(QuizDistractorGenerator::isKanji))
+                        .filter(other -> !kanji.getReading().equals(other.getReading()))
+                        .map(Kanji::getCharacter)
+                        .toList(),
+                word,
+                other -> other.codePoints().anyMatch(wordKanji::contains)
+                        || kanaEnding && other.codePointBefore(other.length()) == lastChar);
+    }
+
+    /** Bù cho câu hỏi chọn cách đọc: ưu tiên cách đọc cùng độ dài và cùng đuôi (動詞 〜める với 〜める). */
+    private static List<String> readingFallback(Kanji kanji, List<Kanji> pool) {
+        String reading = kanji.getReading();
+        char ending = reading.charAt(reading.length() - 1);
+        return rankBySimilarity(otherWords(kanji, pool).stream()
+                        .map(Kanji::getReading)
+                        .filter(StringUtils::hasText)
+                        .toList(),
+                reading,
+                other -> other.charAt(other.length() - 1) == ending);
+    }
+
+    /** Xếp hạng giữ ngẫu nhiên trong từng nhóm: cùng độ dài + giống nhau, cùng độ dài, giống nhau, còn lại. */
+    private static List<String> rankBySimilarity(List<String> candidates, String target, Predicate<String> alike) {
+        List<String> ranked = new ArrayList<>(candidates);
+        Collections.shuffle(ranked);
+        ranked.sort(Comparator.comparingInt(candidate ->
+                (candidate.length() == target.length() ? 0 : 2) + (alike.test(candidate) ? 0 : 1)));
+        return ranked;
+    }
+
+    private static List<Kanji> otherWords(Kanji kanji, List<Kanji> pool) {
+        List<Kanji> others = pool.stream().filter(k -> !k.getId().equals(kanji.getId())).collect(Collectors.toList());
+        Collections.shuffle(others);
+        return others;
     }
 }
