@@ -1,6 +1,7 @@
 package com.kanjimastery.backend.service;
 
 import com.kanjimastery.backend.config.RateLimitProperties;
+import com.kanjimastery.backend.dto.QuizQuestionResponse;
 import com.kanjimastery.backend.exception.TooManyRequestsException;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.repository.KanjiRepository;
@@ -16,10 +17,12 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.never;
@@ -39,6 +42,7 @@ class QuizServiceTest {
     @Mock
     private RateLimiterService rateLimiter;
 
+    private final QuizDistractorGenerator distractors = new QuizDistractorGenerator();
     private QuizService quizService;
 
     // 乾く đã thất bại 2 lần gần đây; 渇く chưa có câu; 固い đã có câu ví dụ.
@@ -51,7 +55,7 @@ class QuizServiceTest {
         RateLimitProperties properties = new RateLimitProperties();
         properties.getQuiz().setLimit(30);
         properties.getQuiz().setWindowSeconds(60);
-        quizService = new QuizService(kanjiRepository, sentenceGenerationService, rateLimiter, properties);
+        quizService = new QuizService(kanjiRepository, sentenceGenerationService, rateLimiter, properties, distractors);
     }
 
     @AfterEach
@@ -106,6 +110,75 @@ class QuizServiceTest {
 
         verify(kanjiRepository).saveExampleSentenceIfAbsent(2L, "のどが渇く。");
         verify(rateLimiter, never()).increment(startsWith("sentence:failures:"), any());
+    }
+
+    @Test
+    void generate_shouldCapQuestionCount_forAWholeLevel() {
+        givenQuizAllowed();
+        List<Kanji> level = IntStream.rangeClosed(1, 80)
+                .mapToObj(i -> word((long) i, "語" + i, "ご" + i, null))
+                .toList();
+        when(kanjiRepository.findAllByTagNamePrefix("N3-%")).thenReturn(level);
+
+        assertThat(quizService.generate("taro", null, "n3", 1000)).hasSize(50);
+    }
+
+    @Test
+    void generate_shouldOfferLookAlikeSpellings_butNotAnExistingWordReadTheSameWay() {
+        givenQuizAllowed();
+        when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(word(10L, "検査", "けんさ", null)));
+        // Giả sử kho từ vựng có một từ viết 険査 cũng đọc けんさ: đáp án đó cũng "đúng", không được đưa vào.
+        when(kanjiRepository.findAllByCharacterIn(anyCollection())).thenReturn(List.of(word(99L, "険査", "けんさ", null)));
+
+        QuizQuestionResponse question = firstQuestionAsking("READING_TO_KANJI");
+
+        assertThat(question.getChoices()).hasSize(4).contains("検査").doesNotContain("険査");
+        assertThat(question.getChoices()).filteredOn(choice -> !choice.equals("検査"))
+                .allSatisfy(choice -> assertThat(distractors.lookAlikeSpellings("検査")).contains(choice));
+    }
+
+    @Test
+    void generate_shouldFillMissingLookAlikes_withWordsSharingTheOkurigana_butNotHomophones() {
+        givenQuizAllowed();
+        when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(
+                word(30L, "厚い", "あつい", null), word(31L, "暑い", "あつい", null),
+                word(32L, "高い", "たかい", null), word(33L, "若い", "わかい", null),
+                word(34L, "交番", "こうばん", null), word(35L, "調査", "ちょうさ", null)));
+
+        QuizQuestionResponse question = firstQuestionAsking("READING_TO_KANJI", "厚い");
+
+        // 厚 chỉ có một chữ trông giống (原) - hai đáp án còn lại là tính từ 〜い, không phải danh từ hay 暑い cùng âm.
+        assertThat(question.getChoices()).containsExactlyInAnyOrder("厚い", "原い", "高い", "若い");
+    }
+
+    @Test
+    void generate_shouldOfferSoundTrapReadings_beforeReadingsOfOtherWords() {
+        givenQuizAllowed();
+        when(kanjiRepository.findAllByFilters(null, TAG_ID))
+                .thenReturn(List.of(word(20L, "周辺", "しゅうへん", null), word(21L, "書類", "しょるい", null)));
+
+        QuizQuestionResponse question = firstQuestionAsking("KANJI_TO_READING", "周辺");
+
+        assertThat(question.getChoices()).hasSize(4).contains("しゅうへん").doesNotContain("しょるい");
+        assertThat(question.getChoices()).filteredOn(choice -> !choice.equals("しゅうへん"))
+                .allSatisfy(choice -> assertThat(distractors.trapReadings("しゅうへん", "周辺")).contains(choice));
+    }
+
+    /** Hướng hỏi được chọn ngẫu nhiên - tạo lại tới khi gặp câu cần kiểm tra (xác suất trượt 2^-100). */
+    private QuizQuestionResponse firstQuestionAsking(String direction, String... character) {
+        for (int attempt = 0; attempt < 100; attempt++) {
+            for (QuizQuestionResponse question : quizService.generate("taro", TAG_ID, null, 10)) {
+                if (question.getDirection().equals(direction)
+                        && (character.length == 0 || question.getCharacter().equals(character[0]))) {
+                    return question;
+                }
+            }
+        }
+        throw new AssertionError("Không sinh được câu hỏi " + direction);
+    }
+
+    private void givenQuizAllowed() {
+        when(rateLimiter.tryAcquire("ratelimit:quiz:taro", 30, Duration.ofSeconds(60))).thenReturn(true);
     }
 
     private void givenLessonWithGeminiAnswer(Optional<Map<Long, String>> answer) {

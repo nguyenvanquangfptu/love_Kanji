@@ -5,7 +5,7 @@ import { Check, CheckCircle2, Flame, Layers, Plus, RotateCcw, Target, Trophy, X 
 import { quizApi } from '@/api/quiz'
 import { extractErrorMessage } from '@/api/client'
 import type { QuizDirection, QuizQuestionResponse } from '@/api/types'
-import { useLessonParams } from '@/lib/lesson'
+import { useLessonParams, useLevelQuizParams } from '@/lib/lesson'
 import { describeAddResult, useAddToReview } from '@/lib/review'
 import { cn } from '@/lib/utils'
 import { SessionHeader } from '@/components/SessionHeader'
@@ -57,6 +57,9 @@ function SentenceWithTarget({ sentence, target }: { sentence: string; target: st
 export function StudyQuizPage() {
   const navigate = useNavigate()
   const { tagId, query } = useLessonParams()
+  // Không có tagId mà có level: trắc nghiệm tổng hợp cả cấp độ (mở từ trang Học bài).
+  const { level, size } = useLevelQuizParams()
+  const levelQuiz = tagId === null ? level : null
 
   const [index, setIndex] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
@@ -67,9 +70,10 @@ export function StudyQuizPage() {
   const [attempt, setAttempt] = useState(0)
 
   const { data: questions, isLoading, isError, error } = useQuery({
-    queryKey: ['study-quiz', tagId, attempt],
-    queryFn: () => quizApi.generate({ tagId: tagId ?? undefined, size: 10 }),
-    enabled: tagId !== null,
+    queryKey: ['study-quiz', tagId, levelQuiz, size, attempt],
+    queryFn: () =>
+      quizApi.generate(levelQuiz ? { level: levelQuiz, size } : { tagId: tagId ?? undefined, size: 10 }),
+    enabled: tagId !== null || levelQuiz !== null,
     staleTime: Infinity,
     gcTime: 0,
   })
@@ -124,9 +128,9 @@ export function StudyQuizPage() {
     setAttempt((a) => a + 1)
   }
 
-  if (tagId === null) return <Navigate to="/study" replace />
+  if (tagId === null && levelQuiz === null) return <Navigate to="/study" replace />
 
-  const exitTo = `/study/vocab?${query}`
+  const exitTo = levelQuiz ? '/study' : `/study/vocab?${query}`
   const progress = total > 0 ? ((index + (answered ? 1 : 0)) / total) * 100 : 0
   const isCorrect = answered && current !== undefined && selected === current.correctIndex
 
@@ -149,7 +153,11 @@ export function StudyQuizPage() {
         {isLoading && <PageSpinner label="Đang soạn câu hỏi..." />}
         {isError && <Alert>{extractErrorMessage(error)}</Alert>}
         {questions && total === 0 && (
-          <EmptyState icon={Target} title="Chưa tạo được câu hỏi" description="Bài này chưa đủ từ vựng để làm trắc nghiệm." />
+          <EmptyState
+            icon={Target}
+            title="Chưa tạo được câu hỏi"
+            description={`${levelQuiz ? `Cấp độ ${levelQuiz}` : 'Bài này'} chưa đủ từ vựng để làm trắc nghiệm.`}
+          />
         )}
 
         {isDone && (
@@ -159,8 +167,9 @@ export function StudyQuizPage() {
             bestStreak={bestStreak}
             mistakes={mistakes}
             onRestart={restart}
-            onFlashcards={() => navigate(`/study/flashcards?${query}`)}
+            onFlashcards={levelQuiz ? undefined : () => navigate(`/study/flashcards?${query}`)}
             exitTo={exitTo}
+            exitLabel={levelQuiz ? 'Về trang Học bài' : 'Về bài học'}
           />
         )}
 
@@ -294,14 +303,17 @@ function QuizResults({
   onRestart,
   onFlashcards,
   exitTo,
+  exitLabel,
 }: {
   score: number
   total: number
   bestStreak: number
   mistakes: QuizQuestionResponse[]
   onRestart: () => void
-  onFlashcards: () => void
+  /** Không có khi làm trắc nghiệm cả cấp độ - thẻ học chỉ mở theo từng bài. */
+  onFlashcards?: () => void
   exitTo: string
+  exitLabel: string
 }) {
   const percent = Math.round((score / total) * 100)
   const title =
@@ -364,12 +376,14 @@ function QuizResults({
         <Button size="lg" className="flex-1" onClick={onRestart}>
           <RotateCcw className="h-5 w-5" /> Làm bộ câu hỏi mới
         </Button>
-        <Button variant="outline" size="lg" className="flex-1" onClick={onFlashcards}>
-          <Layers className="h-5 w-5" /> Ôn bằng thẻ
-        </Button>
+        {onFlashcards && (
+          <Button variant="outline" size="lg" className="flex-1" onClick={onFlashcards}>
+            <Layers className="h-5 w-5" /> Ôn bằng thẻ
+          </Button>
+        )}
       </div>
       <Link to={exitTo} className="mt-5 text-sm font-extrabold text-secondary hover:underline">
-        Về bài học
+        {exitLabel}
       </Link>
     </div>
   )

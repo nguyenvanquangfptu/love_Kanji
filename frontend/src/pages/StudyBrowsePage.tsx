@@ -1,14 +1,15 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { BookMarked, Lock } from 'lucide-react'
+import { BookMarked, ListChecks, Lock } from 'lucide-react'
 import { tagApi } from '@/api/tags'
 import { extractErrorMessage } from '@/api/client'
 import { JLPT_LEVELS } from '@/api/types'
 import { LEVEL_META, OTHER_STYLE, groupTagsByLevel, lessonTitle, parseTagName } from '@/lib/levels'
-import { lessonQuery } from '@/lib/lesson'
+import { LEVEL_QUIZ_SIZES, lessonQuery, levelQuizQuery } from '@/lib/lesson'
 import { cn } from '@/lib/utils'
-import { CardButton } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Card, CardButton } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
 import { PageSpinner } from '@/components/ui/spinner'
 import { PageHeader } from '@/components/PageHeader'
@@ -91,6 +92,32 @@ export function StudyBrowsePage() {
           </p>
         </div>
       </div>
+
+      {activeLevel !== 'OTHER' && readyCount > 0 && (
+        <Card className="mt-3 flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <ListChecks className={cn('h-7 w-7 shrink-0', style.text)} strokeWidth={2.5} />
+            <div className="min-w-0">
+              <p className="font-extrabold">Trắc nghiệm tổng hợp {activeLevel}</p>
+              <p className="text-sm font-semibold text-muted-foreground">
+                Câu hỏi ngẫu nhiên từ cả {readyCount} bài
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-2">
+            {LEVEL_QUIZ_SIZES.map((size) => (
+              <Button
+                key={size}
+                size="sm"
+                variant="outline"
+                onClick={() => navigate(`/study/quiz?${levelQuizQuery(activeLevel, size)}`)}
+              >
+                {size} câu
+              </Button>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {lessons.length === 0 ? (
         <EmptyState

@@ -32,6 +32,8 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
 
     boolean existsByCharacter(String character);
 
+    List<Kanji> findAllByCharacterIn(Collection<String> characters);
+
     long countByIdIn(Collection<Long> ids);
 
     long countByTags_Id(Long tagId);
@@ -43,6 +45,10 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
               AND (:tagId IS NULL OR t.id = :tagId)
             """)
     List<Kanji> findAllByFilters(@Param("level") String level, @Param("tagId") Long tagId);
+
+    /** Từ thuộc các bài có tên bắt đầu bằng {@code prefix} (vd. "N5-%") - một từ có thể nằm ở bài của nhiều cấp độ. */
+    @Query("SELECT DISTINCT k FROM Kanji k JOIN k.tags t WHERE t.name LIKE :prefix")
+    List<Kanji> findAllByTagNamePrefix(@Param("prefix") String prefix);
 
     /** Gọi từ luồng nền sau khi request quiz đã trả về, nên tự mở transaction riêng. */
     @Transactional
