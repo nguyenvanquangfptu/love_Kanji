@@ -8,8 +8,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import com.kanjimastery.backend.config.ExamProperties;
@@ -23,10 +30,13 @@ import com.kanjimastery.backend.dto.StartExamRequest;
 import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamQuestion;
+import com.kanjimastery.backend.model.Kanji;
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.UserExamAnswer;
 import com.kanjimastery.backend.model.UserExamAttempt;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.ExamSessionStore;
+import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.repository.UserExamAnswerRepository;
 import com.kanjimastery.backend.repository.UserExamAttemptRepository;
 
@@ -34,19 +44,24 @@ import com.kanjimastery.backend.repository.UserExamAttemptRepository;
 @RequiredArgsConstructor
 public class ExamService {
 
+    /** Thứ tự kỹ năng khi chia câu thi và khi báo điểm: đọc, viết, nghĩa. */
+    private static final List<String> SKILLS =
+            List.of(QuizDirection.KANJI_TO_READING, QuizDirection.READING_TO_KANJI, QuizDirection.MEANING);
+
     private final ExamQuestionRepository questionRepository;
     private final UserExamAttemptRepository attemptRepository;
     private final UserExamAnswerRepository answerRepository;
     private final ExamSessionStore examSessionStore;
     private final ExamFinalizationService examFinalizationService;
     private final ExamProperties examProperties;
+    private final KanjiRepository kanjiRepository;
 
     @Transactional
     public StartExamResponse start(Long userId, StartExamRequest request) {
         String level = request.getJlptLevel().toUpperCase();
         int count = request.getQuestionCount() != null ? request.getQuestionCount() : examProperties.getDefaultQuestionCount();
 
-        List<ExamQuestion> questions = questionRepository.findRandomByLevel(level, count);
+        List<ExamQuestion> questions = pickQuestions(level, count);
         if (questions.isEmpty()) {
             throw new BadRequestException("Không có câu hỏi nào cho cấp độ: " + level);
         }
@@ -72,6 +87,47 @@ public class ExamService {
                 .remainingSeconds(examProperties.getDurationSeconds())
                 .startedAt(attempt.getStartedAt())
                 .build();
+    }
+
+    /**
+     * Câu thi ngẫu nhiên, lần lượt lấy từng kỹ năng (đọc, viết, nghĩa, rồi câu chưa phân loại) để bài thi chia đều các
+     * kỹ năng - ngân hàng câu sinh từ kho từ vựng có nhiều câu hỏi nghĩa hơn hẳn. Mỗi từ tối đa một câu: câu hỏi nghĩa
+     * ghi kèm cách đọc sẽ lộ đáp án câu hỏi đọc của cùng từ đó. Xáo thứ tự ở cuối.
+     */
+    private List<ExamQuestion> pickQuestions(String level, int count) {
+        List<List<ExamQuestion>> candidates = new ArrayList<>();
+        for (String skill : SKILLS) {
+            candidates.add(questionRepository.findRandomByLevelAndSkill(level, skill, count * 2));
+        }
+        candidates.add(questionRepository.findRandomUnclassifiedByLevel(level, count * 2));
+        Map<Long, ExamQuestion> withWords = questionRepository
+                .findAllWithWordsByIdIn(candidates.stream().flatMap(List::stream).map(ExamQuestion::getId).toList())
+                .stream()
+                .collect(Collectors.toMap(ExamQuestion::getId, Function.identity()));
+
+        List<Iterator<ExamQuestion>> queues = candidates.stream().map(List::iterator).toList();
+        Set<Long> askedWords = new HashSet<>();
+        List<ExamQuestion> picked = new ArrayList<>();
+        boolean tookAny = true;
+        while (picked.size() < count && tookAny) {
+            tookAny = false;
+            for (Iterator<ExamQuestion> queue : queues) {
+                if (picked.size() >= count) {
+                    break;
+                }
+                while (queue.hasNext()) {
+                    ExamQuestion question = withWords.get(queue.next().getId());
+                    if (question != null && Collections.disjoint(question.getKanjiIds(), askedWords)) {
+                        picked.add(question);
+                        askedWords.addAll(question.getKanjiIds());
+                        tookAny = true;
+                        break;
+                    }
+                }
+            }
+        }
+        Collections.shuffle(picked);
+        return picked;
     }
 
     public void saveAnswer(Long userId, Long attemptId, SaveAnswerRequest request) {
@@ -109,7 +165,7 @@ public class ExamService {
 
         List<UserExamAnswer> answers = answerRepository.findByAttemptId(attemptId);
         List<Long> questionIds = answers.stream().map(UserExamAnswer::getQuestionId).toList();
-        Map<Long, ExamQuestion> questionsById = questionRepository.findAllById(questionIds).stream()
+        Map<Long, ExamQuestion> questionsById = questionRepository.findAllWithWordsByIdIn(questionIds).stream()
                 .collect(Collectors.toMap(ExamQuestion::getId, Function.identity()));
 
         List<QuestionReviewItem> items = answers.stream()
@@ -118,6 +174,8 @@ public class ExamService {
                     return QuestionReviewItem.builder()
                             .questionId(answer.getQuestionId())
                             .questionText(question.getQuestionText())
+                            .sentence(question.getSentence())
+                            .highlight(question.getHighlight())
                             .optionA(question.getOptionA())
                             .optionB(question.getOptionB())
                             .optionC(question.getOptionC())
@@ -126,6 +184,7 @@ public class ExamService {
                             .selectedOption(answer.getSelectedOption())
                             .correct(Boolean.TRUE.equals(answer.getIsCorrect()))
                             .explanation(question.getExplanation())
+                            .skill(question.getSkill())
                             .build();
                 })
                 .toList();
@@ -138,7 +197,53 @@ public class ExamService {
                 .totalQuestions(items.size())
                 .timeSpentSeconds(attempt.getTimeSpentSeconds())
                 .questions(items)
+                .skills(skillScores(items))
+                .wrongWords(wrongWords(answers, questionsById))
+                .addedToReview(attempt.getDiagnosedAt() != null)
                 .build();
+    }
+
+    /** Từ của các câu đã trả lời sai, theo thứ tự câu hỏi, không lặp. */
+    private List<ExamReviewResponse.Word> wrongWords(List<UserExamAnswer> answers, Map<Long, ExamQuestion> questionsById) {
+        Set<Long> kanjiIds = new LinkedHashSet<>();
+        for (UserExamAnswer answer : answers) {
+            ExamQuestion question = questionsById.get(answer.getQuestionId());
+            if (question != null && answer.getSelectedOption() != null && !Boolean.TRUE.equals(answer.getIsCorrect())) {
+                kanjiIds.addAll(question.getKanjiIds());
+            }
+        }
+        if (kanjiIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Kanji> words = kanjiRepository.findAllById(kanjiIds).stream()
+                .collect(Collectors.toMap(Kanji::getId, Function.identity()));
+        return kanjiIds.stream()
+                .map(words::get)
+                .filter(word -> word != null)
+                .map(word -> new ExamReviewResponse.Word(word.getId(), word.getCharacter(), word.getReading(),
+                        word.getMeaning()))
+                .toList();
+    }
+
+    /** Số câu đúng trên số câu theo từng kỹ năng: đọc, viết, rồi nghĩa. */
+    static List<ExamReviewResponse.SkillScore> skillScores(List<QuestionReviewItem> items) {
+        Map<String, int[]> bySkill = new LinkedHashMap<>();
+        for (String skill : SKILLS) {
+            bySkill.put(skill, new int[2]);
+        }
+        for (QuestionReviewItem item : items) {
+            int[] tally = item.getSkill() == null ? null : bySkill.get(item.getSkill());
+            if (tally != null) {
+                tally[1]++;
+                if (item.isCorrect()) {
+                    tally[0]++;
+                }
+            }
+        }
+        return bySkill.entrySet().stream()
+                .filter(entry -> entry.getValue()[1] > 0)
+                .map(entry -> new ExamReviewResponse.SkillScore(entry.getKey(), entry.getValue()[0], entry.getValue()[1]))
+                .toList();
     }
 
     private UserExamAttempt getOwnedAttempt(Long attemptId, Long userId) {

@@ -1,6 +1,17 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Layers, Pencil, Plus, Search, Tags as TagsIcon, Trash2 } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  FileQuestion,
+  Layers,
+  Pencil,
+  Plus,
+  Search,
+  Tags as TagsIcon,
+  Trash2,
+} from 'lucide-react'
+import { examApi } from '@/api/exam'
 import { kanjiApi } from '@/api/kanji'
 import { tagApi } from '@/api/tags'
 import { extractErrorMessage } from '@/api/client'
@@ -97,6 +108,9 @@ export function AdminKanjiPage() {
     onError: (err) => setFormError(extractErrorMessage(err)),
   })
 
+  // Câu thi đọc/viết kiểu đề JLPT và câu hỏi nghĩa cho các từ trong bài (máy chủ cũng tự chạy mỗi sáng).
+  const generateQuestions = useMutation({ mutationFn: (level: string) => examApi.generateQuestions(level) })
+
   const deleteMutation = useMutation({
     mutationFn: (id: number) => kanjiApi.delete(id),
     onSuccess: () => {
@@ -136,7 +150,34 @@ export function AdminKanjiPage() {
     const style = activeGridLevel === 'OTHER' ? OTHER_STYLE : LEVEL_META[activeGridLevel].style
     return (
       <div>
-        <PageHeader title="Quản trị từ vựng" subtitle="Chọn một bài để xem, thêm và chỉnh sửa từ." action={tagManagerButton} />
+        <PageHeader
+          title="Quản trị từ vựng"
+          subtitle="Chọn một bài để xem, thêm và chỉnh sửa từ."
+          action={
+            <div className="flex flex-wrap gap-2">
+              {activeGridLevel !== 'OTHER' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={generateQuestions.isPending}
+                  onClick={() => generateQuestions.mutate(activeGridLevel)}
+                >
+                  <FileQuestion className="h-4 w-4" />
+                  {generateQuestions.isPending ? 'Đang sinh câu thi...' : `Sinh câu thi ${activeGridLevel}`}
+                </Button>
+              )}
+              {tagManagerButton}
+            </div>
+          }
+        />
+        {generateQuestions.isSuccess && (
+          <p className="mb-4 rounded-2xl border-2 border-primary/30 bg-primary-soft px-4 py-3 text-sm font-semibold text-primary-dark">
+            {generateQuestions.data.created > 0
+              ? `Đã thêm ${generateQuestions.data.created} câu thi ${generateQuestions.data.level} từ ${generateQuestions.data.words} từ trong các bài.`
+              : `Các từ trong bài ${generateQuestions.data.level} đều đã có câu thi.`}
+          </p>
+        )}
+        {generateQuestions.isError && <Alert className="mb-4">{extractErrorMessage(generateQuestions.error)}</Alert>}
 
         <CardButton onClick={() => openBook('all')} className="mb-6 flex w-full items-center gap-4 p-4">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-b-4 border-secondary-dark bg-secondary text-white">

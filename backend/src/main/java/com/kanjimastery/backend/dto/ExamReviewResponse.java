@@ -17,4 +17,30 @@ public class ExamReviewResponse {
     private Integer totalQuestions;
     private Integer timeSpentSeconds;
     private List<QuestionReviewItem> questions;
+    /** Điểm theo kỹ năng, theo thứ tự đọc - viết - nghĩa; kỹ năng không có câu nào trong bài thì không có. */
+    private List<SkillScore> skills;
+    /** Từ vựng của các câu làm sai (không tính câu bỏ trống), theo thứ tự câu hỏi, không lặp. */
+    private List<Word> wrongWords;
+    /** Kết quả bài thi đã được đưa vào ôn tập: từ của câu sai đã nằm trong lịch ôn. */
+    private boolean addedToReview;
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class Word {
+        private Long kanjiId;
+        private String character;
+        private String reading;
+        private String meaning;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class SkillScore {
+        /** Như hướng hỏi trắc nghiệm: KANJI_TO_READING (đọc), READING_TO_KANJI (viết), MEANING (nghĩa). */
+        private String skill;
+        private int correct;
+        private int total;
+    }
 }

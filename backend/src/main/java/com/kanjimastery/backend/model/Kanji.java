@@ -24,7 +24,8 @@ public class Kanji {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 20)
+    /** Không duy nhất: cùng một từ có thể có nhiều dòng (mỗi nghĩa một dòng), miễn là không chung bài nào. */
+    @Column(nullable = false, length = 20)
     private String character;
 
     @Column(name = "han_viet", nullable = false, length = 50)
@@ -46,6 +47,10 @@ public class Kanji {
     /** Câu ví dụ tiếng Nhật (chứa nguyên văn {@link #character}) do AI sinh, cache lại để không gọi lại API. */
     @Column(name = "example_sentence", columnDefinition = "TEXT")
     private String exampleSentence;
+
+    /** Mẹo nhớ chung do AI sinh (dựa trên âm Hán Việt / hình chữ), sinh một lần rồi dùng cho mọi người. */
+    @Column(columnDefinition = "TEXT")
+    private String mnemonic;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

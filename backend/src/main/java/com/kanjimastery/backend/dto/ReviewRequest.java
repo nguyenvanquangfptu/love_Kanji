@@ -13,8 +13,12 @@ public class ReviewRequest {
     @NotNull(message = "kanjiId không được để trống")
     private Long kanjiId;
 
-    @NotNull(message = "quality không được để trống")
-    @Min(value = 0, message = "quality phải từ 0 đến 5")
-    @Max(value = 5, message = "quality phải từ 0 đến 5")
-    private Integer quality;
+    /** 1 Quên, 2 Khó, 3 Nhớ, 4 Dễ - xem {@link com.kanjimastery.backend.model.ReviewRating}. */
+    @NotNull(message = "rating không được để trống")
+    @Min(value = 1, message = "rating phải từ 1 đến 4")
+    @Max(value = 4, message = "rating phải từ 1 đến 4")
+    private Integer rating;
+
+    /** Thời gian từ lúc hiện thẻ tới lúc lật thẻ (mili giây), không bắt buộc. */
+    private Integer responseMs;
 }

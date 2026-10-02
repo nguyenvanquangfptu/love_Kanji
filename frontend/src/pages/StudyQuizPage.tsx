@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Check, CheckCircle2, Flame, Layers, Plus, RotateCcw, Target, Trophy, X } from 'lucide-react'
 import { quizApi } from '@/api/quiz'
 import { extractErrorMessage } from '@/api/client'
-import type { QuizDirection, QuizQuestionResponse } from '@/api/types'
+import type { QuizDirection, QuizMode, QuizQuestionResponse } from '@/api/types'
 import { useLessonParams, useLevelQuizParams } from '@/lib/lesson'
 import { describeAddResult, useAddToReview } from '@/lib/review'
 import { cn } from '@/lib/utils'
 import { SessionHeader } from '@/components/SessionHeader'
+import { SentenceWithTarget } from '@/components/SentenceWithTarget'
 import { SpeakButton } from '@/components/SpeakButton'
 import { StatTile } from '@/components/StatTile'
 import { EmptyState } from '@/components/EmptyState'
@@ -40,26 +41,24 @@ const CHOICE_TEXT: Record<QuizDirection, string> = {
 
 const PRAISES = ['Chính xác!', 'Tuyệt vời!', 'Giỏi lắm!', 'Xuất sắc!', 'Quá đỉnh!']
 
-function SentenceWithTarget({ sentence, target }: { sentence: string; target: string }) {
-  const at = sentence.indexOf(target)
-  if (at < 0) return <>{sentence}</>
-  return (
-    <>
-      {sentence.slice(0, at)}
-      <span className="rounded-md bg-accent-soft px-1 font-bold underline decoration-accent-dark decoration-[3px] underline-offset-[7px]">
-        {target}
-      </span>
-      {sentence.slice(at + target.length)}
-    </>
-  )
-}
-
 export function StudyQuizPage() {
   const navigate = useNavigate()
   const { tagId, query } = useLessonParams()
   // Không có tagId mà có level: trắc nghiệm tổng hợp cả cấp độ (mở từ trang Học bài).
   const { level, size } = useLevelQuizParams()
-  const levelQuiz = tagId === null ? level : null
+  const [searchParams, setSearchParams] = useSearchParams()
+  // ?kanjiIds=1,2,3: chỉ hỏi đúng các từ này - các từ làm sai trong bài thi ?exam=<id> (mở từ trang kết quả thi).
+  const kanjiIds = (searchParams.get('kanjiIds') ?? '')
+    .split(',')
+    .filter((id) => /^\d+$/.test(id))
+    .join(',')
+  const wordsQuiz = kanjiIds !== ''
+  const examId = searchParams.get('exam')
+  // ?hardWords=1: chỉ hỏi các từ khó của người học (mở từ trang Từ khó).
+  const hardWordsQuiz = !wordsQuiz && searchParams.get('hardWords') === '1'
+  const levelQuiz = !wordsQuiz && !hardWordsQuiz && tagId === null ? level : null
+  // Mặc định ưu tiên từ người học hay sai; ?mode=random để kiểm tra đều cả bài.
+  const mode: QuizMode = searchParams.get('mode') === 'random' ? 'random' : 'adaptive'
 
   const [index, setIndex] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
@@ -67,13 +66,24 @@ export function StudyQuizPage() {
   const [streak, setStreak] = useState(0)
   const [bestStreak, setBestStreak] = useState(0)
   const [mistakes, setMistakes] = useState<QuizQuestionResponse[]>([])
+  // Từ làm sai mà server chưa nhận được kết quả (lỗi mạng) - chưa tự vào Ôn tập, cần thêm tay.
+  const [unsyncedMistakeIds, setUnsyncedMistakeIds] = useState<number[]>([])
   const [attempt, setAttempt] = useState(0)
+  const shownAt = useRef(0)
 
   const { data: questions, isLoading, isError, error } = useQuery({
-    queryKey: ['study-quiz', tagId, levelQuiz, size, attempt],
+    queryKey: ['study-quiz', tagId, levelQuiz, hardWordsQuiz, kanjiIds, size, mode, attempt],
     queryFn: () =>
-      quizApi.generate(levelQuiz ? { level: levelQuiz, size } : { tagId: tagId ?? undefined, size: 10 }),
-    enabled: tagId !== null || levelQuiz !== null,
+      quizApi.generate(
+        wordsQuiz
+          ? { kanjiIds, size: kanjiIds.split(',').length, mode }
+          : hardWordsQuiz
+            ? { hardWords: true, size: 10, mode }
+            : levelQuiz
+              ? { level: levelQuiz, size, mode }
+              : { tagId: tagId ?? undefined, size: 10, mode },
+      ),
+    enabled: wordsQuiz || hardWordsQuiz || tagId !== null || levelQuiz !== null,
     staleTime: Infinity,
     gcTime: 0,
   })
@@ -83,11 +93,27 @@ export function StudyQuizPage() {
   const isDone = total > 0 && index >= total
   const answered = selected !== null
 
+  useEffect(() => {
+    shownAt.current = performance.now()
+  }, [current])
+
   const choose = useCallback(
     (choiceIndex: number) => {
       if (!current || selected !== null || choiceIndex >= current.choices.length) return
       setSelected(choiceIndex)
-      if (choiceIndex === current.correctIndex) {
+      const wrong = choiceIndex !== current.correctIndex
+      // Không chờ kết quả: server tự chấm, ghi lại và đưa từ làm sai vào Ôn tập.
+      quizApi
+        .submitAnswer({
+          kanjiId: current.kanjiId,
+          direction: current.direction,
+          chosenAnswer: current.choices[choiceIndex],
+          responseMs: Math.round(performance.now() - shownAt.current),
+        })
+        .catch(() => {
+          if (wrong) setUnsyncedMistakeIds((ids) => [...ids, current.kanjiId])
+        })
+      if (!wrong) {
         const nextStreak = streak + 1
         setScore((s) => s + 1)
         setStreak(nextStreak)
@@ -125,12 +151,33 @@ export function StudyQuizPage() {
     setStreak(0)
     setBestStreak(0)
     setMistakes([])
+    setUnsyncedMistakeIds([])
     setAttempt((a) => a + 1)
   }
 
-  if (tagId === null && levelQuiz === null) return <Navigate to="/study" replace />
+  function switchMode(next: QuizMode) {
+    setSearchParams(
+      (params) => {
+        if (next === 'random') params.set('mode', 'random')
+        else params.delete('mode')
+        return params
+      },
+      { replace: true },
+    )
+    restart()
+  }
 
-  const exitTo = levelQuiz ? '/study' : `/study/vocab?${query}`
+  if (!wordsQuiz && !hardWordsQuiz && tagId === null && levelQuiz === null) return <Navigate to="/study" replace />
+
+  const exitTo = wordsQuiz
+    ? examId
+      ? `/exam/${examId}/result`
+      : '/exam'
+    : hardWordsQuiz
+      ? '/flashcards/hard-words'
+      : levelQuiz
+        ? '/study'
+        : `/study/vocab?${query}`
   const progress = total > 0 ? ((index + (answered ? 1 : 0)) / total) * 100 : 0
   const isCorrect = answered && current !== undefined && selected === current.correctIndex
 
@@ -156,7 +203,13 @@ export function StudyQuizPage() {
           <EmptyState
             icon={Target}
             title="Chưa tạo được câu hỏi"
-            description={`${levelQuiz ? `Cấp độ ${levelQuiz}` : 'Bài này'} chưa đủ từ vựng để làm trắc nghiệm.`}
+            description={
+              wordsQuiz
+                ? 'Không tìm thấy các từ cần luyện.'
+                : hardWordsQuiz
+                  ? 'Bạn chưa có từ khó nào để luyện riêng.'
+                  : `${levelQuiz ? `Cấp độ ${levelQuiz}` : 'Bài này'} chưa đủ từ vựng để làm trắc nghiệm.`
+            }
           />
         )}
 
@@ -166,10 +219,24 @@ export function StudyQuizPage() {
             total={total}
             bestStreak={bestStreak}
             mistakes={mistakes}
+            unsyncedMistakeIds={unsyncedMistakeIds}
+            mode={mode}
+            // Danh sách từ cố định (từ làm sai trong bài thi): không có chuyện chọn từ theo điểm yếu hay ngẫu nhiên.
+            onSwitchMode={wordsQuiz ? undefined : switchMode}
             onRestart={restart}
-            onFlashcards={levelQuiz ? undefined : () => navigate(`/study/flashcards?${query}`)}
+            onFlashcards={
+              wordsQuiz || hardWordsQuiz || levelQuiz ? undefined : () => navigate(`/study/flashcards?${query}`)
+            }
             exitTo={exitTo}
-            exitLabel={levelQuiz ? 'Về trang Học bài' : 'Về bài học'}
+            exitLabel={
+              wordsQuiz
+                ? 'Về kết quả bài thi'
+                : hardWordsQuiz
+                  ? 'Về danh sách từ khó'
+                  : levelQuiz
+                    ? 'Về trang Học bài'
+                    : 'Về bài học'
+            }
           />
         )}
 
@@ -235,7 +302,13 @@ export function StudyQuizPage() {
       </main>
 
       {answered && current && !isDone && (
-        <FeedbackBar correct={isCorrect} question={current} praise={PRAISES[index % PRAISES.length]} onContinue={next} />
+        <FeedbackBar
+          correct={isCorrect}
+          question={current}
+          chosen={current.choices[selected]}
+          praise={PRAISES[index % PRAISES.length]}
+          onContinue={next}
+        />
       )}
     </>
   )
@@ -244,11 +317,14 @@ export function StudyQuizPage() {
 function FeedbackBar({
   correct,
   question,
+  chosen,
   praise,
   onContinue,
 }: {
   correct: boolean
   question: QuizQuestionResponse
+  /** Đáp án người học vừa chọn. */
+  chosen: string
   praise: string
   onContinue: () => void
 }) {
@@ -284,6 +360,7 @@ function FeedbackBar({
               <span className="font-jp font-bold">{question.character}</span>
               {question.reading && <span className="font-jp">（{question.reading}）</span>} — {question.meaning}
             </p>
+            {question.personalTrap && <PersonalTrapNote question={question} chosen={chosen} correct={correct} />}
           </div>
           <SpeakButton text={question.reading ?? question.character} />
         </div>
@@ -295,11 +372,55 @@ function FeedbackBar({
   )
 }
 
+/** Nhắc lại chỗ người học từng nhầm với chính từ này, kèm từ bị nhầm nếu đó là một từ có thật. */
+function PersonalTrapNote({
+  question,
+  chosen,
+  correct,
+}: {
+  question: QuizQuestionResponse
+  chosen: string
+  correct: boolean
+}) {
+  const { personalTrap, personalTrapCount, personalTrapReading, personalTrapMeaning } = question
+  const trap =
+    question.direction === 'MEANING' ? (
+      <span className="font-bold">“{personalTrap}”</span>
+    ) : (
+      <span className="font-jp font-bold">「{personalTrap}」</span>
+    )
+  return (
+    <p className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-sm font-semibold text-foreground/90">
+      {chosen === personalTrap ? (
+        <>
+          Bạn lại nhầm với {trap} - lần thứ {personalTrapCount + 1}.
+        </>
+      ) : correct ? (
+        <>Lần này bạn không nhầm với {trap} nữa!</>
+      ) : (
+        <>
+          Bạn từng nhầm từ này với {trap} ({personalTrapCount} lần).
+        </>
+      )}
+      {personalTrapReading && (
+        <>
+          {' '}
+          <span className="font-jp font-bold">{personalTrap}</span> đọc là{' '}
+          <span className="font-jp">{personalTrapReading}</span>, nghĩa: {personalTrapMeaning}.
+        </>
+      )}
+    </p>
+  )
+}
+
 function QuizResults({
   score,
   total,
   bestStreak,
   mistakes,
+  unsyncedMistakeIds,
+  mode,
+  onSwitchMode,
   onRestart,
   onFlashcards,
   exitTo,
@@ -309,6 +430,9 @@ function QuizResults({
   total: number
   bestStreak: number
   mistakes: QuizQuestionResponse[]
+  unsyncedMistakeIds: number[]
+  mode: QuizMode
+  onSwitchMode?: (mode: QuizMode) => void
   onRestart: () => void
   /** Không có khi làm trắc nghiệm cả cấp độ - thẻ học chỉ mở theo từng bài. */
   onFlashcards?: () => void
@@ -319,6 +443,7 @@ function QuizResults({
   const title =
     percent === 100 ? 'Hoàn hảo!' : percent >= 80 ? 'Xuất sắc!' : percent >= 50 ? 'Làm tốt lắm!' : 'Cố lên nhé!'
   const uniqueMistakes = mistakes.filter((m, i) => mistakes.findIndex((x) => x.kanjiId === m.kanjiId) === i)
+  const unsyncedIds = [...new Set(unsyncedMistakeIds)]
   const addToReview = useAddToReview()
 
   return (
@@ -339,17 +464,17 @@ function QuizResults({
         <div className="mt-8 w-full text-left">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-black">Từ cần ôn lại ({uniqueMistakes.length})</h2>
-            {addToReview.isSuccess ? (
+            {unsyncedIds.length === 0 || addToReview.isSuccess ? (
               <span className="flex items-center gap-1.5 text-sm font-bold text-primary-dark">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
-                {describeAddResult(addToReview.data)}
+                {addToReview.isSuccess ? describeAddResult(addToReview.data) : 'Đã tự đưa vào Ôn tập'}
               </span>
             ) : (
               <Button
                 size="sm"
                 variant="secondary"
                 disabled={addToReview.isPending}
-                onClick={() => addToReview.mutate(uniqueMistakes.map((m) => m.kanjiId))}
+                onClick={() => addToReview.mutate(unsyncedIds)}
               >
                 <Plus className="h-4 w-4" strokeWidth={3} />
                 {addToReview.isPending ? 'Đang thêm...' : 'Thêm vào Ôn tập'}
@@ -382,7 +507,18 @@ function QuizResults({
           </Button>
         )}
       </div>
-      <Link to={exitTo} className="mt-5 text-sm font-extrabold text-secondary hover:underline">
+      {onSwitchMode && (
+        <button
+          type="button"
+          onClick={() => onSwitchMode(mode === 'adaptive' ? 'random' : 'adaptive')}
+          className="mt-4 text-sm font-bold text-muted-foreground hover:text-foreground hover:underline"
+        >
+          {mode === 'adaptive'
+            ? 'Bộ câu hỏi này ưu tiên từ bạn hay sai · Đổi sang chọn ngẫu nhiên cả bài'
+            : 'Bộ câu hỏi này chọn ngẫu nhiên · Đổi sang ưu tiên từ bạn hay sai'}
+        </button>
+      )}
+      <Link to={exitTo} className="mt-3 text-sm font-extrabold text-secondary hover:underline">
         {exitLabel}
       </Link>
     </div>

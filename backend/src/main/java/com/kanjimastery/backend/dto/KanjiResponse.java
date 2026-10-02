@@ -24,6 +24,8 @@ public class KanjiResponse implements Serializable {
     private String jlptLevel;
     private String meaning;
     private String exampleSentence;
+    /** Mẹo nhớ chung do AI sinh; null nếu chưa có. */
+    private String mnemonic;
     /** Chỉ được set khi lấy qua KanjiService (đường Admin) - null ở các đường khác (vd. SRS). */
     @Builder.Default
     private List<TagResponse> tags = List.of();
@@ -38,6 +40,7 @@ public class KanjiResponse implements Serializable {
                 .jlptLevel(kanji.getJlptLevel())
                 .meaning(kanji.getMeaning())
                 .exampleSentence(kanji.getExampleSentence())
+                .mnemonic(kanji.getMnemonic())
                 .build();
     }
 }

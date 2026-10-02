@@ -3,6 +3,9 @@ package com.kanjimastery.backend.controller;
 import com.kanjimastery.backend.dto.AddSrsCardsRequest;
 import com.kanjimastery.backend.dto.AddSrsCardsResponse;
 import com.kanjimastery.backend.dto.DailyCardResponse;
+import com.kanjimastery.backend.dto.DailyPlanResponse;
+import com.kanjimastery.backend.dto.HardWordsResponse;
+import com.kanjimastery.backend.dto.NoteRequest;
 import com.kanjimastery.backend.dto.ReviewRequest;
 import com.kanjimastery.backend.dto.ReviewResponse;
 import com.kanjimastery.backend.dto.SrsStatsResponse;
@@ -21,6 +24,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.service.SrsService;
+import com.kanjimastery.backend.service.StudyPlanService;
 
 @RestController
 @RequestMapping("/api/v1/srs")
@@ -29,18 +33,28 @@ import com.kanjimastery.backend.service.SrsService;
 public class SrsController {
 
     private final SrsService srsService;
+    private final StudyPlanService studyPlanService;
     private final UserService userService;
 
     @GetMapping("/daily-cards")
     public ResponseEntity<Page<DailyCardResponse>> getDailyCards(
             Authentication authentication,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 20) Pageable pageable,
+            @RequestParam(required = false, defaultValue = "false") boolean extra) {
         Long userId = currentUserId(authentication);
-        return ResponseEntity.ok(srsService.getDailyCards(userId, pageable));
+        return ResponseEntity.ok(srsService.getDailyCards(userId, pageable, extra));
+    }
+
+    @Operation(summary = "Kế hoạch ôn hôm nay",
+            description = "Số thẻ ôn và số từ mới của phiên hôm nay, vừa với thời gian ôn mỗi ngày của người học (đo từ nhịp ôn thật), "
+                    + "cùng số thẻ/từ mới để dành cho các ngày sau.")
+    @GetMapping("/daily-plan")
+    public ResponseEntity<DailyPlanResponse> getDailyPlan(Authentication authentication) {
+        return ResponseEntity.ok(studyPlanService.today(currentUserId(authentication)));
     }
 
     @Operation(summary = "Chấm điểm ôn tập (SM-2)",
-            description = "Nhận đánh giá quality (0-5), tính lại easinessFactor/interval theo SuperMemo SM-2 và cập nhật lịch ôn tiếp theo. Tự tạo bản ghi SRS nếu đây là lần ôn đầu tiên của Kanji này.")
+            description = "Nhận đánh giá rating (1 Quên, 2 Khó, 3 Nhớ, 4 Dễ), tính lại easinessFactor/interval theo SuperMemo SM-2, cập nhật lịch ôn tiếp theo và ghi lại lần ôn. Tự tạo bản ghi SRS nếu đây là lần ôn đầu tiên của Kanji này.")
     @PostMapping("/review")
     public ResponseEntity<ReviewResponse> submitReview(
             Authentication authentication,
@@ -66,6 +80,23 @@ public class SrsController {
             @RequestParam Long tagId) {
         Long userId = currentUserId(authentication);
         return ResponseEntity.ok(srsService.getTagStatus(userId, tagId));
+    }
+
+    @Operation(summary = "Lưu ghi chú/cách nhớ riêng cho một từ trong Ôn tập", description = "Để trống là xoá ghi chú.")
+    @PutMapping("/cards/{kanjiId}/note")
+    public ResponseEntity<Void> saveNote(
+            Authentication authentication,
+            @PathVariable Long kanjiId,
+            @Valid @RequestBody NoteRequest request) {
+        srsService.saveNote(currentUserId(authentication), kanjiId, request.getNote());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Danh sách từ khó",
+            description = "Những từ người học đã quên (sau khi đã học) từ app.srs.hard-word-lapses lần trở lên, quên nhiều lần nhất trước.")
+    @GetMapping("/hard-words")
+    public ResponseEntity<HardWordsResponse> getHardWords(Authentication authentication) {
+        return ResponseEntity.ok(srsService.getHardWords(currentUserId(authentication)));
     }
 
     @GetMapping("/stats")

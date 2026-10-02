@@ -1,6 +1,6 @@
 # Smart Kanji Mastery & JLPT Mock Exam Platform
 
-Backend Spring Boot cho nền tảng học Kanji cá nhân hóa (thuật toán SuperMemo SM-2) và thi thử JLPT trực tuyến với thi thời gian thực, chấm điểm chống race condition, và bảng xếp hạng cập nhật tức thì. Kèm live-demo Frontend React + TypeScript.
+Backend Spring Boot cho nền tảng học Kanji cá nhân hóa (lịch ôn SuperMemo SM-2 hoặc FSRS-6 tối ưu theo từng người) và thi thử JLPT trực tuyến với thi thời gian thực, chấm điểm chống race condition, và bảng xếp hạng cập nhật tức thì. Kèm live-demo Frontend React + TypeScript.
 
 > Dự án được xây dựng theo kế hoạch chi tiết tại [k_ho_ch_tri_n_khai_d_n_spring_boot.md](k_ho_ch_tri_n_khai_d_n_spring_boot.md) — tài liệu đó ghi lại toàn bộ quá trình thiết kế, các vấn đề kỹ thuật phát sinh (race condition, dual-write, N+1 query...) và giải pháp tương ứng.
 
@@ -9,6 +9,8 @@ Backend Spring Boot cho nền tảng học Kanji cá nhân hóa (thuật toán S
 - [Điểm sáng kỹ thuật](#điểm-sáng-kỹ-thuật)
 - [Kiến trúc hệ thống](#kiến-trúc-hệ-thống)
 - [Thuật toán SuperMemo SM-2](#thuật-toán-supermemo-sm-2)
+- [Lịch ôn FSRS](#lịch-ôn-fsrs)
+- [Cá nhân hoá việc học](#cá-nhân-hoá-việc-học)
 - [Chấm điểm bài thi: Race Condition & Transaction Boundary](#chấm-điểm-bài-thi-race-condition--transaction-boundary)
 - [Tối ưu hiệu năng Database](#tối-ưu-hiệu-năng-database)
 - [Database Schema](#database-schema)
@@ -33,6 +35,9 @@ Backend Spring Boot cho nền tảng học Kanji cá nhân hóa (thuật toán S
 6. **Transaction Boundary rõ ràng**: tách hẳn thao tác PostgreSQL khỏi Redis bằng `@TransactionalEventListener(AFTER_COMMIT)`, tránh dual-write.
 7. **Real-time Leaderboard** bằng Redis Sorted Set, không query sắp xếp nặng vào PostgreSQL.
 8. **Testcontainers**: integration test chạy trên Postgres + Redis thật trong container tạm, không phụ thuộc môi trường máy dev, chạy được trong CI.
+9. **Cá nhân hoá từ lịch sử trả lời**: mọi lần trả lời được ghi vào `review_logs`; trắc nghiệm chọn từ theo điểm yếu (weighted sampling Efraimidis-Spirakis), đáp án nhiễu lấy từ chính những lần người học chọn nhầm, phiên ôn mỗi ngày vừa với thời gian người học có và kịp ngày thi — xem [Cá nhân hoá việc học](#cá-nhân-hoá-việc-học).
+10. **FSRS-6 tự cài bằng Java**, khớp từng con số với thư viện tham chiếu py-fsrs (golden test); tham số khởi đầu tối ưu riêng cho từng người theo bước pretrain của optimizer chính thức, và trang Tiến bộ so dự đoán của FSRS với trí nhớ thật — xem [Lịch ôn FSRS](#lịch-ôn-fsrs).
+11. **Đề thi chỉ ra điểm yếu**: câu thi kiểu đề JLPT sinh từ kho từ vựng bằng chính bộ dựng câu hỏi của trắc nghiệm; kết quả chấm theo kỹ năng, và từ của câu sai tự vào lịch ôn qua listener `AFTER_COMMIT` + transaction `REQUIRES_NEW`, chỉ một lần cho mỗi bài thi.
 
 ---
 
@@ -86,6 +91,38 @@ Cài đặt tại [`SrsCalculatorService`](backend/src/main/java/com/kanjimaster
 | Trả lời sai ($q < 3$) | Reset `repetition_count = 0`, `interval = 1 ngày` — **EF vẫn được cập nhật** theo công thức trên |
 
 7 unit test tại [`SrsCalculatorServiceTest`](backend/src/test/java/com/kanjimastery/backend/service/SrsCalculatorServiceTest.java) phủ toàn bộ nhánh: $q=5$ liên tiếp, $q<3$ reset, chặn $EF \ge 1.3$, và validate input ngoài khoảng $[0,5]$.
+
+Người học chấm thẻ theo 4 mức như Anki (Quên / Khó / Nhớ / Dễ), đổi sang $q$ = 1 / 3 / 4 / 5 trước khi vào công thức trên.
+
+## Lịch ôn FSRS
+
+[`Fsrs`](backend/src/main/java/com/kanjimastery/backend/service/Fsrs.java) là bản cài lại bằng Java của mô hình trí nhớ FSRS-6 (Free Spaced Repetition Scheduler, thuật toán Anki dùng), theo đúng công thức của thư viện tham chiếu py-fsrs: mỗi thẻ có **độ ổn định** $S$ (số ngày tới khi khả năng nhớ còn 90%) và **độ khó** $D$; khả năng nhớ sau $t$ ngày là $R = (1 + F \cdot t / S)^{-w_{20}}$, và khoảng ôn để lúc ôn còn nhớ đúng tỉ lệ mong muốn $r$ là $I = \frac{S}{F}(r^{-1/w_{20}} - 1)$. [`FsrsTest`](backend/src/test/java/com/kanjimastery/backend/service/FsrsTest.java) phát lại chính các chuỗi ôn trong test của py-fsrs và khớp kết quả (chuỗi khoảng ôn 0, 2, 11, 46, 163, 498...; $S$ = 53.62691, $D$ = 6.3574867).
+
+| Phần | Cách làm |
+|---|---|
+| Chạy song song SM-2 | Mỗi lần ôn luôn cập nhật cả SM-2 lẫn trí nhớ FSRS, nên đổi qua lại lúc nào cũng được; ngày ôn tiếp theo theo thuật toán người học chọn ở trang Mục tiêu (mặc định SM-2). Thẻ ôn từ trước khi có FSRS được ước lượng: $S$ = khoảng ôn SM-2, $D$ suy từ EF. |
+| Tỉ lệ nhớ mong muốn | 80 / 85 / 90 / 95%. Nút chấm thẻ hiện ngay số ngày tới lần ôn sau của từng mức ("Nhớ · 4 ngày"); phiên ôn hôm nay xếp thẻ theo khả năng nhớ thấp nhất trước. |
+| Tham số riêng từng người | [`FsrsOptimizer`](backend/src/main/java/com/kanjimastery/backend/service/FsrsOptimizer.java) cài lại bước *pretrain* của optimizer chính thức (fsrs-rs): với mỗi mức chấm ở lần học đầu, tìm tam phân độ ổn định khớp nhất với việc từ còn nhớ hay đã quên ở lần ôn kế tiếp (làm trơn Laplace, trọng số căn bậc hai số mẫu, phạt $\lvert S - S_0 \rvert / 16$ với $S_0$ là giá trị mặc định để ít dữ liệu thì vẫn gần mặc định). Cần 50 từ cho một mức chấm; chạy mỗi sáng thứ Hai và khi người học bấm "Tối ưu ngay". Các tham số còn lại giữ mặc định — tối ưu chúng cần gradient descent trên toàn bộ lịch sử và nhiều dữ liệu hơn hẳn. |
+| Mô phỏng 4 tháng | [`FsrsSimulationIT`](backend/src/test/java/com/kanjimastery/backend/service/FsrsSimulationIT.java) cho hai người học ảo giống hệt nhau (một SM-2, một FSRS 90%) học 640 từ trong 120 ngày qua chính các service của app, với đồng hồ được tua; trí nhớ thật của họ quên từ mới nhanh hơn người học nói chung (độ ổn định ban đầu ~0,4 lần). Qua 4 hạt giống ngẫu nhiên: FSRS giữ tỉ lệ nhớ 30 ngày cuối 89,8–92,3% với ít hơn SM-2 2–9% lượt ôn, dự đoán lệch thực tế 0,1–2,7 điểm %, bộ tối ưu ước lượng mức "Nhớ" 0,74–1,22 ngày (thật 0,9). Mô phỏng này cũng tìm ra lỗi thẻ đến hạn theo đúng giờ của lần ôn trước (40–45% lượt ôn bị trễ một ngày khi người học đổi giờ học) - giờ thẻ đến hạn từ đầu ngày học, như Anki. |
+| Kiểm chứng | Mỗi lần ôn lưu xác suất nhớ FSRS dự đoán; trang Tiến bộ so trung bình dự đoán với tỉ lệ nhớ thật 30 ngày qua, chỉ coi là lệch khi chênh quá hai lần sai số chuẩn. |
+
+---
+
+## Cá nhân hoá việc học
+
+Mọi lần người học trả lời một từ — lật thẻ ôn tập, làm trắc nghiệm — là một dòng trong `review_logs` (nguồn, hướng hỏi, đúng/sai, mức 1-4, thời gian trả lời, đáp án đã chọn, trạng thái thẻ ngay trước đó). Các tính năng dưới đây đều là truy vấn trên bảng này, gom theo cả bài trong vài truy vấn chứ không truy vấn theo từng từ.
+
+| Tính năng | Cách làm |
+|---|---|
+| Chấm điểm khách quan | Trắc nghiệm do server chấm; mức Dễ/Nhớ/Khó suy từ thời gian trả lời so với **trung vị của chính người học** (200 câu đúng gần nhất theo hướng hỏi). Đúng khi thẻ chưa đến hạn chỉ được ghi lại, vì SM-2 không tính tới ôn sớm. |
+| Trắc nghiệm thích ứng | ~60% từ yếu (đến hạn, sai 14 ngày qua, EF thấp), ~25% từ chưa gặp, ~15% từ đã thuộc; bốc theo trọng số không lặp ([`AdaptiveQuizPlanner`](backend/src/main/java/com/kanjimastery/backend/service/AdaptiveQuizPlanner.java)). Hướng hỏi nghiêng về chiều người học hay sai. |
+| Đáp án nhiễu cá nhân | Tối đa 2 đáp án sai người học từng chọn cho chính từ đó được đưa lại vào câu hỏi, trừ khi chúng cũng "đúng" (từ đồng âm, nghĩa/cách đọc của dòng khác cùng cách viết). |
+| Từ khó | Đếm số lần quên một thẻ đang ôn bình thường (như leech của Anki); quên 6 lần là từ khó, có trang riêng và trắc nghiệm riêng. Mẹo nhớ dựa trên **âm Hán Việt** do Gemini sinh một lần cho mỗi từ, kèm ghi chú riêng của người học. |
+| Kế hoạch hôm nay | Nhịp ôn đo từ khoảng cách giữa các lần chấm thẻ; số thẻ ôn vừa với số phút mỗi ngày, thẻ dễ quên nhất (trễ nhiều khoảng ôn nhất) trước; từ mới chỉ thêm khi còn chỗ (nạp n từ/ngày ≈ 4n lượt ôn/ngày) và xen giữa các thẻ ôn. "Hôm nay" tính theo giờ Việt Nam, bắt đầu lúc 4 giờ sáng ([`StudyPlanService`](backend/src/main/java/com/kanjimastery/backend/service/StudyPlanService.java)). |
+| Mục tiêu & ngày thi | Từ chưa học của mọi bài từ N5 tới cấp mục tiêu chia đều tới 2 tuần trước kỳ thi; dự báo ngày học xong theo nhịp 2 tuần gần nhất; gợi ý bài tiếp theo khi sắp hết từ mới. |
+| Tiến bộ | Tỉ lệ nhớ thật theo tuần (lần ôn đúng hạn từ đã thuộc), lượt ôn và từ mới theo ngày, độ chính xác trắc nghiệm theo kiểu câu hỏi, những chỗ hay nhầm nhất, FSRS đoán trí nhớ sát tới đâu. |
+| Lịch ôn FSRS | FSRS-6 với tỉ lệ nhớ người học chọn và tham số khởi đầu tối ưu từ lịch sử ôn của chính họ — xem [Lịch ôn FSRS](#lịch-ôn-fsrs). |
+| Đề thi chỉ ra điểm yếu | Mỗi câu thi gắn kỹ năng (đọc / viết / nghĩa) và từ vựng nó kiểm tra; bài thi chia đều các kỹ năng, mỗi từ tối đa một câu. Kết quả chấm theo kỹ năng; câu trả lời được ghi như trắc nghiệm (nguồn `EXAM`) nên từ của câu sai tự vào lịch ôn, kèm nút luyện lại đúng các từ đó. Câu thi kiểu đề JLPT (問題1 漢字読み / 問題2 表記) và câu hỏi nghĩa được sinh mỗi sáng cho từ mới thêm vào bài học ([`ExamQuestionGenerator`](backend/src/main/java/com/kanjimastery/backend/service/ExamQuestionGenerator.java)). |
 
 ---
 
@@ -157,14 +194,18 @@ Ngoài ra, mọi chỗ cần ghép N bản ghi (chấm điểm 20-50 câu hỏi,
 
 ## Database Schema
 
-6 bảng chính (PostgreSQL, quản lý bằng Flyway — xem [`db/migration`](backend/src/main/resources/db/migration)):
+Các bảng chính (PostgreSQL, quản lý bằng Flyway — xem [`db/migration`](backend/src/main/resources/db/migration)):
 
 | Bảng | Vai trò |
 |---|---|
 | `users` | Tài khoản, mật khẩu hash (BCrypt), role |
-| `kanji` | Từ điển Hán tự (character, Hán-Việt, on/kun-yomi, số nét, JLPT level) |
-| `user_kanji_srs` | Tiến độ SRS mỗi user-kanji (composite index `user_id, next_review_at`) |
-| `exam_questions` | Ngân hàng câu hỏi trắc nghiệm JLPT |
+| `kanji` | Từ điển Hán tự (character, Hán-Việt, on/kun-yomi, số nét, JLPT level), câu ví dụ và mẹo nhớ do AI sinh |
+| `user_kanji_srs` | Tiến độ SRS mỗi user-kanji (composite index `user_id, next_review_at`), trí nhớ FSRS (độ ổn định, độ khó), số lần quên, ghi chú riêng |
+| `review_logs` | Mỗi lần trả lời một từ (thẻ ôn tập, trắc nghiệm, bài thi) kèm xác suất nhớ FSRS dự đoán — nguồn dữ liệu cá nhân hoá |
+| `user_learning_profiles` | Mục tiêu học: cấp độ, ngày thi, số phút mỗi ngày, thuật toán lịch ôn, tỉ lệ nhớ mong muốn |
+| `user_fsrs_parameters` | Tham số FSRS tối ưu riêng từng người (JSONB, kèm phiên bản FSRS) |
+| `exam_questions` | Ngân hàng câu hỏi JLPT: kỹ năng, nguồn (soạn tay / sinh từ kho từ vựng), câu ví dụ và phần gạch chân |
+| `exam_question_kanji` | Từ vựng mỗi câu thi kiểm tra |
 | `user_exam_attempts` | Mỗi lượt thi (status: `IN_PROGRESS` / `COMPLETED` / `TIMEOUT`) |
 | `user_exam_answers` | Chi tiết từng câu trả lời — phục vụ tính năng xem lại bài làm |
 
@@ -177,9 +218,11 @@ Tài liệu API đầy đủ, tương tác được (có nút **Authorize** đ�
 | Nhóm | Endpoint | Mô tả |
 |---|---|---|
 | Auth | `POST /api/v1/auth/register` `/login` `/refresh-token` `/logout` `/change-password` | Đăng ký/đăng nhập, Refresh Token Rotation, JWT Blacklist khi logout |
-| Kanji | `GET /api/v1/kanji` `/{id}` | Tra cứu từ điển (có phân trang, cache Redis) |
-| SRS | `GET /api/v1/srs/daily-cards` `POST /review` `GET /stats` | Ôn tập theo SM-2 |
-| Exam | `POST /api/v1/exams/start` `PUT .../answers` `GET .../session` `POST .../submit` `GET .../review` | Thi thử, auto-save, resume, nộp bài, xem lại |
+| Kanji | `GET /api/v1/kanji` `/{id}` `POST /{id}/mnemonic` | Tra cứu từ điển (có phân trang, cache Redis); mẹo nhớ Hán Việt do AI sinh |
+| SRS | `GET /api/v1/srs/daily-plan` `/daily-cards` `POST /review` `GET /stats` `/hard-words` `PUT /cards/{kanjiId}/note` | Kế hoạch và phiên ôn hôm nay, chấm thẻ SM-2, từ khó, ghi chú riêng |
+| Quiz | `GET /api/v1/quiz/generate` `POST /answers` | Trắc nghiệm thích ứng (hoặc `mode=random`, `hardWords=true`, `kanjiIds=1,2,3` cho đúng các từ đó); server chấm từng câu và cập nhật lịch ôn |
+| Mục tiêu & tiến bộ | `GET` `PUT /api/v1/profile/learning` `POST /learning/fsrs/optimize` · `GET /api/v1/progress` | Cấp độ, ngày thi, số phút mỗi ngày, SM-2/FSRS và tỉ lệ nhớ; tối ưu FSRS theo lịch sử ôn; tỉ lệ nhớ theo tuần, hoạt động 14 ngày, chỗ hay nhầm, FSRS dự đoán so với thực tế |
+| Exam | `POST /api/v1/exams/start` `PUT .../answers` `GET .../session` `POST .../submit` `GET .../review` · `POST /questions/generate` (ADMIN) | Thi thử, auto-save, resume, nộp bài, xem lại kèm điểm theo kỹ năng và từ cần ôn; sinh câu thi từ kho từ vựng |
 | Leaderboard | `GET /api/v1/exams/leaderboard` `/my-rank` | Bảng xếp hạng real-time (Redis ZSET) |
 
 ---
@@ -188,11 +231,12 @@ Tài liệu API đầy đủ, tương tác được (có nút **Authorize** đ�
 
 React 18 + Vite + TypeScript, Tailwind CSS, TanStack Query, Axios, React Router, Zustand — mã nguồn tại [`frontend/`](frontend/).
 
-3 màn hình chính:
+Các màn hình chính:
 
-1. **Ôn tập (Flashcard SRS)** — [`FlashcardPage`](frontend/src/pages/FlashcardPage.tsx): thẻ lật 3D (CSS `transform-style: preserve-3d`), phím tắt Space để lật / 0-5 để chấm quality, gọi `POST /srs/review` và chuyển thẻ tiếp theo bằng **Optimistic Update** của TanStack Query (`onMutate` xoá thẻ khỏi cache ngay, rollback nếu lỗi) để tránh giật/nhấp nháy khi chờ round-trip mạng.
-2. **Thi thử (Exam Workspace)** — [`ExamWorkspacePage`](frontend/src/pages/ExamWorkspacePage.tsx): Question Palette theo trạng thái đã làm/chưa làm, đếm ngược dựa hoàn toàn vào `remainingSeconds` Backend trả về (không so sánh `new Date()` để tránh clock drift), auto-save debounce 300ms mỗi lần chọn đáp án, tự động nộp bài khi hết giờ, khôi phục đáp án đã tick khi F5 qua `GET .../session`.
-3. **Kết quả & Xem lại** — [`ExamResultPage`](frontend/src/pages/ExamResultPage.tsx): điểm số, tỉ lệ đúng, thời gian làm bài; danh sách so sánh đáp án đã chọn vs đáp án đúng kèm giải thích; tab Bảng xếp hạng (Redis ZSET) highlight hàng của user hiện tại.
+1. **Ôn tập (Flashcard SRS)** — [`FlashcardPage`](frontend/src/pages/FlashcardPage.tsx): thẻ lật 3D (CSS `transform-style: preserve-3d`), phím tắt Space để lật / 1-4 để chấm (Quên / Khó / Nhớ / Dễ), gọi `POST /srs/review` và chuyển thẻ tiếp theo bằng **Optimistic Update** của TanStack Query (`onMutate` xoá thẻ khỏi cache ngay, rollback nếu lỗi) để tránh giật/nhấp nháy khi chờ round-trip mạng. Đầu trang là kế hoạch hôm nay và tiến độ so với mục tiêu; từ khó có mẹo nhớ ngay trên thẻ; mỗi nút chấm hiện số ngày tới lần ôn sau.
+2. **Thi thử (Exam Workspace)** — [`ExamWorkspacePage`](frontend/src/pages/ExamWorkspacePage.tsx): Question Palette theo trạng thái đã làm/chưa làm, đếm ngược dựa hoàn toàn vào `remainingSeconds` Backend trả về (không so sánh `new Date()` để tránh clock drift), auto-save debounce 300ms mỗi lần chọn đáp án, tự động nộp bài khi hết giờ, khôi phục đáp án đã tick khi F5 qua `GET .../session`. Câu kiểu đề JLPT hiện câu ví dụ với phần được hỏi gạch chân.
+3. **Kết quả & Xem lại** — [`ExamResultPage`](frontend/src/pages/ExamResultPage.tsx): điểm số, tỉ lệ đúng, thời gian làm bài; điểm theo kỹ năng; các từ của câu sai (đã vào Ôn tập) và nút luyện lại đúng các từ đó; danh sách so sánh đáp án đã chọn vs đáp án đúng kèm giải thích; tab Bảng xếp hạng (Redis ZSET) highlight hàng của user hiện tại.
+4. **Tiến bộ** — [`ProgressPage`](frontend/src/pages/ProgressPage.tsx): biểu đồ cột dựng bằng HTML ([`ColumnChart`](frontend/src/components/ColumnChart.tsx)), chú thích khi rê chuột hoặc focus bằng bàn phím, bảng số liệu dưới mỗi biểu đồ; màu lấy từ token của app và đã kiểm tra độ tương phản, khả năng phân biệt khi mù màu. Có thẻ so dự đoán của FSRS với tỉ lệ nhớ thật.
 
 Điểm kỹ thuật đáng chú ý — [`api/client.ts`](frontend/src/api/client.ts): **Axios Interceptor tự động refresh JWT có mutex**. Backend làm Refresh Token Rotation (token cũ bị revoke ngay khi dùng), nên nhiều request `401` xảy ra gần như đồng thời chỉ được phép gọi `/auth/refresh-token` **đúng một lần** — dùng chung một Promise cấp-module, các request khác xếp hàng chờ rồi tự retry với token mới, tránh trường hợp request refresh chạy song song khiến người dùng bị văng logout oan.
 
@@ -261,6 +305,8 @@ Lệnh thứ 4 xoá cache từ vựng cũ trong Redis. Chuyển sang máy mới:
 | Đăng ký, theo IP | 3 lần/phút | `app.rate-limit.register` |
 | Sai mật khẩu, theo tài khoản | 10 lần trong 15 phút thì khoá tài khoản 15 phút | `app.rate-limit.login-lock` |
 | Tạo trắc nghiệm, theo tài khoản | 30 lần/phút | `app.rate-limit.quiz` |
+| Gửi kết quả trắc nghiệm, theo tài khoản | 120 câu/phút | `app.rate-limit.quiz-answer` |
+| Nhờ AI sinh mẹo nhớ, theo tài khoản | 20 lần/giờ (mẹo nhớ đã có thì không tính) | `app.rate-limit.mnemonic` |
 | Request Gemini, cả hệ thống | 100 request/ngày (UTC) | `GEMINI_DAILY_LIMIT` trong `.env` |
 | Từ sinh câu ví dụ thất bại | Thất bại 2 lần thì bỏ qua từ đó 24 giờ | `QuizService` |
 
@@ -301,8 +347,8 @@ cd backend
 ./mvnw test
 ```
 
-- **Unit test** (không cần Docker): `SrsCalculatorServiceTest`, `JwtServiceTest`, `UserServiceTest`.
-- **Integration test** (Testcontainers - tự khởi chạy Postgres + Redis trong container tạm, không phụ thuộc môi trường local): `ExamFinalizationConcurrencyIT` (race condition + rollback), `ExamSessionStoreIT` (TTL buffer), `KanjiMasteryApplicationTests` (context loads).
+- **Unit test** (không cần Docker): `SrsCalculatorServiceTest`, `JwtServiceTest`, `UserServiceTest`, và phần cá nhân hoá: `AdaptiveQuizPlannerTest` (chọn từ, hướng hỏi), `StudyPlanServiceTest` (kế hoạch hôm nay, mục tiêu), `DailySessionOrderTest`, `StudyCalendarTest` (ngày học theo giờ Việt Nam), `FsrsTest` (golden test với py-fsrs), `FsrsOptimizerTest`, `FsrsParametersServiceTest`, `ExamDiagnosisServiceTest`, `ExamQuestionGeneratorTest`...
+- **Integration test** (Testcontainers - tự khởi chạy Postgres + Redis trong container tạm, không phụ thuộc môi trường local): `ExamFinalizationConcurrencyIT` (race condition + rollback), `ExamSessionStoreIT` (TTL buffer), `KanjiMasteryApplicationTests` (context loads), `ReviewLogRepositoryIT` / `TagRepositoryIT` / `UserKanjiSrsRepositoryIT` (các truy vấn native: `percentile_cont`, `FILTER`, `LAG`, `LEAD`, `split_part`), `FsrsParametersRepositoryIT` (JSONB), `ExamQuestionRepositoryIT` (gắn kỹ năng, từ vựng cho câu mẫu), `ExamDiagnosisIT` (nộp bài → từ sai vào lịch ôn, chỉ một lần), `ExamQuestionGeneratorIT`, `FsrsSimulationIT` (mô phỏng 120 ngày, ~90 giây; đổi hạt giống bằng `-Dsimulation.seed=1`, báo cáo và lịch sử ôn ghi ra `backend/target/fsrs-simulation/`).
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) chạy toàn bộ test suite tự động trên mỗi push/PR vào `main`.
 

@@ -27,4 +27,11 @@ public class QuizQuestionResponse {
     private String character;
     private String reading;
     private String meaning;
+    /** Đáp án sai người học từng chọn nhiều nhất cho từ này theo hướng hỏi này, có mặt trong {@link #choices}; null nếu chưa từng nhầm. */
+    private String personalTrap;
+    /** Số lần đã chọn {@link #personalTrap}. */
+    private int personalTrapCount;
+    /** Khi {@link #personalTrap} là cách viết của một từ có thật: cách đọc và nghĩa của từ đó, để so sánh. */
+    private String personalTrapReading;
+    private String personalTrapMeaning;
 }

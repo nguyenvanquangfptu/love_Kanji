@@ -100,7 +100,7 @@ export function StudyBrowsePage() {
             <div className="min-w-0">
               <p className="font-extrabold">Trắc nghiệm tổng hợp {activeLevel}</p>
               <p className="text-sm font-semibold text-muted-foreground">
-                Câu hỏi ngẫu nhiên từ cả {readyCount} bài
+                Ưu tiên từ bạn hay sai, lấy từ cả {readyCount} bài
               </p>
             </div>
           </div>

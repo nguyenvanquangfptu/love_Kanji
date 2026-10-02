@@ -23,4 +23,10 @@ export const examApi = {
 
   getReview: (attemptId: number) =>
     apiClient.get<ExamReviewResponse>(`/exams/attempts/${attemptId}/review`).then((r) => r.data),
+
+  /** Chỉ ADMIN: sinh câu thi cho các từ trong bài của một cấp độ (chỉ câu chưa có). */
+  generateQuestions: (level: string) =>
+    apiClient
+      .post<{ level: string; words: number; created: number }>('/exams/questions/generate', null, { params: { level } })
+      .then((r) => r.data),
 }

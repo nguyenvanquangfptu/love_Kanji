@@ -56,18 +56,34 @@ app:
     register:           # theo IP
       limit: 3
       window-seconds: 60
-    quiz:               # theo tài khoản
+    quiz:               # tạo trắc nghiệm, theo tài khoản
       limit: 30
       window-seconds: 60
+    quiz-answer:        # gửi kết quả từng câu trắc nghiệm, theo tài khoản
+      limit: 120
+      window-seconds: 60
+    mnemonic:           # nhờ AI sinh mẹo nhớ, theo tài khoản
+      limit: 20
+      window-seconds: 3600
     login-lock:         # sai mật khẩu 10 lần trong 15 phút -> khoá tài khoản đó 15 phút, dù đổi IP
       max-failures: 10
       window-seconds: 900
       lock-seconds: 900
+  srs:
+    hard-word-lapses: 6       # quên chừng này lần (sau khi đã học) thì thành "từ khó"
+    hard-words-up-front: 5    # mỗi phiên ôn chỉ để chừng này từ khó ở chỗ cũ, còn lại dồn xuống cuối
+    day-zone: Asia/Ho_Chi_Minh # "hôm nay" của người học tính theo múi giờ này, không theo giờ máy chủ
+    day-start-hour: 4         # ngày học mới bắt đầu lúc 4 giờ sáng: học quá nửa đêm vẫn tính vào hôm trước
+    default-daily-minutes: 20 # khi người học chưa đặt mục tiêu
+    default-new-words-per-day: 10
+    fsrs-min-first-reviews: 50 # tối ưu FSRS riêng cho một mức chấm khi đã có chừng này từ học với mức đó và ôn lại
+    fsrs-optimize-cron: "0 30 4 * * MON" # tối ưu lại tham số FSRS mỗi sáng thứ Hai (giờ day-zone)
   exam:
     duration-seconds: 1800        # 30 phút làm bài
     default-question-count: 20
     session-buffer-seconds: 1800  # TTL Redis Hash = duration + buffer, tránh mất dữ liệu
     reconciliation-interval-ms: 90000
+    question-generation-cron: "0 15 5 * * *" # mỗi sáng sinh câu thi cho từ mới thêm vào bài học (giờ app.srs.day-zone)
   ai:
     # Để trống thì tính năng sinh câu ví dụ tự tắt (quiz vẫn chạy được, chỉ không có câu ngữ cảnh).
     # Nhiều key/model phân tách bằng dấu phẩy. Hạn mức miễn phí tính theo project + model,

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { BookOpen, Check, CheckCircle2, Clock, Lightbulb, RotateCcw, Target, Trophy, XCircle } from 'lucide-react'
 import { examApi } from '@/api/exam'
 import { extractErrorMessage } from '@/api/client'
+import type { ExamReviewResponse, QuizDirection } from '@/api/types'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +13,14 @@ import { Alert } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Leaderboard } from '@/components/Leaderboard'
 import { StatTile } from '@/components/StatTile'
+import { Meter } from '@/components/Meter'
+import { SentenceWithTarget } from '@/components/SentenceWithTarget'
+
+const SKILL_LABELS: Record<QuizDirection, string> = {
+  KANJI_TO_READING: 'Đọc chữ Hán',
+  READING_TO_KANJI: 'Viết chữ Hán',
+  MEANING: 'Hiểu nghĩa',
+}
 
 const STATUS_LABEL: Record<string, string> = {
   COMPLETED: 'Đã nộp bài',
@@ -56,6 +65,9 @@ export function ExamResultPage() {
         <StatTile label="Thời gian" value={`${minutes}:${seconds.toString().padStart(2, '0')}`} tone="orange" icon={Clock} />
       </div>
 
+      {data.skills.length > 0 && <SkillCard skills={data.skills} />}
+      {data.wrongWords.length > 0 && <WrongWordsCard review={data} />}
+
       <div className="flex flex-col gap-3 sm:flex-row">
         <Button size="lg" className="flex-1" onClick={() => navigate('/exam')}>
           <RotateCcw className="h-5 w-5" /> Thi lại
@@ -81,9 +93,16 @@ export function ExamResultPage() {
                   ) : (
                     <XCircle className="mt-0.5 h-6 w-6 shrink-0 text-destructive" strokeWidth={2.5} />
                   )}
-                  <p className="font-jp text-lg font-bold">
-                    <span className="font-sans text-muted-foreground">Câu {idx + 1}.</span> {q.questionText}
-                  </p>
+                  <div>
+                    <p className="font-jp text-lg font-bold">
+                      <span className="font-sans text-muted-foreground">Câu {idx + 1}.</span> {q.questionText}
+                    </p>
+                    {q.sentence && (
+                      <p className="mt-2 font-jp text-lg leading-loose">
+                        <SentenceWithTarget sentence={q.sentence} target={q.highlight} />
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {(['A', 'B', 'C', 'D'] as const).map((opt) => {
@@ -123,5 +142,65 @@ export function ExamResultPage() {
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+/** Từ của các câu làm sai: đã vào Ôn tập, và luyện lại ngay bằng trắc nghiệm chỉ gồm các từ đó. */
+function WrongWordsCard({ review }: { review: ExamReviewResponse }) {
+  const navigate = useNavigate()
+  const words = review.wrongWords
+  const kanjiIds = words.map((w) => w.kanjiId).join(',')
+
+  return (
+    <Card className="p-4 sm:p-5">
+      <h2 className="text-lg font-black">Từ cần ôn lại</h2>
+      <p className="text-sm font-semibold text-muted-foreground">
+        {review.addedToReview
+          ? `${words.length} từ của các câu làm sai đã được đưa vào Ôn tập.`
+          : 'Các từ của câu làm sai trong bài thi này.'}
+      </p>
+      <ul className="mt-3 flex flex-wrap gap-2">
+        {words.map((w) => (
+          <li key={w.kanjiId} className="rounded-xl border-2 border-border px-3 py-1.5" title={w.meaning}>
+            <span className="font-jp text-lg font-bold">{w.character}</span>
+            {w.reading && w.reading !== w.character && (
+              <span className="ml-1.5 font-jp text-sm font-semibold text-muted-foreground">{w.reading}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      <Button
+        className="mt-4"
+        variant="secondary"
+        onClick={() => navigate(`/study/quiz?kanjiIds=${kanjiIds}&exam=${review.attemptId}`)}
+      >
+        <Target className="h-5 w-5" /> Luyện lại các từ này
+      </Button>
+    </Card>
+  )
+}
+
+/** Tỉ lệ đúng theo từng kỹ năng, chỉ ra kỹ năng yếu nhất khi có ít nhất hai kỹ năng. */
+function SkillCard({ skills }: { skills: ExamReviewResponse['skills'] }) {
+  const rate = (s: ExamReviewResponse['skills'][number]) => Math.round((s.correct / s.total) * 100)
+  const weakest = skills.reduce((low, s) => (rate(s) < rate(low) ? s : low), skills[0])
+  const uneven = skills.some((s) => rate(s) > rate(weakest))
+
+  return (
+    <Card className="p-4 sm:p-5">
+      <h2 className="text-lg font-black">Theo kỹ năng</h2>
+      <p className="text-sm font-semibold text-muted-foreground">
+        {skills.length < 2
+          ? 'Bài này chỉ có câu hỏi một kỹ năng.'
+          : uneven
+            ? `Cần luyện thêm nhất: ${SKILL_LABELS[weakest.skill].toLowerCase()}.`
+            : 'Các kỹ năng đều nhau trong bài này.'}
+      </p>
+      <div className="mt-4 flex flex-col gap-4">
+        {skills.map((s) => (
+          <Meter key={s.skill} label={SKILL_LABELS[s.skill]} value={rate(s)} detail={`${s.correct}/${s.total} câu`} />
+        ))}
+      </div>
+    </Card>
   )
 }

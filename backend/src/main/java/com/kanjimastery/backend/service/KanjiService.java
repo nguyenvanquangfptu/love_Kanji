@@ -47,9 +47,7 @@ public class KanjiService {
 
     @Transactional
     public KanjiResponse create(KanjiRequest request) {
-        if (kanjiRepository.existsByCharacter(request.getCharacter())) {
-            throw new BadRequestException("Kanji '" + request.getCharacter() + "' đã tồn tại");
-        }
+        ensureNotDuplicatedInSameLesson(request, null);
         Kanji kanji = new Kanji();
         applyRequest(kanji, request);
         return toResponseWithTags(kanjiRepository.save(kanji));
@@ -60,10 +58,7 @@ public class KanjiService {
     public KanjiResponse update(Long id, KanjiRequest request) {
         Kanji kanji = kanjiRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Kanji với id: " + id));
-        if (!kanji.getCharacter().equals(request.getCharacter())
-                && kanjiRepository.existsByCharacter(request.getCharacter())) {
-            throw new BadRequestException("Kanji '" + request.getCharacter() + "' đã tồn tại");
-        }
+        ensureNotDuplicatedInSameLesson(request, id);
         applyRequest(kanji, request);
         return toResponseWithTags(kanjiRepository.save(kanji));
     }
@@ -74,6 +69,28 @@ public class KanjiService {
             throw new ResourceNotFoundException("Không tìm thấy Kanji với id: " + id);
         }
         kanjiRepository.deleteById(id);
+    }
+
+    /**
+     * Cùng một từ được có nhiều dòng (mỗi nghĩa một dòng, vd. 出る "ra" và 出る "có [thưởng]") nếu nằm ở các bài khác nhau.
+     * Từ không gắn bài nào thì không được trùng, vì khi đó không phân biệt được với dòng đã có.
+     */
+    private void ensureNotDuplicatedInSameLesson(KanjiRequest request, Long selfId) {
+        Set<Long> tagIds = CollectionUtils.isEmpty(request.getTagIds()) ? Set.of() : new HashSet<>(request.getTagIds());
+        for (Kanji other : kanjiRepository.findAllByCharacter(request.getCharacter())) {
+            if (other.getId().equals(selfId)) {
+                continue;
+            }
+            if (tagIds.isEmpty()) {
+                throw new BadRequestException("Từ '" + request.getCharacter() + "' đã tồn tại - nếu đây là nghĩa khác, hãy gán nó vào bài");
+            }
+            other.getTags().stream()
+                    .filter(tag -> tagIds.contains(tag.getId()))
+                    .findFirst()
+                    .ifPresent(tag -> {
+                        throw new BadRequestException("Từ '" + request.getCharacter() + "' đã có trong bài " + tag.getName());
+                    });
+        }
     }
 
     private void applyRequest(Kanji kanji, KanjiRequest request) {

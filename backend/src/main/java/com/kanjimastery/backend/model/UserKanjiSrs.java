@@ -44,6 +44,23 @@ public class UserKanjiSrs {
     @Column(name = "next_review_at", nullable = false)
     private LocalDateTime nextReviewAt;
 
+    /** Số lần quên sau khi đã học - xem {@link com.kanjimastery.backend.config.SrsProperties#getHardWordLapses()}. */
+    @Column(name = "lapse_count", nullable = false)
+    @Builder.Default
+    private Integer lapseCount = 0;
+
     @Column(name = "last_reviewed_at")
     private LocalDateTime lastReviewedAt;
+
+    /** Độ ổn định FSRS (số ngày để xác suất nhớ còn 90%); null nếu chưa ôn lần nào từ khi có FSRS. */
+    @Column(name = "stability")
+    private Double stability;
+
+    /** Độ khó FSRS (1-10); null cùng lúc với {@link #stability}. */
+    @Column(name = "difficulty")
+    private Double difficulty;
+
+    /** Cách nhớ riêng người học tự ghi cho từ này. */
+    @Column(name = "personal_note", columnDefinition = "TEXT")
+    private String personalNote;
 }

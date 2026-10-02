@@ -45,4 +45,8 @@ public class UserExamAttempt {
 
     @Column(name = "submitted_at")
     private LocalDateTime submittedAt;
+
+    /** Lúc kết quả bài thi được đưa vào ôn tập; null = chưa (bài đang làm, hoặc thi trước khi có tính năng này). */
+    @Column(name = "diagnosed_at")
+    private LocalDateTime diagnosedAt;
 }
