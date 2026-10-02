@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { BookOpen, Brain, BrainCircuit, Clock, PartyPopper, Sprout } from 'lucide-react'
 import { srsApi } from '@/api/srs'
-import type { DailyCardResponse, Page } from '@/api/types'
+import type { DailyCardResponse, Page, ReviewRating, ReviewRequest } from '@/api/types'
 import { extractErrorMessage } from '@/api/client'
 import { cn, wordSizeClass } from '@/lib/utils'
 import { FlipCard } from '@/components/FlipCard'
@@ -20,13 +20,11 @@ import { PageSpinner } from '@/components/ui/spinner'
 const DAILY_CARDS_KEY = ['srs', 'daily-cards']
 const STATS_KEY = ['srs', 'stats']
 
-const QUALITY_OPTIONS = [
-  { quality: 0, label: 'Quên hẳn', className: 'border-destructive-dark bg-destructive text-white' },
-  { quality: 1, label: 'Sai', className: 'border-orange-dark bg-orange text-white' },
-  { quality: 2, label: 'Gần đúng', className: 'border-accent-dark bg-accent text-accent-foreground' },
-  { quality: 3, label: 'Khó nhớ', className: 'border-secondary-dark bg-secondary text-white' },
-  { quality: 4, label: 'Nhớ', className: 'border-primary-dark bg-primary text-white' },
-  { quality: 5, label: 'Quá dễ', className: 'border-primary-dark bg-primary text-white' },
+const RATING_OPTIONS: { rating: ReviewRating; label: string; hint: string; className: string }[] = [
+  { rating: 1, label: 'Quên', hint: 'Học lại', className: 'border-destructive-dark bg-destructive text-white' },
+  { rating: 2, label: 'Khó', hint: 'Nghĩ lâu mới ra', className: 'border-orange-dark bg-orange text-white' },
+  { rating: 3, label: 'Nhớ', hint: 'Nhớ ra được', className: 'border-secondary-dark bg-secondary text-white' },
+  { rating: 4, label: 'Dễ', hint: 'Nhớ ngay', className: 'border-primary-dark bg-primary text-white' },
 ]
 
 export function FlashcardPage() {
@@ -51,8 +49,22 @@ export function FlashcardPage() {
     if (data && sessionTotal === null) setSessionTotal(data.content.length)
   }, [data, sessionTotal])
 
+  // Thời gian nhớ lại = từ lúc hiện thẻ tới lần lật đầu tiên (lật đi lật lại sau đó không tính).
+  const shownAt = useRef(0)
+  const recallMs = useRef<number | null>(null)
+  const currentId = current?.kanji.id
+  useEffect(() => {
+    shownAt.current = performance.now()
+    recallMs.current = null
+  }, [currentId])
+
+  const toggleFlip = useCallback(() => {
+    if (recallMs.current === null) recallMs.current = Math.round(performance.now() - shownAt.current)
+    setFlipped((f) => !f)
+  }, [])
+
   const reviewMutation = useMutation({
-    mutationFn: (vars: { kanjiId: number; quality: number }) => srsApi.submitReview(vars),
+    mutationFn: (vars: ReviewRequest) => srsApi.submitReview(vars),
     onMutate: async (vars) => {
       await queryClient.cancelQueries({ queryKey: DAILY_CARDS_KEY })
       const previous = queryClient.getQueryData<Page<DailyCardResponse>>(DAILY_CARDS_KEY)
@@ -69,9 +81,9 @@ export function FlashcardPage() {
   })
 
   const rate = useMemo(
-    () => (quality: number) => {
+    () => (rating: ReviewRating) => {
       if (!current || reviewMutation.isPending) return
-      reviewMutation.mutate({ kanjiId: current.kanji.id, quality })
+      reviewMutation.mutate({ kanjiId: current.kanji.id, rating, responseMs: recallMs.current ?? undefined })
     },
     [current, reviewMutation],
   )
@@ -81,16 +93,16 @@ export function FlashcardPage() {
       if (!current) return
       if (e.code === 'Space') {
         e.preventDefault()
-        setFlipped((f) => !f)
+        toggleFlip()
         return
       }
-      if (flipped && /^[0-5]$/.test(e.key)) {
-        rate(Number(e.key))
+      if (flipped && /^[1-4]$/.test(e.key)) {
+        rate(Number(e.key) as ReviewRating)
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [current, flipped, rate])
+  }, [current, flipped, rate, toggleFlip])
 
   const doneCount = sessionTotal !== null ? sessionTotal - queue.length : 0
 
@@ -113,7 +125,7 @@ export function FlashcardPage() {
         <EmptyState
           icon={BrainCircuit}
           title="Chưa có từ nào trong Ôn tập"
-          description="Mở một bài học rồi bấm “Thêm bài vào Ôn tập”, hoặc thêm các từ làm sai sau khi làm trắc nghiệm. App sẽ nhắc bạn ôn lại đúng lúc sắp quên."
+          description="Mở một bài học rồi bấm “Thêm bài vào Ôn tập”, hoặc làm trắc nghiệm - từ làm sai sẽ tự vào đây. App sẽ nhắc bạn ôn lại đúng lúc sắp quên."
           action={
             <Button size="lg" onClick={() => navigate('/study')}>
               <BookOpen className="h-5 w-5" /> Chọn bài học
@@ -149,7 +161,7 @@ export function FlashcardPage() {
 
           <FlipCard
             flipped={flipped}
-            onClick={() => setFlipped((f) => !f)}
+            onClick={toggleFlip}
             front={
               <>
                 <span className={cn('font-jp font-bold leading-none', wordSizeClass(current.kanji.character))}>
@@ -181,29 +193,29 @@ export function FlashcardPage() {
           {flipped ? (
             <div className="animate-pop-in">
               <p className="mb-3 text-center text-sm font-extrabold text-muted-foreground">Bạn nhớ từ này thế nào?</p>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-                {QUALITY_OPTIONS.map(({ quality, label, className }) => (
+              <div className="grid grid-cols-4 gap-2">
+                {RATING_OPTIONS.map(({ rating, label, hint, className }) => (
                   <button
-                    key={quality}
+                    key={rating}
                     type="button"
                     disabled={reviewMutation.isPending}
-                    onClick={() => rate(quality)}
+                    onClick={() => rate(rating)}
                     className={cn(
                       'flex flex-col items-center rounded-2xl border-b-4 px-2 py-2.5 transition-all hover:brightness-105 active:translate-y-[2px] active:border-b-2 disabled:opacity-60',
                       className,
                     )}
                   >
-                    <span className="text-lg font-black leading-none">{quality}</span>
-                    <span className="mt-1 text-xs font-extrabold">{label}</span>
+                    <span className="text-base font-black leading-none">{label}</span>
+                    <span className="mt-1 text-[11px] font-bold leading-tight opacity-90">{hint}</span>
                   </button>
                 ))}
               </div>
               <p className="mt-3 hidden text-center text-xs font-semibold text-muted-foreground sm:block">
-                Phím tắt: số 0-5 để chấm · Space để lật thẻ
+                Phím tắt: số 1-4 để chấm · Space để lật thẻ
               </p>
             </div>
           ) : (
-            <Button variant="secondary" size="lg" onClick={() => setFlipped(true)}>
+            <Button variant="secondary" size="lg" onClick={toggleFlip}>
               Hiện đáp án
             </Button>
           )}

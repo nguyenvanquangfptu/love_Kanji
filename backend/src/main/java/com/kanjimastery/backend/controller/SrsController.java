@@ -40,7 +40,7 @@ public class SrsController {
     }
 
     @Operation(summary = "Chấm điểm ôn tập (SM-2)",
-            description = "Nhận đánh giá quality (0-5), tính lại easinessFactor/interval theo SuperMemo SM-2 và cập nhật lịch ôn tiếp theo. Tự tạo bản ghi SRS nếu đây là lần ôn đầu tiên của Kanji này.")
+            description = "Nhận đánh giá rating (1 Quên, 2 Khó, 3 Nhớ, 4 Dễ), tính lại easinessFactor/interval theo SuperMemo SM-2, cập nhật lịch ôn tiếp theo và ghi lại lần ôn. Tự tạo bản ghi SRS nếu đây là lần ôn đầu tiên của Kanji này.")
     @PostMapping("/review")
     public ResponseEntity<ReviewResponse> submitReview(
             Authentication authentication,

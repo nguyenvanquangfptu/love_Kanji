@@ -87,9 +87,14 @@ export interface DailyCardResponse {
   lastReviewedAt: string | null
 }
 
+/** 1 Quên, 2 Khó, 3 Nhớ, 4 Dễ. */
+export type ReviewRating = 1 | 2 | 3 | 4
+
 export interface ReviewRequest {
   kanjiId: number
-  quality: number
+  rating: ReviewRating
+  /** Thời gian từ lúc hiện thẻ tới lúc lật thẻ (ms). */
+  responseMs?: number
 }
 
 export interface ReviewResponse {
@@ -213,4 +218,19 @@ export interface QuizQuestionResponse {
   character: string
   reading: string | null
   meaning: string
+}
+
+export interface QuizAnswerRequest {
+  kanjiId: number
+  direction: QuizDirection
+  chosenAnswer: string
+  /** Thời gian từ lúc hiện câu hỏi tới lúc chọn đáp án (ms). */
+  responseMs?: number
+}
+
+export interface QuizAnswerResponse {
+  correct: boolean
+  /** Từ có nằm trong lịch ôn không - từ làm sai luôn được đưa vào. */
+  inReview: boolean
+  nextReviewAt: string | null
 }

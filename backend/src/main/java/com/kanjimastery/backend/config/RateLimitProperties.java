@@ -15,6 +15,8 @@ public class RateLimitProperties {
     private Bucket register = new Bucket();
     /** Tạo trắc nghiệm - đếm theo tài khoản, không theo IP. */
     private Bucket quiz = new Bucket();
+    /** Gửi kết quả từng câu trắc nghiệm - đếm theo tài khoản. */
+    private Bucket quizAnswer = new Bucket();
     private LoginLock loginLock = new LoginLock();
 
     @Getter

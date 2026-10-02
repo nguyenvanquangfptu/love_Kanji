@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Check, CheckCircle2, Flame, Layers, Plus, RotateCcw, Target, Trophy, X } from 'lucide-react'
@@ -67,7 +67,10 @@ export function StudyQuizPage() {
   const [streak, setStreak] = useState(0)
   const [bestStreak, setBestStreak] = useState(0)
   const [mistakes, setMistakes] = useState<QuizQuestionResponse[]>([])
+  // Từ làm sai mà server chưa nhận được kết quả (lỗi mạng) - chưa tự vào Ôn tập, cần thêm tay.
+  const [unsyncedMistakeIds, setUnsyncedMistakeIds] = useState<number[]>([])
   const [attempt, setAttempt] = useState(0)
+  const shownAt = useRef(0)
 
   const { data: questions, isLoading, isError, error } = useQuery({
     queryKey: ['study-quiz', tagId, levelQuiz, size, attempt],
@@ -83,11 +86,27 @@ export function StudyQuizPage() {
   const isDone = total > 0 && index >= total
   const answered = selected !== null
 
+  useEffect(() => {
+    shownAt.current = performance.now()
+  }, [current])
+
   const choose = useCallback(
     (choiceIndex: number) => {
       if (!current || selected !== null || choiceIndex >= current.choices.length) return
       setSelected(choiceIndex)
-      if (choiceIndex === current.correctIndex) {
+      const wrong = choiceIndex !== current.correctIndex
+      // Không chờ kết quả: server tự chấm, ghi lại và đưa từ làm sai vào Ôn tập.
+      quizApi
+        .submitAnswer({
+          kanjiId: current.kanjiId,
+          direction: current.direction,
+          chosenAnswer: current.choices[choiceIndex],
+          responseMs: Math.round(performance.now() - shownAt.current),
+        })
+        .catch(() => {
+          if (wrong) setUnsyncedMistakeIds((ids) => [...ids, current.kanjiId])
+        })
+      if (!wrong) {
         const nextStreak = streak + 1
         setScore((s) => s + 1)
         setStreak(nextStreak)
@@ -125,6 +144,7 @@ export function StudyQuizPage() {
     setStreak(0)
     setBestStreak(0)
     setMistakes([])
+    setUnsyncedMistakeIds([])
     setAttempt((a) => a + 1)
   }
 
@@ -166,6 +186,7 @@ export function StudyQuizPage() {
             total={total}
             bestStreak={bestStreak}
             mistakes={mistakes}
+            unsyncedMistakeIds={unsyncedMistakeIds}
             onRestart={restart}
             onFlashcards={levelQuiz ? undefined : () => navigate(`/study/flashcards?${query}`)}
             exitTo={exitTo}
@@ -300,6 +321,7 @@ function QuizResults({
   total,
   bestStreak,
   mistakes,
+  unsyncedMistakeIds,
   onRestart,
   onFlashcards,
   exitTo,
@@ -309,6 +331,7 @@ function QuizResults({
   total: number
   bestStreak: number
   mistakes: QuizQuestionResponse[]
+  unsyncedMistakeIds: number[]
   onRestart: () => void
   /** Không có khi làm trắc nghiệm cả cấp độ - thẻ học chỉ mở theo từng bài. */
   onFlashcards?: () => void
@@ -319,6 +342,7 @@ function QuizResults({
   const title =
     percent === 100 ? 'Hoàn hảo!' : percent >= 80 ? 'Xuất sắc!' : percent >= 50 ? 'Làm tốt lắm!' : 'Cố lên nhé!'
   const uniqueMistakes = mistakes.filter((m, i) => mistakes.findIndex((x) => x.kanjiId === m.kanjiId) === i)
+  const unsyncedIds = [...new Set(unsyncedMistakeIds)]
   const addToReview = useAddToReview()
 
   return (
@@ -339,17 +363,17 @@ function QuizResults({
         <div className="mt-8 w-full text-left">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-black">Từ cần ôn lại ({uniqueMistakes.length})</h2>
-            {addToReview.isSuccess ? (
+            {unsyncedIds.length === 0 || addToReview.isSuccess ? (
               <span className="flex items-center gap-1.5 text-sm font-bold text-primary-dark">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
-                {describeAddResult(addToReview.data)}
+                {addToReview.isSuccess ? describeAddResult(addToReview.data) : 'Đã tự đưa vào Ôn tập'}
               </span>
             ) : (
               <Button
                 size="sm"
                 variant="secondary"
                 disabled={addToReview.isPending}
-                onClick={() => addToReview.mutate(uniqueMistakes.map((m) => m.kanjiId))}
+                onClick={() => addToReview.mutate(unsyncedIds)}
               >
                 <Plus className="h-4 w-4" strokeWidth={3} />
                 {addToReview.isPending ? 'Đang thêm...' : 'Thêm vào Ôn tập'}

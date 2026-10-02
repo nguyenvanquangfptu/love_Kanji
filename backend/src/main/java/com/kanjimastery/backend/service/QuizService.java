@@ -35,8 +35,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static com.kanjimastery.backend.model.QuizDirection.KANJI_TO_READING;
+import static com.kanjimastery.backend.model.QuizDirection.MEANING;
+import static com.kanjimastery.backend.model.QuizDirection.READING_TO_KANJI;
+
 /**
- * Sinh bộ câu hỏi trắc nghiệm ôn tập (không lưu kết quả, không ảnh hưởng lịch SRS) từ
+ * Sinh bộ câu hỏi trắc nghiệm ôn tập (kết quả từng câu được ghi qua {@link QuizAnswerService}) từ
  * danh sách từ vựng đã lọc theo tag (một bài) hoặc cấp độ (cả cấp độ). Câu hỏi có câu ví dụ theo kiểu đề JLPT
  * (問題1 漢字読み / 問題2 表記) khi đã sinh được câu ví dụ cho từ đó. Đáp án nhiễu là chữ Hán trông gần giống
  * hoặc cách đọc bẫy trường âm/âm ngắt/âm đục ({@link QuizDistractorGenerator}), thiếu mới bù bằng từ khác trong bài.
@@ -46,9 +50,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class QuizService {
 
-    private static final String KANJI_TO_READING = "KANJI_TO_READING";
-    private static final String READING_TO_KANJI = "READING_TO_KANJI";
-    private static final String MEANING = "MEANING";
     private static final int DEFAULT_QUESTIONS = 10;
     /** Trắc nghiệm cả cấp độ có hàng nghìn từ - chặn số câu mỗi lượt để một request không dựng quá nhiều câu hỏi. */
     private static final int MAX_QUESTIONS = 50;
