@@ -221,7 +221,8 @@ export function StudyQuizPage() {
             mistakes={mistakes}
             unsyncedMistakeIds={unsyncedMistakeIds}
             mode={mode}
-            onSwitchMode={switchMode}
+            // Danh sách từ cố định (từ làm sai trong bài thi): không có chuyện chọn từ theo điểm yếu hay ngẫu nhiên.
+            onSwitchMode={wordsQuiz ? undefined : switchMode}
             onRestart={restart}
             onFlashcards={
               wordsQuiz || hardWordsQuiz || levelQuiz ? undefined : () => navigate(`/study/flashcards?${query}`)
@@ -431,7 +432,7 @@ function QuizResults({
   mistakes: QuizQuestionResponse[]
   unsyncedMistakeIds: number[]
   mode: QuizMode
-  onSwitchMode: (mode: QuizMode) => void
+  onSwitchMode?: (mode: QuizMode) => void
   onRestart: () => void
   /** Không có khi làm trắc nghiệm cả cấp độ - thẻ học chỉ mở theo từng bài. */
   onFlashcards?: () => void
@@ -506,15 +507,17 @@ function QuizResults({
           </Button>
         )}
       </div>
-      <button
-        type="button"
-        onClick={() => onSwitchMode(mode === 'adaptive' ? 'random' : 'adaptive')}
-        className="mt-4 text-sm font-bold text-muted-foreground hover:text-foreground hover:underline"
-      >
-        {mode === 'adaptive'
-          ? 'Bộ câu hỏi này ưu tiên từ bạn hay sai · Đổi sang chọn ngẫu nhiên cả bài'
-          : 'Bộ câu hỏi này chọn ngẫu nhiên · Đổi sang ưu tiên từ bạn hay sai'}
-      </button>
+      {onSwitchMode && (
+        <button
+          type="button"
+          onClick={() => onSwitchMode(mode === 'adaptive' ? 'random' : 'adaptive')}
+          className="mt-4 text-sm font-bold text-muted-foreground hover:text-foreground hover:underline"
+        >
+          {mode === 'adaptive'
+            ? 'Bộ câu hỏi này ưu tiên từ bạn hay sai · Đổi sang chọn ngẫu nhiên cả bài'
+            : 'Bộ câu hỏi này chọn ngẫu nhiên · Đổi sang ưu tiên từ bạn hay sai'}
+        </button>
+      )}
       <Link to={exitTo} className="mt-3 text-sm font-extrabold text-secondary hover:underline">
         {exitLabel}
       </Link>
