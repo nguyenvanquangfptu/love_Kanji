@@ -1,19 +1,25 @@
 import { cn } from '@/lib/utils'
 
+/** Ô chọn câu; {@code from}/{@code count} để vẽ riêng các câu của một 問題 (số câu vẫn đánh theo cả bài). */
 export function QuestionPalette({
   total,
   currentIndex,
   isAnswered,
   onSelect,
+  from = 0,
+  count = total - from,
 }: {
   total: number
   currentIndex: number
   isAnswered: (index: number) => boolean
   onSelect: (index: number) => void
+  from?: number
+  count?: number
 }) {
   return (
     <div className="grid grid-cols-6 gap-2 sm:grid-cols-8 lg:grid-cols-5">
-      {Array.from({ length: total }, (_, i) => {
+      {Array.from({ length: Math.min(count, total - from) }, (_, offset) => {
+        const i = from + offset
         const answered = isAnswered(i)
         const current = i === currentIndex
         return (

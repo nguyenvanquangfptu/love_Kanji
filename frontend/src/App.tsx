@@ -11,6 +11,7 @@ import { ProgressPage } from '@/pages/ProgressPage'
 import { ExamSetupPage } from '@/pages/ExamSetupPage'
 import { ExamWorkspacePage } from '@/pages/ExamWorkspacePage'
 import { ExamResultPage } from '@/pages/ExamResultPage'
+import { ExamSittingPage } from '@/pages/ExamSittingPage'
 import { AdminKanjiPage } from '@/pages/AdminKanjiPage'
 import { StudyBrowsePage } from '@/pages/StudyBrowsePage'
 import { StudyVocabListPage } from '@/pages/StudyVocabListPage'
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="progress" element={<ProgressPage />} />
           <Route path="exam" element={<ExamSetupPage />} />
           <Route path="exam/:attemptId/result" element={<ExamResultPage />} />
+          <Route path="exam/jlpt/:sittingId" element={<ExamSittingPage />} />
           <Route element={<AdminRoute />}>
             <Route path="admin/kanji" element={<AdminKanjiPage />} />
           </Route>

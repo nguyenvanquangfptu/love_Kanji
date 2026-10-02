@@ -5,7 +5,8 @@ import { ChevronLeft, ChevronRight, Send } from 'lucide-react'
 import { examApi } from '@/api/exam'
 import { extractErrorMessage } from '@/api/client'
 import { getCachedExamQuestions } from '@/lib/examCache'
-import type { ExamQuestionPublicResponse } from '@/api/types'
+import { mondaiAt, mondaiRanges, QUESTION_TYPE_META, SECTION_META, type MondaiRange } from '@/lib/jlpt'
+import type { ExamQuestionPublicResponse, ExamSectionName } from '@/api/types'
 import { Countdown } from '@/components/Countdown'
 import { QuestionPalette } from '@/components/QuestionPalette'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
@@ -25,6 +26,9 @@ export function ExamWorkspacePage() {
   const navigate = useNavigate()
 
   const [questions, setQuestions] = useState<ExamQuestionPublicResponse[] | null>(null)
+  // Phần đề JLPT: các 問題 (câu xếp liền nhau theo thứ tự) và tên phần; rỗng/null với thi nhanh.
+  const [mondai, setMondai] = useState<MondaiRange[]>([])
+  const [section, setSection] = useState<ExamSectionName | null>(null)
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [currentIndex, setCurrentIndex] = useState(0)
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null)
@@ -50,7 +54,11 @@ export function ExamWorkspacePage() {
       try {
         const session = await examApi.getSession(attemptId)
         if (cancelled) return
-        if (cached) setQuestions(cached.questions)
+        if (cached) {
+          setQuestions(cached.questions)
+          setMondai(mondaiRanges(cached.mondai))
+        }
+        setSection(session.section)
         setAnswers(Object.fromEntries(Object.entries(session.answers).map(([k, v]) => [Number(k), v])))
         deadline.current = performance.now() + session.remainingSeconds * 1000
         setRemainingSeconds(session.remainingSeconds)
@@ -66,15 +74,19 @@ export function ExamWorkspacePage() {
     }
   }, [attemptId])
 
+  // Nộp xong: phần đề JLPT thì về buổi thi (nghỉ giữa giờ, phần tiếp theo), thi nhanh thì sang trang kết quả.
+  const afterSubmit = (sittingId: number | null) =>
+    sittingId ? `/exam/jlpt/${sittingId}` : `/exam/${attemptId}/result`
+
   const submitMutation = useMutation({
     mutationFn: () => examApi.submit(attemptId),
-    onSuccess: () => navigate(`/exam/${attemptId}/result`, { replace: true }),
+    onSuccess: (result) => navigate(afterSubmit(result.sittingId), { replace: true }),
     onError: async () => {
       // Máy chủ có thể đã tự chốt bài khi hết giờ (Redis, job dự phòng) trước khi trình duyệt kịp nộp: bài đã có
       // kết quả thì sang trang kết quả luôn.
       try {
-        await examApi.getReview(attemptId)
-        navigate(`/exam/${attemptId}/result`, { replace: true })
+        const review = await examApi.getReview(attemptId)
+        navigate(afterSubmit(review.sittingId), { replace: true })
       } catch {
         // Nộp bài lỗi (mất mạng, backend gián đoạn...) không được để người dùng kẹt
         // vĩnh viễn ở trạng thái khoá (locked=true) mà không có cách nộp lại.
@@ -195,11 +207,12 @@ export function ExamWorkspacePage() {
   const confirmDialog = (
     <ConfirmDialog
       open={confirmingSubmit}
-      title="Nộp bài ngay bây giờ?"
+      title={section ? `Nộp phần ${SECTION_META[section].vi}?` : 'Nộp bài ngay bây giờ?'}
       description={
-        unansweredCount > 0
+        (unansweredCount > 0
           ? `Bạn còn ${unansweredCount} câu chưa làm. Sau khi nộp sẽ không thể sửa đáp án nữa.`
-          : 'Sau khi nộp, bạn sẽ không thể chỉnh sửa đáp án nữa.'
+          : 'Sau khi nộp, bạn sẽ không thể chỉnh sửa đáp án nữa.') +
+        (section ? ' Như đề thật, nộp rồi thì không quay lại phần này được.' : '')
       }
       confirmLabel="Nộp bài"
       onConfirm={confirmSubmit}
@@ -255,6 +268,7 @@ export function ExamWorkspacePage() {
   }
 
   const current = questions[currentIndex]
+  const currentMondai = mondaiAt(mondai, currentIndex)
 
   return (
     <>
@@ -264,11 +278,22 @@ export function ExamWorkspacePage() {
           {autoSubmitNotice && <Alert>Đã hết giờ làm bài — đang tự động nộp bài...</Alert>}
           {submitMutation.isError && <Alert>{extractErrorMessage(submitMutation.error)}</Alert>}
 
+          {section && (
+            <p className="flex flex-wrap items-baseline gap-x-2 text-sm font-bold text-muted-foreground">
+              <span className="font-jp font-black text-foreground">{SECTION_META[section].jp}</span>
+              <span>Phần {SECTION_META[section].vi}</span>
+            </p>
+          )}
+          {currentMondai && <MondaiHeader mondai={currentMondai} />}
+
           <div key={current.id} className="animate-pop-in">
             <p className="text-sm font-extrabold uppercase tracking-wider text-secondary">
               Câu {currentIndex + 1} / {total}
             </p>
-            <h1 className="mt-2 font-jp text-xl font-bold leading-relaxed sm:text-2xl">{current.questionText}</h1>
+            {/* Đề JLPT: câu dẫn đã có ở đầu 問題, câu có câu ví dụ thì không nhắc lại. */}
+            {!(currentMondai && current.sentence) && (
+              <h1 className="mt-2 font-jp text-xl font-bold leading-relaxed sm:text-2xl">{current.questionText}</h1>
+            )}
             {current.sentence && (
               <p className="mt-4 rounded-2xl border-2 border-border bg-card px-4 py-3 font-jp text-xl leading-loose sm:text-2xl">
                 <SentenceWithTarget sentence={current.sentence} target={current.highlight} />
@@ -328,12 +353,32 @@ export function ExamWorkspacePage() {
         <aside>
           <Card className="p-4 lg:sticky lg:top-24">
             <h2 className="mb-3 font-black">Danh sách câu hỏi</h2>
-            <QuestionPalette
-              total={total}
-              currentIndex={currentIndex}
-              isAnswered={(i) => answers[questions[i].id] !== undefined}
-              onSelect={setCurrentIndex}
-            />
+            {mondai.length > 0 ? (
+              <div className="flex flex-col gap-3">
+                {mondai.map((m) => (
+                  <div key={m.number}>
+                    <p className="mb-1.5 text-xs font-extrabold text-muted-foreground">
+                      <span className="font-jp">問題{m.number}</span> · {QUESTION_TYPE_META[m.type].vi}
+                    </p>
+                    <QuestionPalette
+                      total={total}
+                      from={m.start}
+                      count={m.questionCount}
+                      currentIndex={currentIndex}
+                      isAnswered={(i) => answers[questions[i].id] !== undefined}
+                      onSelect={setCurrentIndex}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <QuestionPalette
+                total={total}
+                currentIndex={currentIndex}
+                isAnswered={(i) => answers[questions[i].id] !== undefined}
+                onSelect={setCurrentIndex}
+              />
+            )}
             <div className="mt-4 flex gap-4 text-xs font-bold text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <span className="h-3 w-3 rounded bg-secondary" /> Đã làm
@@ -350,5 +395,23 @@ export function ExamWorkspacePage() {
       </div>
       {confirmDialog}
     </>
+  )
+}
+
+/** Đầu một 問題 như đề thật: số 問題 và câu dẫn tiếng Nhật, kèm bản dịch nhỏ bên dưới. */
+function MondaiHeader({ mondai }: { mondai: MondaiRange }) {
+  const meta = QUESTION_TYPE_META[mondai.type]
+  return (
+    <div className="rounded-2xl border-2 border-border bg-card px-4 py-3">
+      <p className="font-jp font-bold leading-relaxed">
+        <span className="mr-2 rounded-lg bg-secondary px-2 py-0.5 text-sm font-black text-white">問題{mondai.number}</span>
+        {meta.instruction}
+      </p>
+      <p className="mt-1 text-xs font-semibold text-muted-foreground">
+        {meta.vi}: {meta.instructionVi}
+        {mondai.questionCount < mondai.plannedCount &&
+          ` (${mondai.questionCount}/${mondai.plannedCount} câu - ngân hàng câu hỏi chưa đủ)`}
+      </p>
+    </div>
   )
 }

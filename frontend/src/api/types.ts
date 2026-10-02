@@ -255,6 +255,32 @@ export interface ExamQuestionPublicResponse {
   /** Câu ví dụ kiểu đề JLPT, gạch chân `highlight`; null nếu không có. */
   sentence: string | null
   highlight: string | null
+  /** Dạng câu JLPT; null với câu chỉ dùng cho thi nhanh. */
+  questionType: JlptQuestionType | null
+}
+
+/** Các phần của đề JLPT (chỉ phần Kiến thức ngôn ngữ). */
+export type ExamSectionName = 'VOCABULARY' | 'GRAMMAR'
+
+/** Dạng câu (大問) trong đề JLPT. */
+export type JlptQuestionType =
+  | 'KANJI_READING'
+  | 'ORTHOGRAPHY'
+  | 'CONTEXT'
+  | 'PARAPHRASE'
+  | 'USAGE'
+  | 'GRAMMAR_FORM'
+  | 'SENTENCE_ORDER'
+  | 'TEXT_GRAMMAR'
+
+/** Một 問題 của phần đề JLPT đang làm: câu hỏi của bài xếp liền nhau theo thứ tự các 問題. */
+export interface ExamMondai {
+  /** Số thứ tự trong đề thật (問題1, 問題2...). */
+  number: number
+  type: JlptQuestionType
+  questionCount: number
+  /** Số câu của dạng này trong đề thật - lớn hơn questionCount khi ngân hàng câu hỏi chưa đủ. */
+  plannedCount: number
 }
 
 export interface StartExamResponse {
@@ -263,6 +289,54 @@ export interface StartExamResponse {
   questions: ExamQuestionPublicResponse[]
   remainingSeconds: number
   startedAt: string
+  /** Buổi làm đề JLPT và phần đang làm; null với thi nhanh. */
+  sittingId: number | null
+  section: ExamSectionName | null
+  mondai: ExamMondai[] | null
+}
+
+export interface StartJlptExamRequest {
+  jlptLevel: string
+  sections: ExamSectionName[]
+}
+
+/** Cấu trúc đề JLPT của một cấp độ và số câu hỏi hiện có. */
+export interface JlptLevelResponse {
+  jlptLevel: string
+  sections: {
+    name: ExamSectionName
+    /** Số câu và thời gian của đề thật. */
+    plannedQuestions: number
+    plannedMinutes: number
+    /** Đề ghép được lúc này (dạng chưa đủ câu thì ít câu hơn, thời gian giảm theo tỉ lệ); 0 câu = chưa làm được. */
+    questionCount: number
+    minutes: number
+    mondai: { number: number; type: JlptQuestionType; plannedCount: number; available: number }[]
+  }[]
+}
+
+export type ExamSittingStatus = 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED'
+
+/** Một buổi làm đề JLPT: các phần đã chọn (theo thứ tự làm bài) và kết quả từng phần. */
+export interface ExamSittingResponse {
+  sittingId: number
+  jlptLevel: string
+  status: ExamSittingStatus
+  startedAt: string
+  finishedAt: string | null
+  sections: {
+    name: ExamSectionName
+    /** null = chưa làm. */
+    attemptId: number | null
+    status: ExamAttemptStatus | null
+    totalScore: number | null
+    /** null khi chưa chốt điểm. */
+    totalQuestions: number | null
+    timeSpentSeconds: number | null
+    durationSeconds: number | null
+  }[]
+  /** Phần làm tiếp theo; null khi đang làm dở một phần, đã làm hết hoặc buổi thi đã kết thúc. */
+  nextSection: ExamSectionName | null
 }
 
 export interface SaveAnswerRequest {
@@ -274,6 +348,8 @@ export interface ExamSessionResponse {
   attemptId: number
   remainingSeconds: number
   answers: Record<number, string>
+  sittingId: number | null
+  section: ExamSectionName | null
 }
 
 export type ExamAttemptStatus = 'IN_PROGRESS' | 'COMPLETED' | 'TIMEOUT'
@@ -284,6 +360,8 @@ export interface ExamResultResponse {
   totalScore: number
   timeSpentSeconds: number
   submittedAt: string
+  /** Buổi làm đề JLPT của lượt thi này; null với thi nhanh. */
+  sittingId: number | null
 }
 
 export interface QuestionReviewItem {
@@ -301,6 +379,7 @@ export interface QuestionReviewItem {
   explanation: string | null
   /** Kỹ năng câu hỏi kiểm tra; null nếu chưa phân loại. */
   skill: QuizDirection | null
+  questionType: JlptQuestionType | null
 }
 
 export interface ExamReviewResponse {
@@ -317,6 +396,11 @@ export interface ExamReviewResponse {
   wrongWords: { kanjiId: number; character: string; reading: string | null; meaning: string }[]
   /** Từ của câu sai đã được đưa vào Ôn tập (bài thi trước khi có tính năng này thì chưa). */
   addedToReview: boolean
+  /** Buổi làm đề JLPT và phần của lượt thi này; null với thi nhanh. */
+  sittingId: number | null
+  section: ExamSectionName | null
+  /** Điểm theo từng 問題 của phần đề JLPT, theo thứ tự trong đề; rỗng với thi nhanh. */
+  mondai: { number: number; type: JlptQuestionType; correct: number; total: number }[]
 }
 
 export interface LeaderboardEntryResponse {
