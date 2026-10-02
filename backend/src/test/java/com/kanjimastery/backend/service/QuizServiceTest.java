@@ -138,6 +138,34 @@ class QuizServiceTest {
     }
 
     @Test
+    void generate_shouldSkipLookAlikeSpelling_whenAnyRowOfThatSpellingReadsTheSame() {
+        givenQuizAllowed();
+        when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(word(10L, "検査", "けんさ", null)));
+        // 険査 có hai dòng: dòng đọc khác đứng trước không được che mất dòng cũng đọc けんさ.
+        when(kanjiRepository.findAllByCharacterIn(anyCollection()))
+                .thenReturn(List.of(word(98L, "険査", "けんせい", null), word(99L, "険査", "けんさ", null)));
+
+        QuizQuestionResponse question = firstQuestionAsking("READING_TO_KANJI");
+
+        assertThat(question.getChoices()).contains("検査").doesNotContain("険査");
+    }
+
+    @Test
+    void generate_shouldNotOfferTheMeaningOfAnotherRowOfTheSameWord() {
+        givenQuizAllowed();
+        Kanji light = kanaWord(40L, "つく", "Sáng [điện ~]");
+        Kanji stick = kanaWord(41L, "つく", "Dính");
+        when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(light, stick,
+                kanaWord(42L, "はる", "Dán"), kanaWord(43L, "すく", "Vắng"), kanaWord(44L, "やむ", "Tạnh")));
+
+        QuizQuestionResponse question = firstQuestionAsking("MEANING", "つく");
+
+        assertThat(question.getChoices()).hasSize(4).contains("Dán", "Vắng", "Tạnh");
+        assertThat(question.getChoices()).containsOnlyOnce(question.getMeaning());
+        assertThat(question.getChoices()).filteredOn(choice -> choice.equals("Sáng [điện ~]") || choice.equals("Dính")).hasSize(1);
+    }
+
+    @Test
     void generate_shouldFillMissingLookAlikes_withWordsSharingTheOkurigana_butNotHomophones() {
         givenQuizAllowed();
         when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(
@@ -201,6 +229,18 @@ class QuizServiceTest {
                 .jlptLevel("N3")
                 .strokeCount(10)
                 .exampleSentence(sentence)
+                .build();
+    }
+
+    /** Từ chỉ có kana: không có cách đọc riêng nên luôn được hỏi nghĩa. */
+    private static Kanji kanaWord(Long id, String character, String meaning) {
+        return Kanji.builder()
+                .id(id)
+                .character(character)
+                .hanViet("")
+                .meaning(meaning)
+                .jlptLevel("N4")
+                .strokeCount(0)
                 .build();
     }
 }

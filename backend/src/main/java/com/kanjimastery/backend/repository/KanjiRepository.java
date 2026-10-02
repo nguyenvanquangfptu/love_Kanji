@@ -30,7 +30,7 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
             @Param("tagId") Long tagId,
             Pageable pageable);
 
-    boolean existsByCharacter(String character);
+    List<Kanji> findAllByCharacter(String character);
 
     List<Kanji> findAllByCharacterIn(Collection<String> characters);
 

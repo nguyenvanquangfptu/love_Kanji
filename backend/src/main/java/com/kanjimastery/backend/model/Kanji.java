@@ -24,7 +24,8 @@ public class Kanji {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 20)
+    /** Không duy nhất: cùng một từ có thể có nhiều dòng (mỗi nghĩa một dòng), miễn là không chung bài nào. */
+    @Column(nullable = false, length = 20)
     private String character;
 
     @Column(name = "han_viet", nullable = false, length = 50)

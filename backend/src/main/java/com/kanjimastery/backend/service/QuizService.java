@@ -100,7 +100,7 @@ public class QuizService {
         Map<Long, String> newSentences = generateMissingSentences(selected, pool);
 
         List<PlannedQuestion> plans = selected.stream().map(this::plan).toList();
-        Map<String, String> existingWordReadings = readingsOfExistingWords(plans);
+        Map<String, Set<String>> existingWordReadings = readingsOfExistingWords(plans);
 
         List<QuizQuestionResponse> questions = new ArrayList<>();
         for (PlannedQuestion plan : plans) {
@@ -131,8 +131,9 @@ public class QuizService {
     /**
      * Cách đọc của những cách viết nhiễu trùng với một từ có thật trong kho (vd. thay 会 cho 合 ra 会う) -
      * một truy vấn cho cả bài. Dùng để bỏ đáp án nhiễu đọc giống hệt đáp án đúng, vì khi đó cả hai đều "đúng".
+     * Một cách viết có thể có nhiều dòng với cách đọc khác nhau (開く: あく, ひらく) nên giữ tất cả.
      */
-    private Map<String, String> readingsOfExistingWords(List<PlannedQuestion> plans) {
+    private Map<String, Set<String>> readingsOfExistingWords(List<PlannedQuestion> plans) {
         Set<String> spellings = plans.stream()
                 .filter(plan -> READING_TO_KANJI.equals(plan.direction()))
                 .flatMap(plan -> plan.nearMisses().stream())
@@ -142,7 +143,7 @@ public class QuizService {
         }
         return kanjiRepository.findAllByCharacterIn(spellings).stream()
                 .filter(word -> StringUtils.hasText(word.getReading()))
-                .collect(Collectors.toMap(Kanji::getCharacter, Kanji::getReading, (first, second) -> first));
+                .collect(Collectors.groupingBy(Kanji::getCharacter, Collectors.mapping(Kanji::getReading, Collectors.toSet())));
     }
 
     /**
@@ -223,7 +224,7 @@ public class QuizService {
     }
 
     private QuizQuestionResponse buildQuestion(PlannedQuestion plan, String exampleSentence, List<Kanji> pool,
-                                               Map<String, String> existingWordReadings) {
+                                               Map<String, Set<String>> existingWordReadings) {
         Kanji kanji = plan.kanji();
         String direction = plan.direction();
         String reading = kanji.getReading();
@@ -235,7 +236,7 @@ public class QuizService {
             case READING_TO_KANJI -> {
                 correctAnswer = kanji.getCharacter();
                 nearMisses = plan.nearMisses().stream()
-                        .filter(spelling -> !reading.equals(existingWordReadings.get(spelling)))
+                        .filter(spelling -> !existingWordReadings.getOrDefault(spelling, Set.of()).contains(reading))
                         .toList();
                 fallback = spellingFallback(kanji, pool);
             }
@@ -343,8 +344,14 @@ public class QuizService {
         return ranked;
     }
 
+    /**
+     * Các từ khác trong bài để lấy đáp án nhiễu. Bỏ cả dòng viết giống hệt (cùng từ, nghĩa khác như つく "sáng [điện]"
+     * và つく "dính"): hỏi nghĩa hay cách đọc của chữ đó thì nghĩa/cách đọc của dòng kia cũng "đúng".
+     */
     private static List<Kanji> otherWords(Kanji kanji, List<Kanji> pool) {
-        List<Kanji> others = pool.stream().filter(k -> !k.getId().equals(kanji.getId())).collect(Collectors.toList());
+        List<Kanji> others = pool.stream()
+                .filter(k -> !k.getId().equals(kanji.getId()) && !k.getCharacter().equals(kanji.getCharacter()))
+                .collect(Collectors.toList());
         Collections.shuffle(others);
         return others;
     }
