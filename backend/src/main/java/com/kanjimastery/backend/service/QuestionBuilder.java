@@ -154,17 +154,36 @@ public class QuestionBuilder {
      * bằng hiragana. Giao diện gạch chân {@code prompt} bên trong câu.
      */
     private static String sentenceForQuestion(String exampleSentence, Kanji kanji, String direction) {
-        if (!StringUtils.hasText(exampleSentence) || !exampleSentence.contains(kanji.getCharacter())) {
+        if (!StringUtils.hasText(exampleSentence) || !standsAlone(exampleSentence, kanji.getCharacter())) {
             return null;
         }
         if (!READING_TO_KANJI.equals(direction)) {
             return exampleSentence;
         }
-        // Cách đọc dạng "み(る)" (chữ Hán đơn kèm đuôi) không thay thẳng vào câu được.
-        if (kanji.getReading().contains("(")) {
+        // Cách đọc dạng "み(る)" (chữ Hán đơn kèm đuôi) không thay thẳng vào câu được; cách đọc đã có sẵn trong câu
+        // (は của 歯 trong 私は歯を磨く) thì không biết gạch chân chỗ nào.
+        if (kanji.getReading().contains("(") || exampleSentence.contains(kanji.getReading())) {
             return null;
         }
         return exampleSentence.replaceFirst(Pattern.quote(kanji.getCharacter()), Matcher.quoteReplacement(kanji.getReading()));
+    }
+
+    /**
+     * Câu ví dụ chỉ dùng được khi từ xuất hiện đúng một lần, và từ một chữ Hán không dính chữ Hán khác ở hai bên:
+     * 日 trong 今日, 年 trong 今年, 十 trong 十個 là một phần của từ khác, đọc khác hẳn.
+     */
+    private static boolean standsAlone(String sentence, String word) {
+        int at = sentence.indexOf(word);
+        if (at < 0 || sentence.indexOf(word, at + word.length()) >= 0) {
+            return false;
+        }
+        if (word.codePointCount(0, word.length()) != 1 || !QuizDistractorGenerator.isKanji(word.codePointAt(0))) {
+            return true;
+        }
+        int end = at + word.length();
+        boolean kanjiBefore = at > 0 && QuizDistractorGenerator.isKanji(sentence.codePointBefore(at));
+        boolean kanjiAfter = end < sentence.length() && QuizDistractorGenerator.isKanji(sentence.codePointAt(end));
+        return !kanjiBefore && !kanjiAfter;
     }
 
     /** Ưu tiên đáp án nhiễu gần đúng, thiếu mới bù bằng {@code fallback}. */
