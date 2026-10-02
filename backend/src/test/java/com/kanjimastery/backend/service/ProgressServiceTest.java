@@ -7,6 +7,7 @@ import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.repository.ReviewLogRepository;
 import com.kanjimastery.backend.repository.ReviewLogRepository.Activity;
+import com.kanjimastery.backend.repository.ReviewLogRepository.Calibration;
 import com.kanjimastery.backend.repository.ReviewLogRepository.DirectionStats;
 import com.kanjimastery.backend.repository.ReviewLogRepository.QuizMistake;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,6 +62,7 @@ class ProgressServiceTest {
                 activity("2026-09-21T03:00", CardState.REVIEW, true, false)));   // tuần 21/09, quên
         when(reviewLogRepository.quizDirectionStats(eq(USER_ID), any())).thenReturn(List.of());
         when(reviewLogRepository.topQuizMistakes(eq(USER_ID), any(), anyInt())).thenReturn(List.of());
+        givenCalibration(0, null, null);
 
         ProgressResponse progress = service.get(USER_ID);
 
@@ -91,6 +93,7 @@ class ProgressServiceTest {
         // Từ 99 đã bị xoá khỏi kho: bỏ qua.
         when(kanjiRepository.findAllById(anyList())).thenReturn(List.of(
                 Kanji.builder().id(60L).character("待つ").reading("まつ").meaning("Đợi").build()));
+        givenCalibration(0, null, null);
 
         ProgressResponse progress = service.get(USER_ID);
 
@@ -104,6 +107,48 @@ class ProgressServiceTest {
             assertThat(confusion.getChosenAnswer()).isEqualTo("持つ");
             assertThat(confusion.getTimes()).isEqualTo(3);
         });
+    }
+
+    @Test
+    void get_shouldCompareFsrsPredictionsWithWhatWasRemembered_onceThereAreEnoughReviews() {
+        when(reviewLogRepository.activitySince(eq(USER_ID), any())).thenReturn(List.of());
+        when(reviewLogRepository.quizDirectionStats(eq(USER_ID), any())).thenReturn(List.of());
+        when(reviewLogRepository.topQuizMistakes(eq(USER_ID), any(), anyInt())).thenReturn(List.of());
+
+        givenCalibration(19, 0.9, 0.7);
+        assertThat(service.get(USER_ID).getCalibration()).isNull();
+
+        // 30 ngày tính từ 17:00 ngày 02/10 giờ Việt Nam.
+        when(reviewLogRepository.calibration(USER_ID, LocalDateTime.of(2026, 9, 2, 10, 0)))
+                .thenReturn(calibration(40, 0.88, 0.8));
+        assertThat(service.get(USER_ID).getCalibration()).satisfies(calibration -> {
+            assertThat(calibration.getReviews()).isEqualTo(40);
+            assertThat(calibration.getPredicted()).isEqualTo(0.88);
+            assertThat(calibration.getActual()).isEqualTo(0.8);
+        });
+    }
+
+    private void givenCalibration(long reviews, Double predicted, Double actual) {
+        when(reviewLogRepository.calibration(eq(USER_ID), any())).thenReturn(calibration(reviews, predicted, actual));
+    }
+
+    private static Calibration calibration(long reviews, Double predicted, Double actual) {
+        return new Calibration() {
+            @Override
+            public long getReviews() {
+                return reviews;
+            }
+
+            @Override
+            public Double getPredicted() {
+                return predicted;
+            }
+
+            @Override
+            public Double getActual() {
+                return actual;
+            }
+        };
     }
 
     private static Activity activity(String utc, String stateBefore, boolean scheduled, boolean correct) {

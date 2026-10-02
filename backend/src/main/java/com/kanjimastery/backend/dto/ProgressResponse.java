@@ -20,6 +20,8 @@ public class ProgressResponse {
     private List<Direction> directions;
     /** Những đáp án sai chọn nhiều lần nhất trong 90 ngày. */
     private List<Confusion> confusions;
+    /** FSRS dự đoán so với thực tế, 30 ngày gần nhất; null nếu chưa đủ lượt ôn để so. */
+    private Calibration calibration;
 
     /**
      * Tỉ lệ nhớ thật: trong các lần ôn đúng hạn một thẻ đang ôn bình thường (không tính từ mới, thẻ đang học lại),
@@ -52,6 +54,16 @@ public class ProgressResponse {
         private String direction;
         private long answers;
         private long correct;
+    }
+
+    /** Khi đến lượt ôn: FSRS đoán người học còn nhớ bao nhiêu phần trăm số từ, và thực tế nhớ được bao nhiêu. */
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class Calibration {
+        private long reviews;
+        private double predicted;
+        private double actual;
     }
 
     @Getter

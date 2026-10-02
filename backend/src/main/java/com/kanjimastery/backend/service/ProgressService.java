@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 
 /**
  * Tiến bộ của người học, tính từ review_logs: tỉ lệ nhớ thật theo tuần, số lượt ôn và từ mới theo ngày, độ chính xác
- * trắc nghiệm theo hướng hỏi, và những chỗ hay nhầm nhất.
+ * trắc nghiệm theo hướng hỏi, những chỗ hay nhầm nhất, và FSRS đoán trí nhớ của người học sát tới đâu.
  */
 @Service
 @RequiredArgsConstructor
@@ -34,6 +34,9 @@ public class ProgressService {
     static final int DIRECTION_DAYS = 30;
     static final int CONFUSION_DAYS = 90;
     static final int MAX_CONFUSIONS = 8;
+    static final int CALIBRATION_DAYS = 30;
+    /** Ít lượt ôn hơn thì tỉ lệ nhớ thật dao động quá nhiều để so với dự đoán. */
+    static final int MIN_CALIBRATION_REVIEWS = 20;
 
     private final ReviewLogRepository reviewLogRepository;
     private final KanjiRepository kanjiRepository;
@@ -89,7 +92,17 @@ public class ProgressService {
                                 row.getAnswers() - row.getErrors()))
                         .toList())
                 .confusions(confusions(userId))
+                .calibration(calibration(userId))
                 .build();
+    }
+
+    private ProgressResponse.Calibration calibration(Long userId) {
+        ReviewLogRepository.Calibration row = reviewLogRepository.calibration(userId,
+                calendar.now().minusDays(CALIBRATION_DAYS));
+        if (row.getReviews() < MIN_CALIBRATION_REVIEWS) {
+            return null;
+        }
+        return new ProgressResponse.Calibration(row.getReviews(), row.getPredicted(), row.getActual());
     }
 
     private List<ProgressResponse.Confusion> confusions(Long userId) {

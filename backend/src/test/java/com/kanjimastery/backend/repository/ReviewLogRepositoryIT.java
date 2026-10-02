@@ -27,6 +27,7 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.assertj.core.api.Assertions.within;
 
 /** Các truy vấn thống kê review_logs chạy trên PostgreSQL thật (percentile_cont, FILTER, mốc thời gian). */
 class ReviewLogRepositoryIT extends AbstractIntegrationTest {
@@ -238,6 +239,24 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void calibration_shouldAverageFsrsPredictionsAndOutcomes_ofScheduledReviewsOnAnotherDay() {
+        LocalDateTime now = LocalDateTime.now();
+        saveReview(kanjiId, now.minusDays(3), CardState.REVIEW, ReviewRating.GOOD, true, 0.9);
+        saveReview(kanjiId, now.minusDays(2), CardState.REVIEW, ReviewRating.AGAIN, true, 0.8);
+        // Không tính: ôn lại cùng ngày (dự đoán 1), chỉ ghi lại, chưa có dự đoán, trước mốc thời gian.
+        saveReview(kanjiId, now.minusDays(2), CardState.RELEARNING, ReviewRating.GOOD, true, 1.0);
+        saveReview(kanjiId, now.minusDays(1), CardState.REVIEW, ReviewRating.GOOD, false, 0.95);
+        saveReview(kanjiId, now.minusDays(1), CardState.REVIEW, ReviewRating.GOOD, true, null);
+        saveReview(kanjiId, now.minusDays(40), CardState.REVIEW, ReviewRating.AGAIN, true, 0.5);
+
+        ReviewLogRepository.Calibration calibration = reviewLogRepository.calibration(userId, now.minusDays(30));
+
+        assertThat(calibration.getReviews()).isEqualTo(2);
+        assertThat(calibration.getPredicted()).isCloseTo(0.85, within(1e-9));
+        assertThat(calibration.getActual()).isCloseTo(0.5, within(1e-9));
+    }
+
+    @Test
     void userIdsActiveSince_shouldListLearnersWhoAnsweredSinceTheGivenTime() {
         LocalDateTime now = LocalDateTime.now();
         saveReview(now.minusDays(2), CardState.NEW, true);
@@ -260,6 +279,11 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
     }
 
     private void saveReview(Long kanji, LocalDateTime at, String stateBefore, int rating, boolean scheduled) {
+        saveReview(kanji, at, stateBefore, rating, scheduled, null);
+    }
+
+    private void saveReview(Long kanji, LocalDateTime at, String stateBefore, int rating, boolean scheduled,
+                            Double retrievability) {
         reviewLogRepository.save(ReviewLog.builder()
                 .userId(userId)
                 .kanjiId(kanji)
@@ -268,6 +292,7 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
                 .rating((short) rating)
                 .stateBefore(stateBefore)
                 .scheduled(scheduled)
+                .retrievability(retrievability)
                 .reviewedAt(at)
                 .build());
     }

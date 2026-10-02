@@ -189,6 +189,11 @@ export interface ProgressResponse {
     chosenAnswer: string
     times: number
   }[]
+  /**
+   * 30 ngày gần nhất: lúc đến lượt ôn, FSRS đoán còn nhớ bao nhiêu (predicted) và thật sự nhớ được bao nhiêu (actual),
+   * trên `reviews` lượt ôn; null nếu chưa đủ lượt ôn để so.
+   */
+  calibration: { reviews: number; predicted: number; actual: number } | null
 }
 
 /** 1 Quên, 2 Khó, 3 Nhớ, 4 Dễ. */

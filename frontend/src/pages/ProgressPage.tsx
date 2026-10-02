@@ -103,6 +103,7 @@ function ProgressBody({ progress }: { progress: ProgressResponse }) {
       </div>
 
       <RetentionCard weeks={progress.weeks} />
+      {progress.calibration && <CalibrationCard calibration={progress.calibration} />}
       <ActivityCard days={progress.days} />
       {progress.directions.length > 0 && <DirectionCard directions={progress.directions} />}
       {progress.confusions.length > 0 && <ConfusionCard confusions={progress.confusions} />}
@@ -231,38 +232,73 @@ function ActivityCard({ days }: { days: ProgressResponse['days'] }) {
   )
 }
 
+/**
+ * FSRS đoán trí nhớ sát tới đâu. Chênh lệch nhỏ hơn hai lần sai số chuẩn của tỉ lệ nhớ thật thì coi là khớp: ít lượt
+ * ôn thì tỉ lệ thật dao động nhiều, chênh vài phần trăm chưa nói lên gì.
+ */
+function CalibrationCard({ calibration }: { calibration: NonNullable<ProgressResponse['calibration']> }) {
+  const { reviews, predicted, actual } = calibration
+  const margin = 2 * Math.sqrt((predicted * (1 - predicted)) / reviews)
+  const verdict =
+    actual < predicted - margin
+      ? 'Bạn quên nhanh hơn FSRS nghĩ. Nếu đang xếp lịch bằng FSRS, chọn tỉ lệ nhớ mong muốn cao hơn ở trang Mục tiêu học để được ôn sớm hơn.'
+      : actual > predicted + margin
+        ? 'Bạn nhớ tốt hơn FSRS nghĩ. Nếu đang xếp lịch bằng FSRS, có thể hạ tỉ lệ nhớ mong muốn để ôn ít hơn mà vẫn nhớ đủ.'
+        : 'FSRS đoán sát trí nhớ của bạn: chênh lệch nằm trong mức dao động bình thường của chừng này lượt ôn.'
+
+  return (
+    <ChartCard
+      title="FSRS đoán trí nhớ của bạn"
+      subtitle={`${reviews} lượt ôn trong 30 ngày gần nhất: lúc đến lượt ôn, FSRS đoán bạn còn nhớ bao nhiêu phần trăm số từ, và bạn nhớ được thật bao nhiêu.`}
+    >
+      <div className="flex flex-col gap-4">
+        <Meter label="FSRS đoán" value={Math.round(predicted * 100)} />
+        <Meter label="Bạn nhớ được" value={Math.round(actual * 100)} />
+        <p className="text-sm font-semibold text-muted-foreground">{verdict}</p>
+      </div>
+    </ChartCard>
+  )
+}
+
 function DirectionCard({ directions }: { directions: ProgressResponse['directions'] }) {
   return (
     <ChartCard title="Trắc nghiệm theo kiểu câu hỏi" subtitle="30 ngày gần nhất - kiểu nào thấp nhất là chỗ nên luyện thêm.">
       <div className="flex flex-col gap-4">
-        {directions.map((direction) => {
-          const rate = percent(direction.correct, direction.answers)
-          return (
-            <div key={direction.direction}>
-              <div className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="font-bold">{DIRECTION_LABELS[direction.direction]}</span>
-                <span>
-                  <span className="font-black">{rate}%</span>{' '}
-                  <span className="font-semibold text-muted-foreground">
-                    ({direction.correct}/{direction.answers} câu)
-                  </span>
-                </span>
-              </div>
-              <div
-                className="mt-1.5 h-3 overflow-hidden rounded-full bg-secondary-soft"
-                role="meter"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={rate}
-                aria-label={DIRECTION_LABELS[direction.direction]}
-              >
-                <div className="h-full rounded-full" style={{ width: `${rate}%`, backgroundColor: BLUE }} />
-              </div>
-            </div>
-          )
-        })}
+        {directions.map((direction) => (
+          <Meter
+            key={direction.direction}
+            label={DIRECTION_LABELS[direction.direction]}
+            value={percent(direction.correct, direction.answers)}
+            detail={`${direction.correct}/${direction.answers} câu`}
+          />
+        ))}
       </div>
     </ChartCard>
+  )
+}
+
+/** Một tỉ lệ phần trăm dạng thanh ngang, nhãn và số ghi ngay trên thanh. */
+function Meter({ label, value, detail }: { label: string; value: number; detail?: string }) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-3 text-sm">
+        <span className="font-bold">{label}</span>
+        <span>
+          <span className="font-black">{value}%</span>
+          {detail && <span className="font-semibold text-muted-foreground"> ({detail})</span>}
+        </span>
+      </div>
+      <div
+        className="mt-1.5 h-3 overflow-hidden rounded-full bg-secondary-soft"
+        role="meter"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={value}
+        aria-label={label}
+      >
+        <div className="h-full rounded-full" style={{ width: `${value}%`, backgroundColor: BLUE }} />
+      </div>
+    </div>
   )
 }
 

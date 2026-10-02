@@ -193,6 +193,29 @@ public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
             """, nativeQuery = true)
     List<FirstReviewOutcome> firstReviewOutcomes(@Param("userId") Long userId);
 
+    /** FSRS dự đoán so với thực tế trên một nhóm lần ôn. */
+    interface Calibration {
+        long getReviews();
+
+        /** Xác suất nhớ FSRS dự đoán, trung bình; null nếu không có lần ôn nào. */
+        Double getPredicted();
+
+        /** Tỉ lệ thật sự nhớ được; null nếu không có lần ôn nào. */
+        Double getActual();
+    }
+
+    /**
+     * Các lần ôn tính lịch từ {@code since} có dự đoán của FSRS, trừ lần ôn lại trong cùng ngày học (khoảng cách 0 ngày
+     * thì xác suất ghi là 1 - FSRS chỉ dự đoán cho khoảng cách từ một ngày trở lên).
+     */
+    @Query(value = """
+            SELECT COUNT(*) AS "reviews", AVG(retrievability) AS "predicted",
+                   AVG(CASE WHEN correct THEN 1.0 ELSE 0.0 END) AS "actual"
+            FROM review_logs
+            WHERE user_id = :userId AND scheduled AND retrievability < 1 AND reviewed_at >= :since
+            """, nativeQuery = true)
+    Calibration calibration(@Param("userId") Long userId, @Param("since") LocalDateTime since);
+
     @Query("SELECT DISTINCT r.userId FROM ReviewLog r WHERE r.reviewedAt >= :since")
     List<Long> userIdsActiveSince(@Param("since") LocalDateTime since);
 }
