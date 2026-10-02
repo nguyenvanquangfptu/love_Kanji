@@ -32,7 +32,6 @@ import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -232,10 +231,27 @@ class SrsServiceTest {
         // "Nhớ" lần đầu cho độ ổn định 2,3 ngày: giữ tỉ lệ nhớ 90% thì 2 ngày sau mới ôn (SM-2 là 1 ngày).
         UserKanjiSrs saved = savedCard();
         assertThat(saved.getReviewIntervalDays()).isEqualTo(2);
-        assertThat(ChronoUnit.DAYS.between(saved.getLastReviewedAt(), saved.getNextReviewAt())).isEqualTo(2);
+        assertThat(saved.getNextReviewAt())
+                .isEqualTo(calendar.startOf(calendar.dayOf(saved.getLastReviewedAt()).plusDays(2)));
         // SM-2 vẫn chạy song song, đổi lại lúc nào cũng được.
         assertThat(saved.getRepetitionCount()).isEqualTo(1);
         assertThat(saved.getEasinessFactor()).isEqualByComparingTo("2.50");
+    }
+
+    @Test
+    void submitReview_shouldMakeTheCardDueFromTheStartOfTheStudyDayItIsDueOn() {
+        when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.empty());
+        givenSaveReturnsCard();
+
+        srsService.submitReview(USER_ID, reviewRequest(ReviewRating.GOOD, 2_000));
+
+        // Hẹn 1 ngày: đến hạn từ 4 giờ sáng ngày học kế tiếp chứ không phải đúng 24 giờ sau - mai học sớm hơn giờ hôm
+        // nay thì thẻ vẫn có trong phiên.
+        UserKanjiSrs saved = savedCard();
+        assertThat(saved.getNextReviewAt())
+                .isEqualTo(calendar.startOf(calendar.dayOf(saved.getLastReviewedAt()).plusDays(1)))
+                .isBeforeOrEqualTo(saved.getLastReviewedAt().plusDays(1));
     }
 
     @Test

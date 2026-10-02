@@ -256,7 +256,9 @@ public class SrsService {
         srs.setRepetitionCount(outcome.sm2().repetitionCount());
         srs.setEasinessFactor(outcome.sm2().easinessFactor());
         srs.setReviewIntervalDays(outcome.intervalDays());
-        srs.setNextReviewAt(now.plusDays(outcome.intervalDays()));
+        // Đến hạn từ đầu ngày học thứ N (4 giờ sáng), không phải đúng giờ của lần ôn này: hôm đến hạn học sớm hơn hôm nay
+        // vài tiếng thì thẻ vẫn có trong phiên, không bị đẩy thêm một ngày.
+        srs.setNextReviewAt(calendar.startOf(calendar.dayOf(now).plusDays(outcome.intervalDays())));
         srs.setLastReviewedAt(now);
         srs.setStability(outcome.memory().stability());
         srs.setDifficulty(outcome.memory().difficulty());
