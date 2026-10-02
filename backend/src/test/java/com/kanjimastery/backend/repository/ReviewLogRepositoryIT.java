@@ -178,6 +178,38 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
         assertThat(reviewLogRepository.countNewWordsLearnedSince(userId, since.plusMinutes(10))).isZero();
     }
 
+    @Test
+    void topQuizMistakes_shouldKeepTheMostFrequentRecentOnes_upToTheLimit() {
+        LocalDateTime now = LocalDateTime.now();
+        saveAnswer(now.minusDays(100), DIRECTION, false, "cũ quá");
+        saveAnswer(now.minusDays(100), DIRECTION, false, "cũ quá");
+        saveAnswer(now.minusDays(100), DIRECTION, false, "cũ quá");
+        saveAnswer(now.minusDays(3), DIRECTION, false, "しゅへん");
+        saveAnswer(now.minusDays(2), DIRECTION, false, "しゅへん");
+        saveAnswer(now.minusDays(1), DIRECTION, false, "しょるい");
+        saveAnswer(now.minusHours(1), "MEANING", false, "Xung quanh");
+
+        List<QuizMistake> mistakes = reviewLogRepository.topQuizMistakes(userId, now.minusDays(90), 2);
+
+        assertThat(mistakes).extracting(QuizMistake::getChosenAnswer, QuizMistake::getTimes)
+                .containsExactly(tuple("しゅへん", 2L), tuple("Xung quanh", 1L));
+    }
+
+    @Test
+    void activitySince_shouldReturnEveryAnswerSinceTheGivenTime() {
+        LocalDateTime now = LocalDateTime.now();
+        saveReview(now.minusDays(2), CardState.REVIEW, true);
+        saveReview(now.minusHours(1), CardState.NEW, false);
+        saveReview(now.minusDays(20), CardState.REVIEW, true);
+
+        List<ReviewLogRepository.Activity> activity = reviewLogRepository.activitySince(userId, now.minusDays(7));
+
+        assertThat(activity).hasSize(2);
+        assertThat(activity).extracting(ReviewLogRepository.Activity::getStateBefore,
+                        ReviewLogRepository.Activity::getScheduled, ReviewLogRepository.Activity::getCorrect)
+                .containsExactlyInAnyOrder(tuple(CardState.REVIEW, true, true), tuple(CardState.NEW, false, true));
+    }
+
     private void saveReview(LocalDateTime at, String stateBefore, boolean scheduled) {
         reviewLogRepository.save(ReviewLog.builder()
                 .userId(userId)

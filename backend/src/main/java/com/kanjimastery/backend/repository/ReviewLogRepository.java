@@ -127,4 +127,40 @@ public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
             ORDER BY COUNT(*) DESC, MAX(reviewed_at) DESC
             """, nativeQuery = true)
     List<QuizMistake> quizMistakes(@Param("userId") Long userId, @Param("kanjiIds") Collection<Long> kanjiIds);
+
+    /** Những đáp án sai người học chọn nhiều lần nhất trên mọi từ, từ {@code since}. */
+    @Query(value = """
+            SELECT kanji_id AS "kanjiId", direction AS "direction", chosen_answer AS "chosenAnswer", COUNT(*) AS "times"
+            FROM review_logs
+            WHERE user_id = :userId AND source = 'QUIZ' AND NOT correct AND chosen_answer IS NOT NULL
+              AND reviewed_at >= :since
+            GROUP BY kanji_id, direction, chosen_answer
+            ORDER BY COUNT(*) DESC, MAX(reviewed_at) DESC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<QuizMistake> topQuizMistakes(@Param("userId") Long userId,
+                                      @Param("since") LocalDateTime since,
+                                      @Param("limit") int limit);
+
+    /** Một lần trả lời, đủ để thống kê theo ngày/tuần. */
+    interface Activity {
+        LocalDateTime getReviewedAt();
+
+        String getStateBefore();
+
+        Boolean getScheduled();
+
+        Boolean getCorrect();
+    }
+
+    /**
+     * Các lần trả lời từ {@code since} - gom theo ngày học ở tầng Java (StudyCalendar) để ngày học tính theo giờ
+     * Việt Nam bất kể máy chủ chạy múi giờ nào.
+     */
+    @Query("""
+            SELECT r.reviewedAt AS reviewedAt, r.stateBefore AS stateBefore, r.scheduled AS scheduled, r.correct AS correct
+            FROM ReviewLog r
+            WHERE r.userId = :userId AND r.reviewedAt >= :since
+            """)
+    List<Activity> activitySince(@Param("userId") Long userId, @Param("since") LocalDateTime since);
 }

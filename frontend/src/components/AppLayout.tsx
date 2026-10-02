@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { BookOpen, ClipboardCheck, LogOut, RotateCcw, ShieldCheck, type LucideIcon } from 'lucide-react'
+import { BookOpen, ClipboardCheck, LogOut, RotateCcw, ShieldCheck, TrendingUp, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { authApi } from '@/api/auth'
@@ -16,7 +16,11 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/study', label: 'Học bài', icon: BookOpen, iconColor: 'text-primary' },
   { to: '/flashcards', label: 'Ôn tập', icon: RotateCcw, iconColor: 'text-secondary' },
   { to: '/exam', label: 'Thi thử', icon: ClipboardCheck, iconColor: 'text-orange' },
+  { to: '/progress', label: 'Tiến bộ', icon: TrendingUp, iconColor: 'text-accent-dark' },
 ]
+
+/** Số cột của thanh tab dưới đáy theo số mục (thêm mục Quản trị cho admin). */
+const TAB_COLUMNS: Record<number, string> = { 4: 'grid-cols-4', 5: 'grid-cols-5' }
 
 const ADMIN_ITEM: NavItem = { to: '/admin/kanji', label: 'Quản trị', icon: ShieldCheck, iconColor: 'text-purple' }
 
@@ -116,7 +120,7 @@ export function AppLayout() {
 
       {/* Điện thoại: thanh tab dưới đáy */}
       <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t-2 border-border bg-card lg:hidden">
-        <div className={cn('mx-auto grid max-w-md px-2', items.length === 4 ? 'grid-cols-4' : 'grid-cols-3')}>
+        <div className={cn('mx-auto grid max-w-md px-2', TAB_COLUMNS[items.length] ?? 'grid-cols-4')}>
           {items.map(({ to, label, icon: Icon, iconColor }) => (
             <NavLink key={to} to={to} className="flex flex-col items-center gap-0.5 py-2">
               {({ isActive }) => (

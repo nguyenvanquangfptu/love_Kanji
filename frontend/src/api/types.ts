@@ -148,6 +148,26 @@ export interface LearningProfileResponse {
 
 export type LearningProfileRequest = Omit<LearningProfileResponse, 'configured'>
 
+/** Tiến bộ của người học, tính từ lịch sử trả lời. */
+export interface ProgressResponse {
+  /** 8 tuần gần nhất (thứ Hai đầu tuần), cũ trước. Tỉ lệ nhớ = remembered / reviews ở các lần ôn đúng hạn. */
+  weeks: { weekStart: string; reviews: number; remembered: number }[]
+  /** 14 ngày học gần nhất, cũ trước. */
+  days: { day: string; reviews: number; newWords: number }[]
+  /** Trắc nghiệm 30 ngày gần nhất theo hướng hỏi. */
+  directions: { direction: QuizDirection; answers: number; correct: number }[]
+  /** Những đáp án sai chọn nhiều lần nhất trong 90 ngày. */
+  confusions: {
+    kanjiId: number
+    character: string
+    reading: string | null
+    meaning: string
+    direction: QuizDirection
+    chosenAnswer: string
+    times: number
+  }[]
+}
+
 /** 1 Quên, 2 Khó, 3 Nhớ, 4 Dễ. */
 export type ReviewRating = 1 | 2 | 3 | 4
 
