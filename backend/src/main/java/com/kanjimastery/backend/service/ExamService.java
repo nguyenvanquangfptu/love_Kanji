@@ -9,8 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import com.kanjimastery.backend.config.ExamProperties;
@@ -24,11 +26,13 @@ import com.kanjimastery.backend.dto.StartExamRequest;
 import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamQuestion;
+import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.UserExamAnswer;
 import com.kanjimastery.backend.model.UserExamAttempt;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.ExamSessionStore;
+import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.repository.UserExamAnswerRepository;
 import com.kanjimastery.backend.repository.UserExamAttemptRepository;
 
@@ -42,6 +46,7 @@ public class ExamService {
     private final ExamSessionStore examSessionStore;
     private final ExamFinalizationService examFinalizationService;
     private final ExamProperties examProperties;
+    private final KanjiRepository kanjiRepository;
 
     @Transactional
     public StartExamResponse start(Long userId, StartExamRequest request) {
@@ -111,7 +116,7 @@ public class ExamService {
 
         List<UserExamAnswer> answers = answerRepository.findByAttemptId(attemptId);
         List<Long> questionIds = answers.stream().map(UserExamAnswer::getQuestionId).toList();
-        Map<Long, ExamQuestion> questionsById = questionRepository.findAllById(questionIds).stream()
+        Map<Long, ExamQuestion> questionsById = questionRepository.findAllWithWordsByIdIn(questionIds).stream()
                 .collect(Collectors.toMap(ExamQuestion::getId, Function.identity()));
 
         List<QuestionReviewItem> items = answers.stream()
@@ -142,7 +147,31 @@ public class ExamService {
                 .timeSpentSeconds(attempt.getTimeSpentSeconds())
                 .questions(items)
                 .skills(skillScores(items))
+                .wrongWords(wrongWords(answers, questionsById))
+                .addedToReview(attempt.getDiagnosedAt() != null)
                 .build();
+    }
+
+    /** Từ của các câu đã trả lời sai, theo thứ tự câu hỏi, không lặp. */
+    private List<ExamReviewResponse.Word> wrongWords(List<UserExamAnswer> answers, Map<Long, ExamQuestion> questionsById) {
+        Set<Long> kanjiIds = new LinkedHashSet<>();
+        for (UserExamAnswer answer : answers) {
+            ExamQuestion question = questionsById.get(answer.getQuestionId());
+            if (question != null && answer.getSelectedOption() != null && !Boolean.TRUE.equals(answer.getIsCorrect())) {
+                kanjiIds.addAll(question.getKanjiIds());
+            }
+        }
+        if (kanjiIds.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, Kanji> words = kanjiRepository.findAllById(kanjiIds).stream()
+                .collect(Collectors.toMap(Kanji::getId, Function.identity()));
+        return kanjiIds.stream()
+                .map(words::get)
+                .filter(word -> word != null)
+                .map(word -> new ExamReviewResponse.Word(word.getId(), word.getCharacter(), word.getReading(),
+                        word.getMeaning()))
+                .toList();
     }
 
     /** Số câu đúng trên số câu theo từng kỹ năng: đọc, viết, rồi nghĩa. */

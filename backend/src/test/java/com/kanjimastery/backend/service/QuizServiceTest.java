@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -90,14 +91,14 @@ class QuizServiceTest {
     void generate_shouldRejectRequest_whenUserExceedsQuizLimit() {
         when(rateLimiter.tryAcquire("ratelimit:quiz:taro", 30, Duration.ofSeconds(60))).thenReturn(false);
 
-        assertThatThrownBy(() -> quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false))
+        assertThatThrownBy(() -> quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null))
                 .isInstanceOf(TooManyRequestsException.class);
         verifyNoInteractions(kanjiRepository, sentenceGenerationService);
     }
 
     @Test
     void generate_shouldRejectUnknownMode() {
-        assertThatThrownBy(() -> quizService.generate("taro", TAG_ID, null, 10, "hard", false))
+        assertThatThrownBy(() -> quizService.generate("taro", TAG_ID, null, 10, "hard", false, null))
                 .isInstanceOf(BadRequestException.class);
         verifyNoInteractions(rateLimiter, kanjiRepository);
     }
@@ -118,7 +119,7 @@ class QuizServiceTest {
         when(learnerHistoryService.load(eq(USER_ID), anyCollection()))
                 .thenReturn(new LearnerHistory(LocalDateTime.now(), dueCards, Map.of(), Map.of()));
 
-        List<QuizQuestionResponse> questions = quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false);
+        List<QuizQuestionResponse> questions = quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null);
 
         assertThat(questions).hasSize(10);
         assertThat(questions).filteredOn(question -> question.getKanjiId() <= 10).hasSizeBetween(6, 7);
@@ -129,7 +130,7 @@ class QuizServiceTest {
         givenQuizAllowed();
         when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(readyWord));
 
-        assertThat(quizService.generate("taro", TAG_ID, null, 10, QuizService.MODE_RANDOM, false)).hasSize(1);
+        assertThat(quizService.generate("taro", TAG_ID, null, 10, QuizService.MODE_RANDOM, false, null)).hasSize(1);
         verify(learnerHistoryService, never()).load(anyLong(), anyCollection());
     }
 
@@ -139,10 +140,27 @@ class QuizServiceTest {
         when(srsService.hardWordIds(USER_ID)).thenReturn(List.of(1L, 3L));
         when(kanjiRepository.findAllById(List.of(1L, 3L))).thenReturn(List.of(failedWord, readyWord));
 
-        List<QuizQuestionResponse> questions = quizService.generate("taro", TAG_ID, "N3", 10, ADAPTIVE, true);
+        List<QuizQuestionResponse> questions = quizService.generate("taro", TAG_ID, "N3", 10, ADAPTIVE, true, null);
 
         assertThat(questions).extracting(QuizQuestionResponse::getKanjiId).containsExactlyInAnyOrder(1L, 3L);
         verify(kanjiRepository, never()).findAllByFilters(any(), any());
+    }
+
+    @Test
+    void generate_shouldAskExactlyTheGivenWords_withDistractorsFromTheirLessons() {
+        givenQuizAllowed();
+        when(kanjiRepository.findAllById(Set.of(1L, 3L))).thenReturn(List.of(failedWord, readyWord));
+        List<Kanji> lessonmates = IntStream.rangeClosed(10, 20)
+                .mapToObj(i -> word((long) i, "語" + i, "ご" + i, null))
+                .toList();
+        when(kanjiRepository.findLessonmatesOf(Set.of(1L, 3L))).thenReturn(lessonmates);
+
+        List<QuizQuestionResponse> questions = quizService.generate("taro", null, null, 2, ADAPTIVE, false,
+                List.of(3L, 1L, 3L));
+
+        assertThat(questions).extracting(QuizQuestionResponse::getKanjiId).containsExactlyInAnyOrder(1L, 3L);
+        assertThat(questions).allSatisfy(question -> assertThat(question.getChoices()).hasSize(4));
+        verify(srsService, never()).hardWordIds(any());
     }
 
     @Test
@@ -151,7 +169,7 @@ class QuizServiceTest {
         when(srsService.hardWordIds(USER_ID)).thenReturn(List.of());
         when(kanjiRepository.findAllById(List.of())).thenReturn(List.of());
 
-        assertThatThrownBy(() -> quizService.generate("taro", null, null, 10, ADAPTIVE, true))
+        assertThatThrownBy(() -> quizService.generate("taro", null, null, 10, ADAPTIVE, true, null))
                 .isInstanceOf(BadRequestException.class);
     }
 
@@ -159,7 +177,7 @@ class QuizServiceTest {
     void generate_shouldNotSendWordsThatFailedRecently() {
         givenLessonWithGeminiAnswer(Optional.of(Map.of()));
 
-        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false);
+        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<Kanji>> batch = ArgumentCaptor.forClass(List.class);
@@ -171,7 +189,7 @@ class QuizServiceTest {
     void generate_shouldRecordFailure_whenGeminiAnsweredWithoutAUsableSentence() {
         givenLessonWithGeminiAnswer(Optional.of(Map.of()));
 
-        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false);
+        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null);
 
         verify(rateLimiter).increment("sentence:failures:2", Duration.ofHours(24));
     }
@@ -180,7 +198,7 @@ class QuizServiceTest {
     void generate_shouldNotRecordFailure_whenGeminiDidNotAnswer() {
         givenLessonWithGeminiAnswer(Optional.empty());
 
-        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false);
+        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null);
 
         verify(rateLimiter, never()).increment(startsWith("sentence:failures:"), any());
     }
@@ -189,7 +207,7 @@ class QuizServiceTest {
     void generate_shouldSaveNewSentence_andNotCountItAsFailure() {
         givenLessonWithGeminiAnswer(Optional.of(Map.of(2L, "のどが渇く。")));
 
-        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false);
+        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null);
 
         verify(kanjiRepository).saveExampleSentenceIfAbsent(2L, "のどが渇く。");
         verify(rateLimiter, never()).increment(startsWith("sentence:failures:"), any());
@@ -203,7 +221,7 @@ class QuizServiceTest {
                 .toList();
         when(kanjiRepository.findAllByTagNamePrefix("N3-%")).thenReturn(level);
 
-        assertThat(quizService.generate("taro", null, "n3", 1000, ADAPTIVE, false)).hasSize(50);
+        assertThat(quizService.generate("taro", null, "n3", 1000, ADAPTIVE, false, null)).hasSize(50);
     }
 
     @Test
@@ -342,7 +360,7 @@ class QuizServiceTest {
     /** Hướng hỏi được chọn ngẫu nhiên - tạo lại tới khi gặp câu cần kiểm tra (xác suất trượt 2^-100). */
     private QuizQuestionResponse firstQuestionAsking(String direction, String... character) {
         for (int attempt = 0; attempt < 100; attempt++) {
-            for (QuizQuestionResponse question : quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false)) {
+            for (QuizQuestionResponse question : quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null)) {
                 if (question.getDirection().equals(direction)
                         && (character.length == 0 || question.getCharacter().equals(character[0]))) {
                     return question;

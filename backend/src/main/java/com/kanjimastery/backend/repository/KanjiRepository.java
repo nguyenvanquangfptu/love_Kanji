@@ -51,6 +51,13 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
     @Query("SELECT DISTINCT k FROM Kanji k JOIN k.tags t WHERE t.name LIKE :prefix")
     List<Kanji> findAllByTagNamePrefix(@Param("prefix") String prefix);
 
+    /** Các từ cùng bài (cùng tag) với ít nhất một trong {@code ids}, kể cả chính các từ đó nếu có tag. */
+    @Query("""
+            SELECT DISTINCT k FROM Kanji k JOIN k.tags t
+            WHERE t IN (SELECT t2 FROM Kanji k2 JOIN k2.tags t2 WHERE k2.id IN :ids)
+            """)
+    List<Kanji> findLessonmatesOf(@Param("ids") Collection<Long> ids);
+
     /** Gọi từ luồng nền sau khi request quiz đã trả về, nên tự mở transaction riêng. */
     @Transactional
     @Modifying

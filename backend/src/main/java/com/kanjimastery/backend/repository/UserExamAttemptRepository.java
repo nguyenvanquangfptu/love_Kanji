@@ -30,4 +30,13 @@ public interface UserExamAttemptRepository extends JpaRepository<UserExamAttempt
                               @Param("score") int score,
                               @Param("timeSpent") int timeSpent,
                               @Param("submittedAt") LocalDateTime submittedAt);
+
+    /** Đánh dấu bài thi đã được đưa vào ôn tập; trả 0 nếu bài chưa chốt điểm hoặc đã được đưa vào rồi. */
+    @Modifying
+    @Query("""
+            UPDATE UserExamAttempt a
+            SET a.diagnosedAt = :diagnosedAt
+            WHERE a.id = :id AND a.diagnosedAt IS NULL AND a.status <> 'IN_PROGRESS'
+            """)
+    int markDiagnosed(@Param("id") Long id, @Param("diagnosedAt") LocalDateTime diagnosedAt);
 }

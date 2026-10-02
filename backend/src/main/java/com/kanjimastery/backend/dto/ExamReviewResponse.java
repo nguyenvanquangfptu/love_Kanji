@@ -19,6 +19,20 @@ public class ExamReviewResponse {
     private List<QuestionReviewItem> questions;
     /** Điểm theo kỹ năng, theo thứ tự đọc - viết - nghĩa; kỹ năng không có câu nào trong bài thì không có. */
     private List<SkillScore> skills;
+    /** Từ vựng của các câu làm sai (không tính câu bỏ trống), theo thứ tự câu hỏi, không lặp. */
+    private List<Word> wrongWords;
+    /** Kết quả bài thi đã được đưa vào ôn tập: từ của câu sai đã nằm trong lịch ôn. */
+    private boolean addedToReview;
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class Word {
+        private Long kanjiId;
+        private String character;
+        private String reading;
+        private String meaning;
+    }
 
     @Getter
     @Builder

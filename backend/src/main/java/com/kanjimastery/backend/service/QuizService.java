@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +45,8 @@ import static com.kanjimastery.backend.model.QuizDirection.READING_TO_KANJI;
 
 /**
  * Sinh bộ câu hỏi trắc nghiệm ôn tập (kết quả từng câu được ghi qua {@link QuizAnswerService}) từ
- * danh sách từ vựng đã lọc theo tag (một bài) hoặc cấp độ (cả cấp độ). Mặc định chọn từ và hướng hỏi theo điểm yếu
+ * danh sách từ vựng đã lọc theo tag (một bài) hoặc cấp độ (cả cấp độ), từ khó của người học, hoặc một danh sách từ
+ * cho trước (các từ làm sai trong một bài thi). Mặc định chọn từ và hướng hỏi theo điểm yếu
  * của người học ({@link AdaptiveQuizPlanner}); chế độ {@link #MODE_RANDOM} chọn ngẫu nhiên đều để kiểm tra cả bài.
  * Câu hỏi có câu ví dụ theo kiểu đề JLPT
  * (問題1 漢字読み / 問題2 表記) khi đã sinh được câu ví dụ cho từ đó. Đáp án nhiễu là chữ Hán trông gần giống
@@ -89,9 +91,12 @@ public class QuizService {
         sentenceExecutor.shutdownNow();
     }
 
+    /**
+     * @param kanjiIds nếu có: hỏi đúng các từ này (bỏ qua tagId/level/hardWords), đáp án nhiễu lấy từ các từ cùng bài
+     */
     @Transactional(readOnly = true)
     public List<QuizQuestionResponse> generate(String username, Long tagId, String level, Integer size, String mode,
-                                               boolean hardWords) {
+                                               boolean hardWords, List<Long> kanjiIds) {
         boolean adaptive = switch (mode == null ? MODE_ADAPTIVE : mode) {
             case MODE_ADAPTIVE -> true;
             case MODE_RANDOM -> false;
@@ -104,7 +109,15 @@ public class QuizService {
 
         Long userId = userService.getByUsername(username).getId();
         List<Kanji> pool;
-        if (hardWords) {
+        // Danh sách từ cho trước: hỏi đúng các từ đó, không chọn lại theo điểm yếu.
+        List<Kanji> givenWords = null;
+        if (kanjiIds != null && !kanjiIds.isEmpty()) {
+            givenWords = kanjiRepository.findAllById(new LinkedHashSet<>(kanjiIds));
+            if (givenWords.isEmpty()) {
+                throw new BadRequestException("Không tìm thấy từ vựng nào để luyện");
+            }
+            pool = withLessonmates(givenWords);
+        } else if (hardWords) {
             pool = kanjiRepository.findAllById(srsService.hardWordIds(userId));
             if (pool.isEmpty()) {
                 throw new BadRequestException("Bạn chưa có từ khó nào để luyện riêng");
@@ -127,7 +140,11 @@ public class QuizService {
                 ? learnerHistoryService.load(userId, pool.stream().map(Kanji::getId).toList())
                 : null;
         List<Kanji> selected;
-        if (history != null) {
+        if (givenWords != null) {
+            List<Kanji> shuffledWords = new ArrayList<>(givenWords);
+            Collections.shuffle(shuffledWords, random);
+            selected = shuffledWords.subList(0, Math.min(requested, shuffledWords.size()));
+        } else if (history != null) {
             selected = AdaptiveQuizPlanner.selectWords(pool, requested, history, random);
         } else {
             List<Kanji> shuffledPool = new ArrayList<>(pool);
@@ -153,6 +170,14 @@ public class QuizService {
             questions.add(buildQuestion(plan, sentence, pool, existingWords));
         }
         return questions;
+    }
+
+    /** {@code words} cùng các từ học chung bài với chúng - đủ để lấy đáp án nhiễu khi chỉ hỏi vài từ. */
+    private List<Kanji> withLessonmates(List<Kanji> words) {
+        Map<Long, Kanji> pool = new LinkedHashMap<>();
+        words.forEach(word -> pool.put(word.getId(), word));
+        kanjiRepository.findLessonmatesOf(pool.keySet()).forEach(word -> pool.putIfAbsent(word.getId(), word));
+        return new ArrayList<>(pool.values());
     }
 
     /**

@@ -308,6 +308,10 @@ export interface ExamReviewResponse {
   questions: QuestionReviewItem[]
   /** Điểm theo kỹ năng (đọc, viết, nghĩa); kỹ năng không có câu nào trong bài thì không có. */
   skills: { skill: QuizDirection; correct: number; total: number }[]
+  /** Từ vựng của các câu làm sai (không tính câu bỏ trống), theo thứ tự câu hỏi. */
+  wrongWords: { kanjiId: number; character: string; reading: string | null; meaning: string }[]
+  /** Từ của câu sai đã được đưa vào Ôn tập (bài thi trước khi có tính năng này thì chưa). */
+  addedToReview: boolean
 }
 
 export interface LeaderboardEntryResponse {

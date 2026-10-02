@@ -65,6 +65,7 @@ export function ExamResultPage() {
       </div>
 
       {data.skills.length > 0 && <SkillCard skills={data.skills} />}
+      {data.wrongWords.length > 0 && <WrongWordsCard review={data} />}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <Button size="lg" className="flex-1" onClick={() => navigate('/exam')}>
@@ -133,6 +134,41 @@ export function ExamResultPage() {
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+/** Từ của các câu làm sai: đã vào Ôn tập, và luyện lại ngay bằng trắc nghiệm chỉ gồm các từ đó. */
+function WrongWordsCard({ review }: { review: ExamReviewResponse }) {
+  const navigate = useNavigate()
+  const words = review.wrongWords
+  const kanjiIds = words.map((w) => w.kanjiId).join(',')
+
+  return (
+    <Card className="p-4 sm:p-5">
+      <h2 className="text-lg font-black">Từ cần ôn lại</h2>
+      <p className="text-sm font-semibold text-muted-foreground">
+        {review.addedToReview
+          ? `${words.length} từ của các câu làm sai đã được đưa vào Ôn tập.`
+          : 'Các từ của câu làm sai trong bài thi này.'}
+      </p>
+      <ul className="mt-3 flex flex-wrap gap-2">
+        {words.map((w) => (
+          <li key={w.kanjiId} className="rounded-xl border-2 border-border px-3 py-1.5" title={w.meaning}>
+            <span className="font-jp text-lg font-bold">{w.character}</span>
+            {w.reading && w.reading !== w.character && (
+              <span className="ml-1.5 font-jp text-sm font-semibold text-muted-foreground">{w.reading}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      <Button
+        className="mt-4"
+        variant="secondary"
+        onClick={() => navigate(`/study/quiz?kanjiIds=${kanjiIds}&exam=${review.attemptId}`)}
+      >
+        <Target className="h-5 w-5" /> Luyện lại các từ này
+      </Button>
+    </Card>
   )
 }
 
