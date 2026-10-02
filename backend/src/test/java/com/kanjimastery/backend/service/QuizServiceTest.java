@@ -74,8 +74,8 @@ class QuizServiceTest {
         RateLimitProperties properties = new RateLimitProperties();
         properties.getQuiz().setLimit(30);
         properties.getQuiz().setWindowSeconds(60);
-        quizService = new QuizService(kanjiRepository, sentenceGenerationService, rateLimiter, properties, distractors,
-                userService, learnerHistoryService, srsService);
+        quizService = new QuizService(kanjiRepository, sentenceGenerationService, rateLimiter, properties,
+                new QuestionBuilder(kanjiRepository, distractors), userService, learnerHistoryService, srsService);
         lenient().when(userService.getByUsername("taro")).thenReturn(User.builder().id(USER_ID).build());
         lenient().when(learnerHistoryService.load(eq(USER_ID), anyCollection()))
                 .thenAnswer(invocation -> LearnerHistory.empty(LocalDateTime.now()));
