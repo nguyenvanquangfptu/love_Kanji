@@ -20,6 +20,8 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import com.kanjimastery.backend.config.ExamProperties;
+import com.kanjimastery.backend.config.JlptBlueprintProperties;
+import com.kanjimastery.backend.dto.ExamMondaiResponse;
 import com.kanjimastery.backend.dto.ExamQuestionPublicResponse;
 import com.kanjimastery.backend.dto.ExamResultResponse;
 import com.kanjimastery.backend.dto.ExamReviewResponse;
@@ -55,6 +57,7 @@ public class ExamService {
     private final ExamFinalizationService examFinalizationService;
     private final ExamProperties examProperties;
     private final KanjiRepository kanjiRepository;
+    private final JlptBlueprintProperties blueprints;
 
     @Transactional
     public StartExamResponse start(Long userId, StartExamRequest request) {
@@ -66,26 +69,31 @@ public class ExamService {
             throw new BadRequestException("Không có câu hỏi nào cho cấp độ: " + level);
         }
 
-        UserExamAttempt attempt = UserExamAttempt.builder()
-                .userId(userId)
-                .jlptLevel(level)
-                .startedAt(LocalDateTime.now())
-                .build();
-        attempt = attemptRepository.save(attempt);
+        return begin(UserExamAttempt.builder().userId(userId).jlptLevel(level).build(), questions, null);
+    }
 
-        List<Long> questionIds = questions.stream().map(ExamQuestion::getId).toList();
-        examSessionStore.initSession(attempt.getId(), questionIds);
-
-        List<ExamQuestionPublicResponse> publicQuestions = questions.stream()
-                .map(ExamQuestionPublicResponse::from)
-                .toList();
+    /**
+     * Lưu lượt thi với các câu đã chọn (theo thứ tự hiển thị) và bắt đầu tính giờ theo thời gian làm bài của lượt -
+     * dùng chung cho thi nhanh và từng phần của đề JLPT ({@code mondai}: các 問題 của phần thi, null với thi nhanh).
+     */
+    @Transactional
+    public StartExamResponse begin(UserExamAttempt attempt, List<ExamQuestion> questions,
+                                   List<ExamMondaiResponse> mondai) {
+        attempt.setStartedAt(LocalDateTime.now());
+        UserExamAttempt saved = attemptRepository.save(attempt);
+        int durationSeconds = examProperties.durationOf(saved);
+        examSessionStore.initSession(saved.getId(), questions.stream().map(ExamQuestion::getId).toList(),
+                durationSeconds);
 
         return StartExamResponse.builder()
-                .attemptId(attempt.getId())
-                .jlptLevel(level)
-                .questions(publicQuestions)
-                .remainingSeconds(examProperties.getDurationSeconds())
-                .startedAt(attempt.getStartedAt())
+                .attemptId(saved.getId())
+                .jlptLevel(saved.getJlptLevel())
+                .questions(questions.stream().map(ExamQuestionPublicResponse::from).toList())
+                .remainingSeconds(durationSeconds)
+                .startedAt(saved.getStartedAt())
+                .sittingId(saved.getSittingId())
+                .section(saved.getSection())
+                .mondai(mondai)
                 .build();
     }
 
@@ -131,20 +139,22 @@ public class ExamService {
     }
 
     public void saveAnswer(Long userId, Long attemptId, SaveAnswerRequest request) {
-        getOwnedInProgressAttempt(attemptId, userId);
+        UserExamAttempt attempt = getOwnedInProgressAttempt(attemptId, userId);
         String option = request.getSelectedOption() != null ? request.getSelectedOption().toUpperCase() : null;
-        examSessionStore.saveAnswer(attemptId, request.getQuestionId(), option);
+        examSessionStore.saveAnswer(attemptId, request.getQuestionId(), option, examProperties.durationOf(attempt));
     }
 
     public ExamSessionResponse getSession(Long userId, Long attemptId) {
         UserExamAttempt attempt = getOwnedAttempt(attemptId, userId);
         long elapsed = Duration.between(attempt.getStartedAt(), LocalDateTime.now()).getSeconds();
-        long remaining = Math.max(0, examProperties.getDurationSeconds() - elapsed);
+        long remaining = Math.max(0, examProperties.durationOf(attempt) - elapsed);
 
         return ExamSessionResponse.builder()
                 .attemptId(attemptId)
                 .remainingSeconds(remaining)
                 .answers(examSessionStore.getAnswers(attemptId))
+                .sittingId(attempt.getSittingId())
+                .section(attempt.getSection())
                 .build();
     }
 
@@ -163,7 +173,7 @@ public class ExamService {
             throw new BadRequestException("Bài thi chưa được nộp, không thể xem lại");
         }
 
-        List<UserExamAnswer> answers = answerRepository.findByAttemptId(attemptId);
+        List<UserExamAnswer> answers = answerRepository.findByAttemptIdOrderByIdAsc(attemptId);
         List<Long> questionIds = answers.stream().map(UserExamAnswer::getQuestionId).toList();
         Map<Long, ExamQuestion> questionsById = questionRepository.findAllWithWordsByIdIn(questionIds).stream()
                 .collect(Collectors.toMap(ExamQuestion::getId, Function.identity()));
@@ -185,6 +195,7 @@ public class ExamService {
                             .correct(Boolean.TRUE.equals(answer.getIsCorrect()))
                             .explanation(question.getExplanation())
                             .skill(question.getSkill())
+                            .questionType(question.getQuestionType())
                             .build();
                 })
                 .toList();
@@ -200,7 +211,38 @@ public class ExamService {
                 .skills(skillScores(items))
                 .wrongWords(wrongWords(answers, questionsById))
                 .addedToReview(attempt.getDiagnosedAt() != null)
+                .sittingId(attempt.getSittingId())
+                .section(attempt.getSection())
+                .mondai(mondaiScores(attempt, items))
                 .build();
+    }
+
+    /** Điểm theo từng 問題 của phần đề JLPT, theo thứ tự trong đề; thi nhanh thì rỗng. */
+    private List<ExamReviewResponse.MondaiScore> mondaiScores(UserExamAttempt attempt, List<QuestionReviewItem> items) {
+        if (attempt.getSection() == null) {
+            return List.of();
+        }
+        List<String> types = blueprints.section(attempt.getJlptLevel(), attempt.getSection())
+                .map(JlptBlueprintProperties.Section::types)
+                .orElse(List.of());
+        Map<String, int[]> byType = new LinkedHashMap<>();
+        for (String type : types) {
+            byType.put(type, new int[2]);
+        }
+        for (QuestionReviewItem item : items) {
+            if (item.getQuestionType() != null) {
+                int[] tally = byType.computeIfAbsent(item.getQuestionType(), type -> new int[2]);
+                tally[1]++;
+                if (item.isCorrect()) {
+                    tally[0]++;
+                }
+            }
+        }
+        return byType.entrySet().stream()
+                .filter(entry -> entry.getValue()[1] > 0)
+                .map(entry -> new ExamReviewResponse.MondaiScore(types.indexOf(entry.getKey()) + 1, entry.getKey(),
+                        entry.getValue()[0], entry.getValue()[1]))
+                .toList();
     }
 
     /** Từ của các câu đã trả lời sai, theo thứ tự câu hỏi, không lặp. */
@@ -271,6 +313,7 @@ public class ExamService {
                 .totalScore(attempt.getTotalScore())
                 .timeSpentSeconds(attempt.getTimeSpentSeconds())
                 .submittedAt(attempt.getSubmittedAt())
+                .sittingId(attempt.getSittingId())
                 .build();
     }
 }

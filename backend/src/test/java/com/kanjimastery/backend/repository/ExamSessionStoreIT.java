@@ -33,10 +33,11 @@ class ExamSessionStoreIT extends AbstractIntegrationTest {
     }
 
     @Test
-    void sessionAndQuestionsKeys_shouldHaveLongerTtlThanTimeoutMarker() {
+    void sessionAndQuestionsKeys_shouldHaveLongerTtlThanTimeoutMarker_whichFollowsTheAttemptsOwnDuration() {
         attemptId = System.nanoTime();
-        examSessionStore.initSession(attemptId, List.of(1L, 2L, 3L));
-        examSessionStore.saveAnswer(attemptId, 1L, "A");
+        // Một phần đề JLPT 10 phút, ngắn hơn 30 phút mặc định của thi nhanh.
+        examSessionStore.initSession(attemptId, List.of(1L, 2L, 3L), 600);
+        examSessionStore.saveAnswer(attemptId, 1L, "A", 600);
 
         Long sessionTtl = redisTemplate.getExpire("exam:session:" + attemptId);
         Long questionsTtl = redisTemplate.getExpire("exam:questions:" + attemptId);
@@ -50,5 +51,7 @@ class ExamSessionStoreIT extends AbstractIntegrationTest {
         // không được đặt trùng TTL - đây chính là điểm đã sửa sau khi review thiết kế.
         assertThat(sessionTtl).isGreaterThan(timeoutTtl);
         assertThat(questionsTtl).isGreaterThan(timeoutTtl);
+        assertThat(timeoutTtl).isBetween(590L, 600L);
+        assertThat(sessionTtl).isBetween(590L + 1800, 600L + 1800);
     }
 }

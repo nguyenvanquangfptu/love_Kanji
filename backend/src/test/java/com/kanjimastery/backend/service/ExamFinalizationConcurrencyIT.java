@@ -79,7 +79,7 @@ class ExamFinalizationConcurrencyIT extends AbstractIntegrationTest {
                 .build());
         attemptId = attempt.getId();
 
-        examSessionStore.initSession(attemptId, questionIds);
+        examSessionStore.initSession(attemptId, questionIds, 1800);
     }
 
     @AfterEach

@@ -9,5 +9,6 @@ import com.kanjimastery.backend.service.ExamFinalizationService;
  * bằng {@code @TransactionalEventListener(AFTER_COMMIT)} để đẩy điểm lên Redis ZSET và
  * dọn Redis Hash - tách hẳn khỏi transaction DB để tránh dual-write giữa 2 hệ thống.
  */
-public record ExamFinalizedEvent(Long attemptId, Long userId, String jlptLevel, int totalScore, int timeSpentSeconds) {
+public record ExamFinalizedEvent(Long attemptId, Long userId, String jlptLevel, int totalScore, int timeSpentSeconds,
+                                 Long sittingId) {
 }

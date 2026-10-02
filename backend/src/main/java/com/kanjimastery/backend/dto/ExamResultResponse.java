@@ -15,4 +15,6 @@ public class ExamResultResponse {
     private Integer totalScore;
     private Integer timeSpentSeconds;
     private LocalDateTime submittedAt;
+    /** Buổi làm đề JLPT của lượt thi này - nộp xong thì quay về buổi thi; null với thi nhanh. */
+    private Long sittingId;
 }

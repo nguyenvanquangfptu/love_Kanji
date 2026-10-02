@@ -1,0 +1,32 @@
+# Cấu trúc đề JLPT (phần Kiến thức ngôn ngữ, chỉ Từ vựng + Ngữ pháp) - xem ke_hoach_de_jlpt.md.
+# Số câu mỗi dạng theo jlpt.jp (là con số dự kiến, mỗi kỳ có thể chênh): N4, N5 theo thay đổi từ kỳ 12/2020,
+# N3 theo sách hướng dẫn chính thức. Thời gian phần Từ vựng theo đề thật; phần Ngữ pháp trong đề thật gộp với
+# Đọc hiểu nên thời gian ở đây là con số tự đặt.
+# Thứ tự các dạng trong mỗi phần là thứ tự 問題1, 問題2...
+app:
+  jlpt:
+    levels:
+      N5:
+        sections:
+          - name: VOCABULARY
+            minutes: 20
+            questions: { KANJI_READING: 7, ORTHOGRAPHY: 5, CONTEXT: 6, PARAPHRASE: 3 }
+          - name: GRAMMAR
+            minutes: 15
+            questions: { GRAMMAR_FORM: 9, SENTENCE_ORDER: 4, TEXT_GRAMMAR: 4 }
+      N4:
+        sections:
+          - name: VOCABULARY
+            minutes: 25
+            questions: { KANJI_READING: 7, ORTHOGRAPHY: 5, CONTEXT: 8, PARAPHRASE: 4, USAGE: 4 }
+          - name: GRAMMAR
+            minutes: 20
+            questions: { GRAMMAR_FORM: 13, SENTENCE_ORDER: 4, TEXT_GRAMMAR: 4 }
+      N3:
+        sections:
+          - name: VOCABULARY
+            minutes: 30
+            questions: { KANJI_READING: 8, ORTHOGRAPHY: 6, CONTEXT: 11, PARAPHRASE: 5, USAGE: 5 }
+          - name: GRAMMAR
+            minutes: 25
+            questions: { GRAMMAR_FORM: 13, SENTENCE_ORDER: 5, TEXT_GRAMMAR: 5 }

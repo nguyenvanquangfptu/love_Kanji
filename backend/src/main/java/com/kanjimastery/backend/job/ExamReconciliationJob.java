@@ -30,9 +30,13 @@ public class ExamReconciliationJob {
 
     @Scheduled(fixedDelayString = "${app.exam.reconciliation-interval-ms:90000}")
     public void reconcileExpiredAttempts() {
-        LocalDateTime cutoff = LocalDateTime.now().minusSeconds(examProperties.getDurationSeconds());
+        // Mỗi lượt có thời gian làm bài riêng (các phần đề JLPT ngắn hơn thi nhanh): lấy mọi lượt đã quá 1 phút rồi lọc
+        // theo thời gian của từng lượt.
+        LocalDateTime now = LocalDateTime.now();
         List<UserExamAttempt> staleAttempts = attemptRepository
-                .findByStatusAndStartedAtLessThanEqual(ExamAttemptStatus.IN_PROGRESS, cutoff);
+                .findByStatusAndStartedAtLessThanEqual(ExamAttemptStatus.IN_PROGRESS, now.minusMinutes(1)).stream()
+                .filter(attempt -> !attempt.getStartedAt().plusSeconds(examProperties.durationOf(attempt)).isAfter(now))
+                .toList();
 
         if (staleAttempts.isEmpty()) {
             return;

@@ -1,12 +1,15 @@
 package com.kanjimastery.backend.service;
 
 import com.kanjimastery.backend.config.ExamProperties;
+import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.ExamQuestionPublicResponse;
 import com.kanjimastery.backend.dto.ExamReviewResponse;
 import com.kanjimastery.backend.dto.StartExamRequest;
 import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamQuestion;
+import com.kanjimastery.backend.model.ExamSection;
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.UserExamAnswer;
@@ -24,7 +27,9 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -57,6 +62,8 @@ class ExamServiceTest {
     private ExamProperties examProperties = new ExamProperties();
     @Mock
     private KanjiRepository kanjiRepository;
+    @Spy
+    private JlptBlueprintProperties blueprints = new JlptBlueprintProperties();
 
     @InjectMocks
     private ExamService examService;
@@ -66,7 +73,7 @@ class ExamServiceTest {
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
                 .userId(USER_ID).jlptLevel("N5").status(ExamAttemptStatus.COMPLETED).totalScore(3)
                 .startedAt(LocalDateTime.now().minusMinutes(20)).build()));
-        when(answerRepository.findByAttemptId(ATTEMPT_ID)).thenReturn(List.of(
+        when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(
                 answer(1L, "B", true), answer(2L, "A", false), answer(3L, null, false), answer(4L, "C", true),
                 answer(5L, "D", true)));
         when(questionRepository.findAllWithWordsByIdIn(anyList())).thenReturn(List.of(
@@ -89,7 +96,7 @@ class ExamServiceTest {
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
                 .userId(USER_ID).jlptLevel("N5").status(ExamAttemptStatus.TIMEOUT).totalScore(1)
                 .startedAt(LocalDateTime.now().minusMinutes(31)).diagnosedAt(LocalDateTime.now()).build()));
-        when(answerRepository.findByAttemptId(ATTEMPT_ID)).thenReturn(List.of(
+        when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(
                 answer(1L, "B", false), answer(2L, null, false), answer(3L, "A", true), answer(4L, "C", false)));
         when(questionRepository.findAllWithWordsByIdIn(anyList())).thenReturn(List.of(
                 question(1L, QuizDirection.MEANING, 15L), question(2L, QuizDirection.MEANING, 25L),
@@ -132,7 +139,65 @@ class ExamServiceTest {
         // Vòng 1: đọc 1, viết 3, nghĩa 5 (4 trùng 水); vòng 2: đọc 6.
         assertThat(response.getQuestions()).extracting(ExamQuestionPublicResponse::getId)
                 .containsExactlyInAnyOrder(1L, 3L, 5L, 6L);
-        verify(examSessionStore).initSession(eq(ATTEMPT_ID), any());
+        // Thi nhanh: thời gian mặc định, không thuộc buổi làm đề JLPT nào.
+        verify(examSessionStore).initSession(eq(ATTEMPT_ID), anyList(), eq(1800));
+        assertThat(response.getRemainingSeconds()).isEqualTo(1800);
+        assertThat(response.getSittingId()).isNull();
+        assertThat(response.getMondai()).isNull();
+    }
+
+    @Test
+    void getReview_ofAJlptSection_shouldScoreEachMondai_numberedAsInTheRealTest() {
+        JlptBlueprintProperties.Section vocabulary = new JlptBlueprintProperties.Section();
+        vocabulary.setName(ExamSection.VOCABULARY);
+        vocabulary.setMinutes(25);
+        vocabulary.setQuestions(new LinkedHashMap<>(Map.of(JlptQuestionType.KANJI_READING, 7)));
+        vocabulary.getQuestions().put(JlptQuestionType.ORTHOGRAPHY, 5);
+        vocabulary.getQuestions().put(JlptQuestionType.CONTEXT, 8);
+        JlptBlueprintProperties.Level n4 = new JlptBlueprintProperties.Level();
+        n4.setSections(List.of(vocabulary));
+        blueprints.getLevels().put("N4", n4);
+        when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
+                .userId(USER_ID).jlptLevel("N4").status(ExamAttemptStatus.COMPLETED).totalScore(2)
+                .sittingId(5L).section(ExamSection.VOCABULARY).durationSeconds(900)
+                .startedAt(LocalDateTime.now().minusMinutes(10)).build()));
+        when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(
+                answer(1L, "A", true), answer(2L, "B", false), answer(3L, "A", true)));
+        when(questionRepository.findAllWithWordsByIdIn(anyList())).thenReturn(List.of(
+                typed(question(1L, QuizDirection.KANJI_TO_READING), JlptQuestionType.KANJI_READING),
+                typed(question(2L, QuizDirection.KANJI_TO_READING), JlptQuestionType.KANJI_READING),
+                typed(question(3L, QuizDirection.MEANING), JlptQuestionType.CONTEXT)));
+
+        ExamReviewResponse review = examService.getReview(USER_ID, ATTEMPT_ID);
+
+        // 表記 không có câu nào trong bài thì không hiện; 文脈規定 vẫn là 問題3 như đề thật.
+        assertThat(review.getMondai())
+                .extracting(ExamReviewResponse.MondaiScore::getNumber, ExamReviewResponse.MondaiScore::getType,
+                        ExamReviewResponse.MondaiScore::getCorrect, ExamReviewResponse.MondaiScore::getTotal)
+                .containsExactly(tuple(1, JlptQuestionType.KANJI_READING, 1, 2), tuple(3, JlptQuestionType.CONTEXT, 1, 1));
+        assertThat(review.getSittingId()).isEqualTo(5L);
+        assertThat(review.getSection()).isEqualTo(ExamSection.VOCABULARY);
+        assertThat(review.getQuestions().get(2).getQuestionType()).isEqualTo(JlptQuestionType.CONTEXT);
+    }
+
+    @Test
+    void getReview_ofAQuickExam_shouldHaveNoMondaiScores() {
+        when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
+                .userId(USER_ID).jlptLevel("N5").status(ExamAttemptStatus.COMPLETED).totalScore(1)
+                .startedAt(LocalDateTime.now().minusMinutes(20)).build()));
+        when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(answer(1L, "A", true)));
+        when(questionRepository.findAllWithWordsByIdIn(anyList())).thenReturn(List.of(
+                typed(question(1L, QuizDirection.KANJI_TO_READING), JlptQuestionType.KANJI_READING)));
+
+        ExamReviewResponse review = examService.getReview(USER_ID, ATTEMPT_ID);
+
+        assertThat(review.getMondai()).isEmpty();
+        assertThat(review.getSittingId()).isNull();
+    }
+
+    private static ExamQuestion typed(ExamQuestion question, String questionType) {
+        question.setQuestionType(questionType);
+        return question;
     }
 
     private static UserExamAnswer answer(Long questionId, String selected, boolean correct) {

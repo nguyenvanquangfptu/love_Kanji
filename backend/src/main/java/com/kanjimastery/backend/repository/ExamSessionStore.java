@@ -29,18 +29,19 @@ public class ExamSessionStore {
     private final StringRedisTemplate redisTemplate;
     private final ExamProperties examProperties;
 
-    public void initSession(Long attemptId, List<Long> questionIds) {
-        Duration timeoutTtl = Duration.ofSeconds(examProperties.getDurationSeconds());
+    /** @param durationSeconds thời gian làm bài của lượt - hết giờ thì marker hết hạn và bài được tự nộp */
+    public void initSession(Long attemptId, List<Long> questionIds, int durationSeconds) {
+        Duration timeoutTtl = Duration.ofSeconds(durationSeconds);
         String joinedIds = questionIds.stream().map(String::valueOf).collect(Collectors.joining(","));
 
-        redisTemplate.opsForValue().set(questionsKey(attemptId), joinedIds, sessionTtl());
+        redisTemplate.opsForValue().set(questionsKey(attemptId), joinedIds, sessionTtl(durationSeconds));
         redisTemplate.opsForValue().set(timeoutKey(attemptId), "", timeoutTtl);
     }
 
-    public void saveAnswer(Long attemptId, Long questionId, String selectedOption) {
+    public void saveAnswer(Long attemptId, Long questionId, String selectedOption, int durationSeconds) {
         String key = sessionKey(attemptId);
         redisTemplate.opsForHash().put(key, String.valueOf(questionId), selectedOption);
-        redisTemplate.expire(key, sessionTtl());
+        redisTemplate.expire(key, sessionTtl(durationSeconds));
     }
 
     public Map<Long, String> getAnswers(Long attemptId) {
@@ -65,8 +66,8 @@ public class ExamSessionStore {
         redisTemplate.delete(timeoutKey(attemptId));
     }
 
-    private Duration sessionTtl() {
-        return Duration.ofSeconds((long) examProperties.getDurationSeconds() + examProperties.getSessionBufferSeconds());
+    private Duration sessionTtl(int durationSeconds) {
+        return Duration.ofSeconds((long) durationSeconds + examProperties.getSessionBufferSeconds());
     }
 
     private String sessionKey(Long attemptId) {

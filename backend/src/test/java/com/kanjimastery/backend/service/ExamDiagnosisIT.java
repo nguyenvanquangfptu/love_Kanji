@@ -74,7 +74,7 @@ class ExamDiagnosisIT extends AbstractIntegrationTest {
                 .jlptLevel("N5")
                 .startedAt(LocalDateTime.now().minusMinutes(5))
                 .build()).getId();
-        examSessionStore.initSession(attemptId, List.of(waterQuestion.getId(), goldQuestion.getId()));
+        examSessionStore.initSession(attemptId, List.of(waterQuestion.getId(), goldQuestion.getId()), 1800);
     }
 
     @AfterEach
@@ -86,8 +86,8 @@ class ExamDiagnosisIT extends AbstractIntegrationTest {
 
     @Test
     void submittingAnExam_shouldAddTheWordsOfWrongAnswersToReview_onlyOnce() {
-        examSessionStore.saveAnswer(attemptId, waterQuestion.getId(), "A");   // sai: 水 là "Nước" (B)
-        examSessionStore.saveAnswer(attemptId, goldQuestion.getId(), "B");    // đúng: 金 là "Vàng, tiền"
+        examSessionStore.saveAnswer(attemptId, waterQuestion.getId(), "A", 1800);   // sai: 水 là "Nước" (B)
+        examSessionStore.saveAnswer(attemptId, goldQuestion.getId(), "B", 1800);    // đúng: 金 là "Vàng, tiền"
         Long water = waterQuestion.getKanjiIds().iterator().next();
         Long gold = goldQuestion.getKanjiIds().iterator().next();
 

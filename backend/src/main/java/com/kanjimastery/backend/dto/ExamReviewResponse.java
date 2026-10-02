@@ -23,6 +23,11 @@ public class ExamReviewResponse {
     private List<Word> wrongWords;
     /** Kết quả bài thi đã được đưa vào ôn tập: từ của câu sai đã nằm trong lịch ôn. */
     private boolean addedToReview;
+    /** Buổi làm đề JLPT và phần của lượt thi này; null với thi nhanh. */
+    private Long sittingId;
+    private String section;
+    /** Điểm theo từng 問題 của phần đề JLPT, theo thứ tự trong đề; rỗng với thi nhanh. */
+    private List<MondaiScore> mondai;
 
     @Getter
     @Builder
@@ -32,6 +37,18 @@ public class ExamReviewResponse {
         private String character;
         private String reading;
         private String meaning;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
+    public static class MondaiScore {
+        /** Số thứ tự trong đề thật (問題1, 問題2...). */
+        private int number;
+        /** {@link com.kanjimastery.backend.model.JlptQuestionType} */
+        private String type;
+        private int correct;
+        private int total;
     }
 
     @Getter

@@ -95,6 +95,6 @@ public class ExamFinalizationService {
         answerRepository.saveAll(answerRows);
 
         eventPublisher.publishEvent(new ExamFinalizedEvent(
-                attemptId, attempt.getUserId(), attempt.getJlptLevel(), score, timeSpentSeconds));
+                attemptId, attempt.getUserId(), attempt.getJlptLevel(), score, timeSpentSeconds, attempt.getSittingId()));
     }
 }

@@ -13,6 +13,9 @@ public interface UserExamAttemptRepository extends JpaRepository<UserExamAttempt
 
     List<UserExamAttempt> findByStatusAndStartedAtLessThanEqual(String status, LocalDateTime cutoff);
 
+    /** Các phần đã bắt đầu của một buổi làm đề JLPT, theo thứ tự làm. */
+    List<UserExamAttempt> findBySittingIdOrderByIdAsc(Long sittingId);
+
     /**
      * UPDATE có điều kiện (compare-and-swap ở tầng SQL) - chỉ luồng nào khiến
      * số dòng ảnh hưởng > 0 mới được coi là "thắng cuộc đua" chốt điểm. Đây là

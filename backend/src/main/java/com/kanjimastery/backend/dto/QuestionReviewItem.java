@@ -23,4 +23,6 @@ public class QuestionReviewItem {
     private String explanation;
     /** Kỹ năng câu hỏi kiểm tra; null nếu chưa phân loại. */
     private String skill;
+    /** Dạng câu JLPT ({@link com.kanjimastery.backend.model.JlptQuestionType}); null với câu chỉ dùng cho thi nhanh. */
+    private String questionType;
 }

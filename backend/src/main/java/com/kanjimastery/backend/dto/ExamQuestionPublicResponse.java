@@ -19,6 +19,8 @@ public class ExamQuestionPublicResponse {
     /** Câu ví dụ kiểu đề JLPT, gạch chân {@code highlight}; null nếu không có. */
     private String sentence;
     private String highlight;
+    /** Dạng câu JLPT ({@link com.kanjimastery.backend.model.JlptQuestionType}); null với câu chỉ dùng cho thi nhanh. */
+    private String questionType;
 
     public static ExamQuestionPublicResponse from(ExamQuestion q) {
         return ExamQuestionPublicResponse.builder()
@@ -30,6 +32,7 @@ public class ExamQuestionPublicResponse {
                 .optionD(q.getOptionD())
                 .sentence(q.getSentence())
                 .highlight(q.getHighlight())
+                .questionType(q.getQuestionType())
                 .build();
     }
 }

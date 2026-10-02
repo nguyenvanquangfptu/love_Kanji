@@ -14,4 +14,7 @@ public class ExamSessionResponse {
     private Long attemptId;
     private long remainingSeconds;
     private Map<Long, String> answers;
+    /** Buổi làm đề JLPT và phần của lượt thi này; null với thi nhanh. */
+    private Long sittingId;
+    private String section;
 }

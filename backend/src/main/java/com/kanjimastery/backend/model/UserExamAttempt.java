@@ -46,6 +46,18 @@ public class UserExamAttempt {
     @Column(name = "submitted_at")
     private LocalDateTime submittedAt;
 
+    /** Buổi làm đề JLPT chứa lượt thi này; null = thi nhanh. */
+    @Column(name = "sitting_id")
+    private Long sittingId;
+
+    /** Phần của đề JLPT ({@link ExamSection}); null = thi nhanh. */
+    @Column(length = 12)
+    private String section;
+
+    /** Thời gian làm bài của lượt (giây); null = mặc định {@code app.exam.duration-seconds}. */
+    @Column(name = "duration_seconds")
+    private Integer durationSeconds;
+
     /** Lúc kết quả bài thi được đưa vào ôn tập; null = chưa (bài đang làm, hoặc thi trước khi có tính năng này). */
     @Column(name = "diagnosed_at")
     private LocalDateTime diagnosedAt;

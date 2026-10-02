@@ -31,6 +31,29 @@ public interface ExamQuestionRepository extends JpaRepository<ExamQuestion, Long
             """, nativeQuery = true)
     List<ExamQuestion> findRandomUnclassifiedByLevel(@Param("level") String level, @Param("count") int count);
 
+    /** Câu đã duyệt của một dạng câu trong đề JLPT ({@link com.kanjimastery.backend.model.JlptQuestionType}). */
+    @Query(value = """
+            SELECT * FROM exam_questions
+            WHERE jlpt_level = :level AND question_type = :type AND status = 'APPROVED'
+            ORDER BY RANDOM() LIMIT :count
+            """, nativeQuery = true)
+    List<ExamQuestion> findRandomByLevelAndType(@Param("level") String level, @Param("type") String type,
+                                                @Param("count") int count);
+
+    /** Số câu đã duyệt của một dạng câu JLPT. */
+    interface TypeCount {
+        String getType();
+
+        Long getCount();
+    }
+
+    @Query(value = """
+            SELECT question_type AS "type", COUNT(*) AS "count" FROM exam_questions
+            WHERE jlpt_level = :level AND question_type IS NOT NULL AND status = 'APPROVED'
+            GROUP BY question_type
+            """, nativeQuery = true)
+    List<TypeCount> countApprovedByType(@Param("level") String level);
+
     /** Một câu thi đã sinh: kiểm tra từ nào, theo dạng câu JLPT (hoặc kỹ năng, với câu hỏi nghĩa của thi nhanh). */
     interface GeneratedQuestionWord {
         Long getKanjiId();

@@ -1,6 +1,9 @@
 spring:
   application:
     name: kanji-mastery-backend
+  config:
+    # Cấu trúc đề JLPT (số câu từng dạng, thời gian từng phần).
+    import: classpath:jlpt-blueprints.yml
 
   datasource:
     # Cổng 5433 vì máy dev có sẵn PostgreSQL native chiếm cổng 5432 mặc định.
@@ -83,6 +86,8 @@ app:
     default-question-count: 20
     session-buffer-seconds: 1800  # TTL Redis Hash = duration + buffer, tránh mất dữ liệu
     reconciliation-interval-ms: 90000
+    sitting-max-hours: 3          # buổi làm đề JLPT chưa làm hết các phần sau chừng này giờ thì coi như bỏ dở
+    sitting-cleanup-interval-ms: 600000
     question-generation-cron: "0 15 5 * * *" # mỗi sáng sinh câu thi cho từ mới thêm vào bài học (giờ app.srs.day-zone)
   ai:
     # Để trống thì tính năng sinh câu ví dụ tự tắt (quiz vẫn chạy được, chỉ không có câu ngữ cảnh).
