@@ -37,17 +37,18 @@ class SentenceGenerationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SentenceGenerationService(new ObjectMapper(), rateLimiter) {
+        GeminiClient gemini = new GeminiClient(new ObjectMapper(), rateLimiter) {
             @Override
             HttpResponse<String> send(String model, String apiKey, String requestBody) {
                 calledModels.add(model);
                 return nextResponse;
             }
         };
-        ReflectionTestUtils.setField(service, "apiKeysRaw", "test-key");
-        ReflectionTestUtils.setField(service, "modelsRaw", "test-model");
-        ReflectionTestUtils.setField(service, "dailyRequestLimit", 100);
-        service.loadConfig();
+        ReflectionTestUtils.setField(gemini, "apiKeysRaw", "test-key");
+        ReflectionTestUtils.setField(gemini, "modelsRaw", "test-model");
+        ReflectionTestUtils.setField(gemini, "dailyRequestLimit", 100);
+        gemini.loadConfig();
+        service = new SentenceGenerationService(gemini, new ObjectMapper());
     }
 
     @Test
