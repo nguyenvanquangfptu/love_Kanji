@@ -78,4 +78,26 @@ public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
             GROUP BY direction
             """, nativeQuery = true)
     List<DirectionStats> quizDirectionStats(@Param("userId") Long userId, @Param("since") LocalDateTime since);
+
+    /** Một đáp án sai người học đã chọn khi được hỏi một từ theo một hướng, và số lần chọn. */
+    interface QuizMistake {
+        Long getKanjiId();
+
+        String getDirection();
+
+        String getChosenAnswer();
+
+        long getTimes();
+    }
+
+    /** Đáp án sai đã chọn trong trắc nghiệm, chọn nhiều lần nhất (rồi gần đây nhất) trước (idx_review_logs_user_kanji). */
+    @Query(value = """
+            SELECT kanji_id AS "kanjiId", direction AS "direction", chosen_answer AS "chosenAnswer", COUNT(*) AS "times"
+            FROM review_logs
+            WHERE user_id = :userId AND kanji_id IN (:kanjiIds) AND source = 'QUIZ' AND NOT correct
+              AND chosen_answer IS NOT NULL
+            GROUP BY kanji_id, direction, chosen_answer
+            ORDER BY COUNT(*) DESC, MAX(reviewed_at) DESC
+            """, nativeQuery = true)
+    List<QuizMistake> quizMistakes(@Param("userId") Long userId, @Param("kanjiIds") Collection<Long> kanjiIds);
 }

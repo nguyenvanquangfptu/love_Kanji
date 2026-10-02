@@ -3,6 +3,7 @@ package com.kanjimastery.backend.service;
 import com.kanjimastery.backend.model.UserKanjiSrs;
 import com.kanjimastery.backend.repository.ReviewLogRepository;
 import com.kanjimastery.backend.repository.ReviewLogRepository.DirectionStats;
+import com.kanjimastery.backend.repository.ReviewLogRepository.QuizMistake;
 import com.kanjimastery.backend.repository.ReviewLogRepository.WordDirectionStats;
 import com.kanjimastery.backend.repository.UserKanjiSrsRepository;
 import com.kanjimastery.backend.service.LearnerHistory.Tally;
@@ -13,13 +14,15 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/** Đọc {@link LearnerHistory} cho cả một nhóm từ bằng ba truy vấn, không truy vấn theo từng từ. */
+/** Đọc lịch sử học ({@link LearnerHistory}, đáp án từng chọn sai) cho cả một nhóm từ, không truy vấn theo từng từ. */
 @Service
 @RequiredArgsConstructor
 public class LearnerHistoryService {
@@ -61,5 +64,27 @@ public class LearnerHistoryService {
                 .collect(Collectors.toMap(DirectionStats::getDirection, row -> new Tally(row.getAnswers(), row.getErrors())));
 
         return new LearnerHistory(now, cards, words, learnerDirections);
+    }
+
+    /** Một đáp án sai người học từng chọn và số lần chọn. */
+    public record PastMistake(String answer, long times) {
+    }
+
+    /**
+     * Đáp án sai người học từng chọn trong trắc nghiệm: kanjiId -> hướng hỏi -> các đáp án, chọn nhiều lần nhất trước.
+     * Một truy vấn cho cả bài.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Map<String, List<PastMistake>>> pastMistakes(Long userId, Collection<Long> kanjiIds) {
+        if (kanjiIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Map<String, List<PastMistake>>> result = new HashMap<>();
+        for (QuizMistake row : reviewLogRepository.quizMistakes(userId, kanjiIds)) {
+            result.computeIfAbsent(row.getKanjiId(), id -> new HashMap<>())
+                    .computeIfAbsent(row.getDirection(), direction -> new ArrayList<>())
+                    .add(new PastMistake(row.getChosenAnswer(), row.getTimes()));
+        }
+        return result;
     }
 }

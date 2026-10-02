@@ -221,6 +221,12 @@ export interface QuizQuestionResponse {
   character: string
   reading: string | null
   meaning: string
+  /** Đáp án sai bạn từng chọn nhiều nhất cho từ này (theo hướng hỏi này), có trong `choices`; null nếu chưa từng nhầm. */
+  personalTrap: string | null
+  personalTrapCount: number
+  /** Khi `personalTrap` là cách viết của một từ có thật: cách đọc và nghĩa của từ đó. */
+  personalTrapReading: string | null
+  personalTrapMeaning: string | null
 }
 
 export interface QuizAnswerRequest {

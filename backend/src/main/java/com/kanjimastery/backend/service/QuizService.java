@@ -6,6 +6,7 @@ import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.TooManyRequestsException;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.repository.KanjiRepository;
+import com.kanjimastery.backend.service.LearnerHistoryService.PastMistake;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +36,7 @@ import java.util.random.RandomGenerator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static com.kanjimastery.backend.model.QuizDirection.KANJI_TO_READING;
 import static com.kanjimastery.backend.model.QuizDirection.MEANING;
@@ -59,6 +61,8 @@ public class QuizService {
     /** Trắc nghiệm cả cấp độ có hàng nghìn từ - chặn số câu mỗi lượt để một request không dựng quá nhiều câu hỏi. */
     private static final int MAX_QUESTIONS = 50;
     private static final int DISTRACTOR_COUNT = 3;
+    /** Số đáp án từng chọn sai được đưa lại vào một câu (còn lại là đáp án nhiễu gần đúng). */
+    private static final int MAX_PERSONAL_TRAPS = 2;
     /** Thời gian tối đa chờ AI sinh câu ví dụ cho một lượt tạo quiz - quá hạn thì dùng câu hỏi không có ngữ cảnh. */
     private static final long SENTENCE_BUDGET_MS = 15_000;
     /** Số từ tối đa trong một request sinh câu (một request cho cả bài để tiết kiệm hạn mức). */
@@ -107,10 +111,10 @@ public class QuizService {
 
         int requested = size == null || size < 1 ? DEFAULT_QUESTIONS : Math.min(size, MAX_QUESTIONS);
         RandomGenerator random = ThreadLocalRandom.current();
+        Long userId = userService.getByUsername(username).getId();
         // Chế độ ngẫu nhiên không cần lịch sử học: null = chọn từ và hướng hỏi ngẫu nhiên đều.
         LearnerHistory history = adaptive
-                ? learnerHistoryService.load(userService.getByUsername(username).getId(),
-                        pool.stream().map(Kanji::getId).toList())
+                ? learnerHistoryService.load(userId, pool.stream().map(Kanji::getId).toList())
                 : null;
         List<Kanji> selected;
         if (history != null) {
@@ -123,8 +127,12 @@ public class QuizService {
 
         Map<Long, String> newSentences = generateMissingSentences(selected, pool);
 
-        List<PlannedQuestion> plans = selected.stream().map(kanji -> plan(kanji, history, random)).toList();
-        Map<String, Set<String>> existingWordReadings = readingsOfExistingWords(plans);
+        Map<Long, Map<String, List<PastMistake>>> pastMistakes =
+                learnerHistoryService.pastMistakes(userId, selected.stream().map(Kanji::getId).toList());
+        List<PlannedQuestion> plans = selected.stream()
+                .map(kanji -> plan(kanji, history, pastMistakes.getOrDefault(kanji.getId(), Map.of()), random))
+                .toList();
+        Map<String, List<Kanji>> existingWords = existingWords(plans);
 
         List<QuizQuestionResponse> questions = new ArrayList<>();
         for (PlannedQuestion plan : plans) {
@@ -132,45 +140,54 @@ public class QuizService {
             String sentence = StringUtils.hasText(kanji.getExampleSentence())
                     ? kanji.getExampleSentence()
                     : newSentences.get(kanji.getId());
-            questions.add(buildQuestion(plan, sentence, pool, existingWordReadings));
+            questions.add(buildQuestion(plan, sentence, pool, existingWords));
         }
         return questions;
     }
 
-    /** Hướng hỏi của một câu và các đáp án nhiễu gần đúng cho hướng đó (chưa lọc từ đồng âm). */
-    private record PlannedQuestion(Kanji kanji, String direction, List<String> nearMisses) {
+    /**
+     * Hướng hỏi của một câu, các đáp án nhiễu gần đúng và các đáp án sai người học từng chọn cho hướng đó
+     * (chưa lọc những đáp án cũng "đúng").
+     */
+    private record PlannedQuestion(Kanji kanji, String direction, List<String> nearMisses,
+                                   List<PastMistake> pastMistakes) {
     }
 
-    private PlannedQuestion plan(Kanji kanji, LearnerHistory history, RandomGenerator random) {
+    private PlannedQuestion plan(Kanji kanji, LearnerHistory history, Map<String, List<PastMistake>> pastMistakes,
+                                 RandomGenerator random) {
         if (!StringUtils.hasText(kanji.getReading())) {
-            return new PlannedQuestion(kanji, MEANING, List.of());
+            return new PlannedQuestion(kanji, MEANING, List.of(), pastMistakes.getOrDefault(MEANING, List.of()));
         }
         boolean askReading = history != null
                 ? KANJI_TO_READING.equals(AdaptiveQuizPlanner.chooseDirection(kanji, history, random))
                 : random.nextBoolean();
-        return askReading
-                ? new PlannedQuestion(kanji, KANJI_TO_READING,
-                        distractorGenerator.trapReadings(kanji.getReading(), kanji.getCharacter()))
-                : new PlannedQuestion(kanji, READING_TO_KANJI,
-                        distractorGenerator.lookAlikeSpellings(kanji.getCharacter()));
+        String direction = askReading ? KANJI_TO_READING : READING_TO_KANJI;
+        List<String> nearMisses = askReading
+                ? distractorGenerator.trapReadings(kanji.getReading(), kanji.getCharacter())
+                : distractorGenerator.lookAlikeSpellings(kanji.getCharacter());
+        return new PlannedQuestion(kanji, direction, nearMisses, pastMistakes.getOrDefault(direction, List.of()));
     }
 
     /**
-     * Cách đọc của những cách viết nhiễu trùng với một từ có thật trong kho (vd. thay 会 cho 合 ra 会う) -
-     * một truy vấn cho cả bài. Dùng để bỏ đáp án nhiễu đọc giống hệt đáp án đúng, vì khi đó cả hai đều "đúng".
-     * Một cách viết có thể có nhiều dòng với cách đọc khác nhau (開く: あく, ひらく) nên giữ tất cả.
+     * Các dòng trong kho trùng cách viết với đáp án nhiễu dạng chữ (cách viết nhiễu, cách viết từng chọn sai) hoặc với
+     * từ đang hỏi khi có đáp án từng chọn sai - một truy vấn cho cả bài. Dùng để bỏ đáp án nhiễu cũng "đúng": cách viết
+     * khác mà có từ thật đọc giống hệt (thay 会 cho 合 ra 会う), hay cách đọc/nghĩa của một dòng khác cùng cách viết
+     * (開く: あく, ひらく).
      */
-    private Map<String, Set<String>> readingsOfExistingWords(List<PlannedQuestion> plans) {
-        Set<String> spellings = plans.stream()
-                .filter(plan -> READING_TO_KANJI.equals(plan.direction()))
-                .flatMap(plan -> plan.nearMisses().stream())
-                .collect(Collectors.toSet());
+    private Map<String, List<Kanji>> existingWords(List<PlannedQuestion> plans) {
+        Set<String> spellings = new HashSet<>();
+        for (PlannedQuestion plan : plans) {
+            if (READING_TO_KANJI.equals(plan.direction())) {
+                spellings.addAll(plan.nearMisses());
+                plan.pastMistakes().forEach(mistake -> spellings.add(mistake.answer()));
+            } else if (!plan.pastMistakes().isEmpty()) {
+                spellings.add(plan.kanji().getCharacter());
+            }
+        }
         if (spellings.isEmpty()) {
             return Map.of();
         }
-        return kanjiRepository.findAllByCharacterIn(spellings).stream()
-                .filter(word -> StringUtils.hasText(word.getReading()))
-                .collect(Collectors.groupingBy(Kanji::getCharacter, Collectors.mapping(Kanji::getReading, Collectors.toSet())));
+        return kanjiRepository.findAllByCharacterIn(spellings).stream().collect(Collectors.groupingBy(Kanji::getCharacter));
     }
 
     /**
@@ -251,35 +268,52 @@ public class QuizService {
     }
 
     private QuizQuestionResponse buildQuestion(PlannedQuestion plan, String exampleSentence, List<Kanji> pool,
-                                               Map<String, Set<String>> existingWordReadings) {
+                                               Map<String, List<Kanji>> existingWords) {
         Kanji kanji = plan.kanji();
         String direction = plan.direction();
         String reading = kanji.getReading();
+        List<Kanji> otherRows = existingWords.getOrDefault(kanji.getCharacter(), List.of()).stream()
+                .filter(row -> !row.getId().equals(kanji.getId()))
+                .toList();
 
         String correctAnswer;
-        List<String> nearMisses;
+        // Đáp án khác mà cũng "đúng" - không được đưa vào làm đáp án nhiễu.
+        Predicate<String> alsoCorrect;
         List<String> fallback;
         switch (direction) {
             case READING_TO_KANJI -> {
                 correctAnswer = kanji.getCharacter();
-                nearMisses = plan.nearMisses().stream()
-                        .filter(spelling -> !existingWordReadings.getOrDefault(spelling, Set.of()).contains(reading))
-                        .toList();
+                alsoCorrect = spelling -> existingWords.getOrDefault(spelling, List.of()).stream()
+                        .anyMatch(word -> reading.equals(word.getReading()));
                 fallback = spellingFallback(kanji, pool);
             }
             case KANJI_TO_READING -> {
                 correctAnswer = reading;
-                nearMisses = plan.nearMisses();
+                alsoCorrect = answer -> otherRows.stream().anyMatch(row -> answer.equals(row.getReading()));
                 fallback = readingFallback(kanji, pool);
             }
             default -> {
                 correctAnswer = kanji.getMeaning();
-                nearMisses = List.of();
+                alsoCorrect = answer -> otherRows.stream().anyMatch(row -> answer.equals(row.getMeaning()));
                 fallback = otherWords(kanji, pool).stream().map(Kanji::getMeaning).toList();
             }
         }
 
+        // Đáp án người học từng chọn sai đứng trước cả đáp án nhiễu gần đúng: đó là chỗ họ thật sự hay nhầm.
+        List<PastMistake> traps = plan.pastMistakes().stream()
+                .filter(mistake -> !mistake.answer().equals(correctAnswer) && !alsoCorrect.test(mistake.answer()))
+                .limit(MAX_PERSONAL_TRAPS)
+                .toList();
+        List<String> nearMisses = Stream.concat(traps.stream().map(PastMistake::answer), plan.nearMisses().stream())
+                .filter(alsoCorrect.negate())
+                .toList();
+
         List<String> choices = buildChoices(correctAnswer, nearMisses, fallback);
+        PastMistake shownTrap = traps.stream().filter(trap -> choices.contains(trap.answer())).findFirst().orElse(null);
+        // Cách viết từng chọn nhầm là một từ có thật: kèm cách đọc và nghĩa để người học so sánh.
+        Kanji trapWord = shownTrap != null && READING_TO_KANJI.equals(direction)
+                ? existingWords.getOrDefault(shownTrap.answer(), List.of()).stream().findFirst().orElse(null)
+                : null;
         String prompt = READING_TO_KANJI.equals(direction) ? reading : kanji.getCharacter();
 
         return QuizQuestionResponse.builder()
@@ -292,6 +326,10 @@ public class QuizService {
                 .character(kanji.getCharacter())
                 .reading(reading)
                 .meaning(kanji.getMeaning())
+                .personalTrap(shownTrap == null ? null : shownTrap.answer())
+                .personalTrapCount(shownTrap == null ? 0 : (int) shownTrap.times())
+                .personalTrapReading(trapWord == null ? null : trapWord.getReading())
+                .personalTrapMeaning(trapWord == null ? null : trapWord.getMeaning())
                 .build();
     }
 

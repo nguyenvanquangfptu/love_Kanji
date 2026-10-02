@@ -8,6 +8,7 @@ import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.User;
 import com.kanjimastery.backend.model.UserKanjiSrs;
 import com.kanjimastery.backend.repository.KanjiRepository;
+import com.kanjimastery.backend.service.LearnerHistoryService.PastMistake;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -75,6 +76,7 @@ class QuizServiceTest {
         lenient().when(userService.getByUsername("taro")).thenReturn(User.builder().id(USER_ID).build());
         lenient().when(learnerHistoryService.load(eq(USER_ID), anyCollection()))
                 .thenAnswer(invocation -> LearnerHistory.empty(LocalDateTime.now()));
+        lenient().when(learnerHistoryService.pastMistakes(eq(USER_ID), anyCollection())).thenReturn(Map.of());
     }
 
     @AfterEach
@@ -127,7 +129,6 @@ class QuizServiceTest {
 
         assertThat(quizService.generate("taro", TAG_ID, null, 10, QuizService.MODE_RANDOM)).hasSize(1);
         verify(learnerHistoryService, never()).load(anyLong(), anyCollection());
-        verifyNoInteractions(userService);
     }
 
     @Test
@@ -248,6 +249,70 @@ class QuizServiceTest {
         assertThat(question.getChoices()).hasSize(4).contains("しゅうへん").doesNotContain("しょるい");
         assertThat(question.getChoices()).filteredOn(choice -> !choice.equals("しゅうへん"))
                 .allSatisfy(choice -> assertThat(distractors.trapReadings("しゅうへん", "周辺")).contains(choice));
+    }
+
+    @Test
+    void generate_shouldOfferTheLearnersOwnPastMistake_beforeSoundTraps() {
+        givenQuizAllowed();
+        when(kanjiRepository.findAllByFilters(null, TAG_ID))
+                .thenReturn(List.of(word(20L, "周辺", "しゅうへん", null), word(21L, "書類", "しょるい", null)));
+        givenPastMistakes(20L, "KANJI_TO_READING", new PastMistake("しょるい", 3));
+
+        QuizQuestionResponse question = firstQuestionAsking("KANJI_TO_READING", "周辺");
+
+        // Không có lịch sử thì しょるい bị cách đọc bẫy đẩy ra (xem test trên); người học từng chọn nó 3 lần nên phải có.
+        assertThat(question.getChoices()).hasSize(4).contains("しゅうへん", "しょるい");
+        assertThat(question.getPersonalTrap()).isEqualTo("しょるい");
+        assertThat(question.getPersonalTrapCount()).isEqualTo(3);
+        assertThat(question.getPersonalTrapReading()).isNull();
+    }
+
+    @Test
+    void generate_shouldShowReadingAndMeaning_whenThePastMistakeIsARealWord() {
+        givenQuizAllowed();
+        when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(word(60L, "待つ", "まつ", null)));
+        givenPastMistakes(60L, "READING_TO_KANJI", new PastMistake("持つ", 2));
+        when(kanjiRepository.findAllByCharacterIn(anyCollection())).thenReturn(List.of(word(61L, "持つ", "もつ", null)));
+
+        QuizQuestionResponse question = firstQuestionAsking("READING_TO_KANJI", "待つ");
+
+        assertThat(question.getChoices()).contains("待つ", "持つ");
+        assertThat(question.getPersonalTrap()).isEqualTo("持つ");
+        assertThat(question.getPersonalTrapReading()).isEqualTo("もつ");
+        assertThat(question.getPersonalTrapMeaning()).isEqualTo("nghĩa của 持つ");
+    }
+
+    @Test
+    void generate_shouldDropAPastMistake_thatIsAlsoCorrect() {
+        givenQuizAllowed();
+        when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(word(70L, "会う", "あう", null)));
+        // Người học từng chọn 合う - nhưng kho có từ 合う cũng đọc あう, nên đáp án đó cũng "đúng".
+        givenPastMistakes(70L, "READING_TO_KANJI", new PastMistake("合う", 4));
+        when(kanjiRepository.findAllByCharacterIn(anyCollection())).thenReturn(List.of(word(71L, "合う", "あう", null)));
+
+        QuizQuestionResponse question = firstQuestionAsking("READING_TO_KANJI", "会う");
+
+        assertThat(question.getChoices()).contains("会う").doesNotContain("合う");
+        assertThat(question.getPersonalTrap()).isNull();
+    }
+
+    @Test
+    void generate_shouldDropAPastMistake_thatIsTheReadingOfAnotherRowOfTheSameWord() {
+        givenQuizAllowed();
+        Kanji aku = word(50L, "開く", "あく", null);
+        when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(aku));
+        givenPastMistakes(50L, "KANJI_TO_READING", new PastMistake("ひらく", 2));
+        when(kanjiRepository.findAllByCharacterIn(anyCollection())).thenReturn(List.of(aku, word(51L, "開く", "ひらく", null)));
+
+        QuizQuestionResponse question = firstQuestionAsking("KANJI_TO_READING", "開く");
+
+        assertThat(question.getChoices()).contains("あく").doesNotContain("ひらく");
+        assertThat(question.getPersonalTrap()).isNull();
+    }
+
+    private void givenPastMistakes(Long kanjiId, String direction, PastMistake... mistakes) {
+        when(learnerHistoryService.pastMistakes(eq(USER_ID), anyCollection()))
+                .thenReturn(Map.of(kanjiId, Map.of(direction, List.of(mistakes))));
     }
 
     /** Hướng hỏi được chọn ngẫu nhiên - tạo lại tới khi gặp câu cần kiểm tra (xác suất trượt 2^-100). */

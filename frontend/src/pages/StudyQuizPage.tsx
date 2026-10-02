@@ -273,7 +273,13 @@ export function StudyQuizPage() {
       </main>
 
       {answered && current && !isDone && (
-        <FeedbackBar correct={isCorrect} question={current} praise={PRAISES[index % PRAISES.length]} onContinue={next} />
+        <FeedbackBar
+          correct={isCorrect}
+          question={current}
+          chosen={current.choices[selected]}
+          praise={PRAISES[index % PRAISES.length]}
+          onContinue={next}
+        />
       )}
     </>
   )
@@ -282,11 +288,14 @@ export function StudyQuizPage() {
 function FeedbackBar({
   correct,
   question,
+  chosen,
   praise,
   onContinue,
 }: {
   correct: boolean
   question: QuizQuestionResponse
+  /** Đáp án người học vừa chọn. */
+  chosen: string
   praise: string
   onContinue: () => void
 }) {
@@ -322,6 +331,7 @@ function FeedbackBar({
               <span className="font-jp font-bold">{question.character}</span>
               {question.reading && <span className="font-jp">（{question.reading}）</span>} — {question.meaning}
             </p>
+            {question.personalTrap && <PersonalTrapNote question={question} chosen={chosen} correct={correct} />}
           </div>
           <SpeakButton text={question.reading ?? question.character} />
         </div>
@@ -330,6 +340,47 @@ function FeedbackBar({
         </Button>
       </div>
     </div>
+  )
+}
+
+/** Nhắc lại chỗ người học từng nhầm với chính từ này, kèm từ bị nhầm nếu đó là một từ có thật. */
+function PersonalTrapNote({
+  question,
+  chosen,
+  correct,
+}: {
+  question: QuizQuestionResponse
+  chosen: string
+  correct: boolean
+}) {
+  const { personalTrap, personalTrapCount, personalTrapReading, personalTrapMeaning } = question
+  const trap =
+    question.direction === 'MEANING' ? (
+      <span className="font-bold">“{personalTrap}”</span>
+    ) : (
+      <span className="font-jp font-bold">「{personalTrap}」</span>
+    )
+  return (
+    <p className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-sm font-semibold text-foreground/90">
+      {chosen === personalTrap ? (
+        <>
+          Bạn lại nhầm với {trap} - lần thứ {personalTrapCount + 1}.
+        </>
+      ) : correct ? (
+        <>Lần này bạn không nhầm với {trap} nữa!</>
+      ) : (
+        <>
+          Bạn từng nhầm từ này với {trap} ({personalTrapCount} lần).
+        </>
+      )}
+      {personalTrapReading && (
+        <>
+          {' '}
+          <span className="font-jp font-bold">{personalTrap}</span> đọc là{' '}
+          <span className="font-jp">{personalTrapReading}</span>, nghĩa: {personalTrapMeaning}.
+        </>
+      )}
+    </p>
   )
 }
 
