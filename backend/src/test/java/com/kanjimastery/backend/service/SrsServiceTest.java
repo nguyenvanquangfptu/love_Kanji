@@ -1,9 +1,13 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.config.SrsProperties;
 import com.kanjimastery.backend.dto.AddSrsCardsResponse;
+import com.kanjimastery.backend.dto.DailyCardResponse;
+import com.kanjimastery.backend.dto.HardWordsResponse;
 import com.kanjimastery.backend.dto.ReviewRequest;
 import com.kanjimastery.backend.dto.SrsTagStatusResponse;
 import com.kanjimastery.backend.model.CardState;
+import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.ReviewLog;
 import com.kanjimastery.backend.model.ReviewRating;
 import com.kanjimastery.backend.model.ReviewSource;
@@ -18,6 +22,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -26,7 +32,9 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -50,6 +58,9 @@ class SrsServiceTest {
 
     @Spy
     private SrsCalculatorService srsCalculatorService = new SrsCalculatorService();
+
+    @Spy
+    private SrsProperties srsProperties = new SrsProperties();
 
     @InjectMocks
     private SrsService srsService;
@@ -127,6 +138,8 @@ class SrsServiceTest {
         assertThat(card.getRepetitionCount()).isZero();
         assertThat(card.getReviewIntervalDays()).isEqualTo(1);
 
+        assertThat(card.getLapseCount()).isEqualTo(1);
+
         ReviewLog log = savedLog();
         assertThat(log.getCorrect()).isFalse();
         assertThat(log.getStateBefore()).isEqualTo(CardState.REVIEW);
@@ -184,7 +197,51 @@ class SrsServiceTest {
 
         assertThat(card.getRepetitionCount()).isZero();
         assertThat(card.getReviewIntervalDays()).isEqualTo(1);
+        assertThat(card.getLapseCount()).isEqualTo(1);
         assertThat(savedLog().getScheduled()).isTrue();
+    }
+
+    @Test
+    void submitReview_shouldNotCountALapse_whenANewCardIsForgotten() {
+        UserKanjiSrs neverReviewed = UserKanjiSrs.builder().userId(USER_ID).kanjiId(KANJI_ID).repetitionCount(0)
+                .easinessFactor(new BigDecimal("2.50")).reviewIntervalDays(0).nextReviewAt(LocalDateTime.now()).build();
+        when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.of(neverReviewed));
+        givenSaveReturnsCard();
+
+        srsService.submitReview(USER_ID, reviewRequest(ReviewRating.AGAIN, 1_000));
+
+        assertThat(neverReviewed.getLapseCount()).isZero();
+    }
+
+    @Test
+    void getDailyCards_shouldFlagHardWords_andMoveThoseBeyondTheFirstFewToTheEnd() {
+        srsProperties.setHardWordsUpFront(2);
+        List<UserKanjiSrs> due = List.of(dueCard(1L, 6), dueCard(2L, 0), dueCard(3L, 7), dueCard(4L, 9),
+                dueCard(5L, 1));
+        PageRequest page = PageRequest.of(0, 20);
+        when(srsRepository.findByUserIdAndNextReviewAtLessThanEqualOrderByNextReviewAtAsc(eq(USER_ID), any(), eq(page)))
+                .thenReturn(new PageImpl<>(due, page, due.size()));
+        when(kanjiRepository.findAllById(anyList())).thenReturn(due.stream().map(card -> kanji(card.getKanjiId())).toList());
+
+        List<DailyCardResponse> cards = srsService.getDailyCards(USER_ID, page).getContent();
+
+        // Từ khó thứ 3 (id 4) dồn xuống cuối; thứ tự còn lại giữ nguyên.
+        assertThat(cards).extracting(card -> card.getKanji().getId()).containsExactly(1L, 2L, 3L, 5L, 4L);
+        assertThat(cards).extracting(DailyCardResponse::isHardWord).containsExactly(true, false, true, false, true);
+    }
+
+    @Test
+    void getHardWords_shouldListWordsForgottenAtLeastTheThresholdNumberOfTimes() {
+        when(srsRepository.findByUserIdAndLapseCountGreaterThanEqualOrderByLapseCountDesc(USER_ID, 6))
+                .thenReturn(List.of(dueCard(8L, 9), dueCard(9L, 6)));
+        when(kanjiRepository.findAllById(List.of(8L, 9L))).thenReturn(List.of(kanji(9L), kanji(8L)));
+
+        HardWordsResponse response = srsService.getHardWords(USER_ID);
+
+        assertThat(response.getLapseThreshold()).isEqualTo(6);
+        assertThat(response.getWords()).extracting(word -> word.getKanji().getId(), HardWordsResponse.Word::getLapseCount)
+                .containsExactly(tuple(8L, 9), tuple(9L, 6));
     }
 
     @Test
@@ -240,6 +297,17 @@ class SrsServiceTest {
                 .nextReviewAt(nextReviewAt)
                 .lastReviewedAt(nextReviewAt.minusDays(intervalDays))
                 .build();
+    }
+
+    private static UserKanjiSrs dueCard(long kanjiId, int lapses) {
+        LocalDateTime due = LocalDateTime.now().minusHours(kanjiId);
+        return UserKanjiSrs.builder().id(kanjiId + 100).userId(USER_ID).kanjiId(kanjiId).repetitionCount(1)
+                .easinessFactor(new BigDecimal("2.30")).reviewIntervalDays(1).nextReviewAt(due)
+                .lastReviewedAt(due.minusDays(1)).lapseCount(lapses).build();
+    }
+
+    private static Kanji kanji(long id) {
+        return Kanji.builder().id(id).character("語" + id).hanViet("NGỮ").meaning("nghĩa " + id).build();
     }
 
     private void givenSaveReturnsCard() {

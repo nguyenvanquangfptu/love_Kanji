@@ -25,6 +25,10 @@ public interface UserKanjiSrsRepository extends JpaRepository<UserKanjiSrs, Long
 
     long countByUserId(Long userId);
 
+    long countByUserIdAndLapseCountGreaterThanEqual(Long userId, Integer minLapses);
+
+    List<UserKanjiSrs> findByUserIdAndLapseCountGreaterThanEqualOrderByLapseCountDesc(Long userId, Integer minLapses);
+
     long countByUserIdAndNextReviewAtLessThanEqual(Long userId, LocalDateTime now);
 
     long countByUserIdAndNextReviewAtAfterAndReviewIntervalDaysGreaterThanEqual(

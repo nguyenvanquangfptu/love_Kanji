@@ -59,9 +59,11 @@ export function StudyQuizPage() {
   const { tagId, query } = useLessonParams()
   // Không có tagId mà có level: trắc nghiệm tổng hợp cả cấp độ (mở từ trang Học bài).
   const { level, size } = useLevelQuizParams()
-  const levelQuiz = tagId === null ? level : null
-  // Mặc định ưu tiên từ người học hay sai; ?mode=random để kiểm tra đều cả bài.
   const [searchParams, setSearchParams] = useSearchParams()
+  // ?hardWords=1: chỉ hỏi các từ khó của người học (mở từ trang Từ khó).
+  const hardWordsQuiz = searchParams.get('hardWords') === '1'
+  const levelQuiz = !hardWordsQuiz && tagId === null ? level : null
+  // Mặc định ưu tiên từ người học hay sai; ?mode=random để kiểm tra đều cả bài.
   const mode: QuizMode = searchParams.get('mode') === 'random' ? 'random' : 'adaptive'
 
   const [index, setIndex] = useState(0)
@@ -76,10 +78,16 @@ export function StudyQuizPage() {
   const shownAt = useRef(0)
 
   const { data: questions, isLoading, isError, error } = useQuery({
-    queryKey: ['study-quiz', tagId, levelQuiz, size, mode, attempt],
+    queryKey: ['study-quiz', tagId, levelQuiz, hardWordsQuiz, size, mode, attempt],
     queryFn: () =>
-      quizApi.generate(levelQuiz ? { level: levelQuiz, size, mode } : { tagId: tagId ?? undefined, size: 10, mode }),
-    enabled: tagId !== null || levelQuiz !== null,
+      quizApi.generate(
+        hardWordsQuiz
+          ? { hardWords: true, size: 10, mode }
+          : levelQuiz
+            ? { level: levelQuiz, size, mode }
+            : { tagId: tagId ?? undefined, size: 10, mode },
+      ),
+    enabled: hardWordsQuiz || tagId !== null || levelQuiz !== null,
     staleTime: Infinity,
     gcTime: 0,
   })
@@ -163,9 +171,9 @@ export function StudyQuizPage() {
     restart()
   }
 
-  if (tagId === null && levelQuiz === null) return <Navigate to="/study" replace />
+  if (!hardWordsQuiz && tagId === null && levelQuiz === null) return <Navigate to="/study" replace />
 
-  const exitTo = levelQuiz ? '/study' : `/study/vocab?${query}`
+  const exitTo = hardWordsQuiz ? '/flashcards/hard-words' : levelQuiz ? '/study' : `/study/vocab?${query}`
   const progress = total > 0 ? ((index + (answered ? 1 : 0)) / total) * 100 : 0
   const isCorrect = answered && current !== undefined && selected === current.correctIndex
 
@@ -191,7 +199,11 @@ export function StudyQuizPage() {
           <EmptyState
             icon={Target}
             title="Chưa tạo được câu hỏi"
-            description={`${levelQuiz ? `Cấp độ ${levelQuiz}` : 'Bài này'} chưa đủ từ vựng để làm trắc nghiệm.`}
+            description={
+              hardWordsQuiz
+                ? 'Bạn chưa có từ khó nào để luyện riêng.'
+                : `${levelQuiz ? `Cấp độ ${levelQuiz}` : 'Bài này'} chưa đủ từ vựng để làm trắc nghiệm.`
+            }
           />
         )}
 
@@ -205,9 +217,9 @@ export function StudyQuizPage() {
             mode={mode}
             onSwitchMode={switchMode}
             onRestart={restart}
-            onFlashcards={levelQuiz ? undefined : () => navigate(`/study/flashcards?${query}`)}
+            onFlashcards={hardWordsQuiz || levelQuiz ? undefined : () => navigate(`/study/flashcards?${query}`)}
             exitTo={exitTo}
-            exitLabel={levelQuiz ? 'Về trang Học bài' : 'Về bài học'}
+            exitLabel={hardWordsQuiz ? 'Về danh sách từ khó' : levelQuiz ? 'Về trang Học bài' : 'Về bài học'}
           />
         )}
 

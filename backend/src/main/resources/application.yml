@@ -66,6 +66,9 @@ app:
       max-failures: 10
       window-seconds: 900
       lock-seconds: 900
+  srs:
+    hard-word-lapses: 6       # quên chừng này lần (sau khi đã học) thì thành "từ khó"
+    hard-words-up-front: 5    # mỗi phiên ôn chỉ để chừng này từ khó ở chỗ cũ, còn lại dồn xuống cuối
   exam:
     duration-seconds: 1800        # 30 phút làm bài
     default-question-count: 20

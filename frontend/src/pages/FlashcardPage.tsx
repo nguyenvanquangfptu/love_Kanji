@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Brain, BrainCircuit, Clock, PartyPopper, Sprout } from 'lucide-react'
+import { BookOpen, Brain, BrainCircuit, ChevronRight, Clock, Dumbbell, PartyPopper, Sprout } from 'lucide-react'
 import { srsApi } from '@/api/srs'
 import type { DailyCardResponse, Page, ReviewRating, ReviewRequest } from '@/api/types'
 import { extractErrorMessage } from '@/api/client'
@@ -118,6 +118,17 @@ export function FlashcardPage() {
         </div>
       )}
 
+      {stats && stats.hardWords > 0 && (
+        <Link
+          to="/flashcards/hard-words"
+          className="mb-6 flex items-center gap-3 rounded-2xl border-2 border-destructive/30 bg-destructive-soft px-4 py-3 font-bold text-destructive-dark transition-all hover:brightness-[0.98]"
+        >
+          <Dumbbell className="h-5 w-5 shrink-0" strokeWidth={2.5} />
+          <span className="flex-1">Bạn có {stats.hardWords} từ khó - xem và luyện riêng</span>
+          <ChevronRight className="h-5 w-5 shrink-0" />
+        </Link>
+      )}
+
       {isLoading && <PageSpinner />}
       {isError && <Alert>{extractErrorMessage(error)}</Alert>}
 
@@ -167,9 +178,10 @@ export function FlashcardPage() {
                 <span className={cn('font-jp font-bold leading-none', wordSizeClass(current.kanji.character))}>
                   {current.kanji.character}
                 </span>
-                <Badge variant="secondary" className="mt-6">
-                  {current.kanji.jlptLevel}
-                </Badge>
+                <div className="mt-6 flex flex-wrap justify-center gap-2">
+                  <Badge variant="secondary">{current.kanji.jlptLevel}</Badge>
+                  {current.hardWord && <Badge variant="destructive">Từ khó · quên {current.lapseCount} lần</Badge>}
+                </div>
                 <p className="absolute bottom-5 text-xs font-bold text-muted-foreground">Nhớ nghĩa rồi thì chạm để lật</p>
               </>
             }

@@ -3,6 +3,7 @@ package com.kanjimastery.backend.controller;
 import com.kanjimastery.backend.dto.AddSrsCardsRequest;
 import com.kanjimastery.backend.dto.AddSrsCardsResponse;
 import com.kanjimastery.backend.dto.DailyCardResponse;
+import com.kanjimastery.backend.dto.HardWordsResponse;
 import com.kanjimastery.backend.dto.ReviewRequest;
 import com.kanjimastery.backend.dto.ReviewResponse;
 import com.kanjimastery.backend.dto.SrsStatsResponse;
@@ -66,6 +67,13 @@ public class SrsController {
             @RequestParam Long tagId) {
         Long userId = currentUserId(authentication);
         return ResponseEntity.ok(srsService.getTagStatus(userId, tagId));
+    }
+
+    @Operation(summary = "Danh sách từ khó",
+            description = "Những từ người học đã quên (sau khi đã học) từ app.srs.hard-word-lapses lần trở lên, quên nhiều lần nhất trước.")
+    @GetMapping("/hard-words")
+    public ResponseEntity<HardWordsResponse> getHardWords(Authentication authentication) {
+        return ResponseEntity.ok(srsService.getHardWords(currentUserId(authentication)));
     }
 
     @GetMapping("/stats")

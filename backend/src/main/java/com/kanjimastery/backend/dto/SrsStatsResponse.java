@@ -12,4 +12,5 @@ public class SrsStatsResponse {
     private long dueForReview;      // "Cần ôn tập gấp"
     private long stillLearning;     // "Đang học dở"
     private long deeplyMemorized;   // "Đã ghi nhớ sâu" (interval >= 21 ngày)
+    private long hardWords;         // "Từ khó": quên từ app.srs.hard-word-lapses lần trở lên
 }

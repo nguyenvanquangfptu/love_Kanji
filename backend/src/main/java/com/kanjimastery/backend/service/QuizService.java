@@ -79,6 +79,7 @@ public class QuizService {
     private final QuizDistractorGenerator distractorGenerator;
     private final UserService userService;
     private final LearnerHistoryService learnerHistoryService;
+    private final SrsService srsService;
     private final ExecutorService sentenceExecutor = Executors.newFixedThreadPool(4);
     /** Từ đang được sinh câu ở một request khác - tránh gửi trùng khi người học mở quiz liên tục. */
     private final Set<Long> sentencesInFlight = ConcurrentHashMap.newKeySet();
@@ -89,7 +90,8 @@ public class QuizService {
     }
 
     @Transactional(readOnly = true)
-    public List<QuizQuestionResponse> generate(String username, Long tagId, String level, Integer size, String mode) {
+    public List<QuizQuestionResponse> generate(String username, Long tagId, String level, Integer size, String mode,
+                                               boolean hardWords) {
         boolean adaptive = switch (mode == null ? MODE_ADAPTIVE : mode) {
             case MODE_ADAPTIVE -> true;
             case MODE_RANDOM -> false;
@@ -100,18 +102,26 @@ public class QuizService {
             throw new TooManyRequestsException("Bạn tạo trắc nghiệm quá nhanh. Vui lòng đợi một chút rồi thử lại.");
         }
 
-        String normalizedLevel = StringUtils.hasText(level) ? level.toUpperCase() : null;
-        // Cả cấp độ = mọi bài của cấp đó (N5-01..N5-25), không theo cột jlpt_level: từ như 意味 ghi N3 nhưng cũng học ở bài N5.
-        List<Kanji> pool = tagId == null && normalizedLevel != null
-                ? kanjiRepository.findAllByTagNamePrefix(normalizedLevel + "-%")
-                : kanjiRepository.findAllByFilters(normalizedLevel, tagId);
-        if (pool.isEmpty()) {
-            throw new BadRequestException("Không có từ vựng nào phù hợp bộ lọc đã chọn");
+        Long userId = userService.getByUsername(username).getId();
+        List<Kanji> pool;
+        if (hardWords) {
+            pool = kanjiRepository.findAllById(srsService.hardWordIds(userId));
+            if (pool.isEmpty()) {
+                throw new BadRequestException("Bạn chưa có từ khó nào để luyện riêng");
+            }
+        } else {
+            String normalizedLevel = StringUtils.hasText(level) ? level.toUpperCase() : null;
+            // Cả cấp độ = mọi bài của cấp đó (N5-01..N5-25), không theo cột jlpt_level: từ như 意味 ghi N3 nhưng cũng học ở bài N5.
+            pool = tagId == null && normalizedLevel != null
+                    ? kanjiRepository.findAllByTagNamePrefix(normalizedLevel + "-%")
+                    : kanjiRepository.findAllByFilters(normalizedLevel, tagId);
+            if (pool.isEmpty()) {
+                throw new BadRequestException("Không có từ vựng nào phù hợp bộ lọc đã chọn");
+            }
         }
 
         int requested = size == null || size < 1 ? DEFAULT_QUESTIONS : Math.min(size, MAX_QUESTIONS);
         RandomGenerator random = ThreadLocalRandom.current();
-        Long userId = userService.getByUsername(username).getId();
         // Chế độ ngẫu nhiên không cần lịch sử học: null = chọn từ và hướng hỏi ngẫu nhiên đều.
         LearnerHistory history = adaptive
                 ? learnerHistoryService.load(userId, pool.stream().map(Kanji::getId).toList())

@@ -85,6 +85,9 @@ export interface DailyCardResponse {
   reviewIntervalDays: number
   nextReviewAt: string
   lastReviewedAt: string | null
+  lapseCount: number
+  /** Quên đủ nhiều lần để thành từ khó. */
+  hardWord: boolean
 }
 
 /** 1 Quên, 2 Khó, 3 Nhớ, 4 Dễ. */
@@ -110,6 +113,15 @@ export interface SrsStatsResponse {
   dueForReview: number
   stillLearning: number
   deeplyMemorized: number
+  /** Số từ khó: quên từ `HardWordsResponse.lapseThreshold` lần trở lên. */
+  hardWords: number
+}
+
+export interface HardWordsResponse {
+  /** Quên từ chừng này lần trở lên là từ khó. */
+  lapseThreshold: number
+  /** Quên nhiều lần nhất trước. */
+  words: { kanji: KanjiResponse; lapseCount: number; nextReviewAt: string }[]
 }
 
 export interface AddSrsCardsResponse {

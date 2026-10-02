@@ -19,4 +19,7 @@ public class DailyCardResponse {
     private Integer reviewIntervalDays;
     private LocalDateTime nextReviewAt;
     private LocalDateTime lastReviewedAt;
+    private Integer lapseCount;
+    /** Quên đủ nhiều lần để thành từ khó - hiện nhãn "Từ khó". */
+    private boolean hardWord;
 }

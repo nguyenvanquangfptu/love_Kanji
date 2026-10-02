@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.config.SrsProperties;
 import com.kanjimastery.backend.exception.ResourceNotFoundException;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.repository.KanjiRepository;
@@ -10,14 +11,17 @@ import com.kanjimastery.backend.dto.ReviewResponse;
 import com.kanjimastery.backend.dto.SrsStatsResponse;
 import com.kanjimastery.backend.dto.SrsTagStatusResponse;
 import com.kanjimastery.backend.dto.AddSrsCardsResponse;
+import com.kanjimastery.backend.dto.HardWordsResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +48,7 @@ public class SrsService {
     private final KanjiRepository kanjiRepository;
     private final SrsCalculatorService srsCalculatorService;
     private final ReviewLogRepository reviewLogRepository;
+    private final SrsProperties srsProperties;
 
     /**
      * Một lần người học trả lời một từ.
@@ -68,15 +73,68 @@ public class SrsService {
         Map<Long, Kanji> kanjiById = kanjiRepository.findAllById(kanjiIds).stream()
                 .collect(Collectors.toMap(Kanji::getId, Function.identity()));
 
-        return duePage.map(srs -> DailyCardResponse.builder()
-                .srsId(srs.getId())
-                .kanji(KanjiResponse.from(kanjiById.get(srs.getKanjiId())))
-                .repetitionCount(srs.getRepetitionCount())
-                .easinessFactor(srs.getEasinessFactor())
-                .reviewIntervalDays(srs.getReviewIntervalDays())
-                .nextReviewAt(srs.getNextReviewAt())
-                .lastReviewedAt(srs.getLastReviewedAt())
-                .build());
+        List<DailyCardResponse> cards = duePage.getContent().stream()
+                .map(srs -> DailyCardResponse.builder()
+                        .srsId(srs.getId())
+                        .kanji(KanjiResponse.from(kanjiById.get(srs.getKanjiId())))
+                        .repetitionCount(srs.getRepetitionCount())
+                        .easinessFactor(srs.getEasinessFactor())
+                        .reviewIntervalDays(srs.getReviewIntervalDays())
+                        .nextReviewAt(srs.getNextReviewAt())
+                        .lastReviewedAt(srs.getLastReviewedAt())
+                        .lapseCount(srs.getLapseCount())
+                        .hardWord(isHardWord(srs))
+                        .build())
+                .toList();
+        return new PageImpl<>(hardWordsUpFrontOnly(cards), pageable, duePage.getTotalElements());
+    }
+
+    /** Chỉ để vài từ khó đầu tiên ở chỗ cũ, các từ khó sau đó dồn xuống cuối phiên ôn để người học không bị ngợp. */
+    private List<DailyCardResponse> hardWordsUpFrontOnly(List<DailyCardResponse> cards) {
+        List<DailyCardResponse> ordered = new ArrayList<>(cards.size());
+        List<DailyCardResponse> deferred = new ArrayList<>();
+        int hardWords = 0;
+        for (DailyCardResponse card : cards) {
+            if (card.isHardWord() && ++hardWords > srsProperties.getHardWordsUpFront()) {
+                deferred.add(card);
+            } else {
+                ordered.add(card);
+            }
+        }
+        ordered.addAll(deferred);
+        return ordered;
+    }
+
+    private boolean isHardWord(UserKanjiSrs card) {
+        return card.getLapseCount() >= srsProperties.getHardWordLapses();
+    }
+
+    /** Từ khó của người học, quên nhiều lần nhất trước. */
+    public HardWordsResponse getHardWords(Long userId) {
+        List<UserKanjiSrs> cards = srsRepository
+                .findByUserIdAndLapseCountGreaterThanEqualOrderByLapseCountDesc(userId, srsProperties.getHardWordLapses());
+        Map<Long, Kanji> kanjiById = kanjiRepository.findAllById(cards.stream().map(UserKanjiSrs::getKanjiId).toList())
+                .stream()
+                .collect(Collectors.toMap(Kanji::getId, Function.identity()));
+        return HardWordsResponse.builder()
+                .lapseThreshold(srsProperties.getHardWordLapses())
+                .words(cards.stream()
+                        .map(card -> HardWordsResponse.Word.builder()
+                                .kanji(KanjiResponse.from(kanjiById.get(card.getKanjiId())))
+                                .lapseCount(card.getLapseCount())
+                                .nextReviewAt(card.getNextReviewAt())
+                                .build())
+                        .toList())
+                .build();
+    }
+
+    /** Id các từ khó của người học - nguồn cho trắc nghiệm chỉ gồm từ khó. */
+    public List<Long> hardWordIds(Long userId) {
+        return srsRepository
+                .findByUserIdAndLapseCountGreaterThanEqualOrderByLapseCountDesc(userId, srsProperties.getHardWordLapses())
+                .stream()
+                .map(UserKanjiSrs::getKanjiId)
+                .toList();
     }
 
     @Transactional
@@ -131,9 +189,13 @@ public class SrsService {
         return Optional.of(card.getNextReviewAt());
     }
 
-    /** Tính lịch ôn mới theo SM-2 (thẻ chưa có thì tạo) và ghi lại lần trả lời trong cùng transaction. */
+    /**
+     * Tính lịch ôn mới theo SM-2 (thẻ chưa có thì tạo) và ghi lại lần trả lời trong cùng transaction.
+     * "Quên" một thẻ đã học (không còn mới) được đếm vào số lần quên - đủ số lần thì thành từ khó.
+     */
     private UserKanjiSrs schedule(Long userId, Long kanjiId, UserKanjiSrs card, Answer answer, LocalDateTime now) {
         log(userId, kanjiId, card, answer, true, now);
+        boolean lapse = answer.rating() == ReviewRating.AGAIN && !CardState.NEW.equals(CardState.of(card));
 
         UserKanjiSrs srs = card != null ? card : UserKanjiSrs.builder()
                 .userId(userId)
@@ -152,6 +214,9 @@ public class SrsService {
         srs.setReviewIntervalDays(result.reviewIntervalDays());
         srs.setNextReviewAt(now.plusDays(result.reviewIntervalDays()));
         srs.setLastReviewedAt(now);
+        if (lapse) {
+            srs.setLapseCount(srs.getLapseCount() + 1);
+        }
         return srsRepository.save(srs);
     }
 
@@ -209,6 +274,7 @@ public class SrsService {
                 .dueForReview(due)
                 .stillLearning(Math.max(learning, 0))
                 .deeplyMemorized(mastered)
+                .hardWords(srsRepository.countByUserIdAndLapseCountGreaterThanEqual(userId, srsProperties.getHardWordLapses()))
                 .build();
     }
 }

@@ -2,6 +2,7 @@ import { apiClient } from './client'
 import type {
   AddSrsCardsResponse,
   DailyCardResponse,
+  HardWordsResponse,
   Page,
   ReviewRequest,
   ReviewResponse,
@@ -17,6 +18,8 @@ export const srsApi = {
     apiClient.post<ReviewResponse>('/srs/review', payload).then((r) => r.data),
 
   getStats: () => apiClient.get<SrsStatsResponse>('/srs/stats').then((r) => r.data),
+
+  getHardWords: () => apiClient.get<HardWordsResponse>('/srs/hard-words').then((r) => r.data),
 
   addCards: (kanjiIds: number[]) =>
     apiClient.post<AddSrsCardsResponse>('/srs/cards', { kanjiIds }).then((r) => r.data),

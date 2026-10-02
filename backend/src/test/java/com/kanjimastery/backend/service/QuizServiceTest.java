@@ -57,6 +57,8 @@ class QuizServiceTest {
     private UserService userService;
     @Mock
     private LearnerHistoryService learnerHistoryService;
+    @Mock
+    private SrsService srsService;
 
     private final QuizDistractorGenerator distractors = new QuizDistractorGenerator();
     private QuizService quizService;
@@ -72,7 +74,7 @@ class QuizServiceTest {
         properties.getQuiz().setLimit(30);
         properties.getQuiz().setWindowSeconds(60);
         quizService = new QuizService(kanjiRepository, sentenceGenerationService, rateLimiter, properties, distractors,
-                userService, learnerHistoryService);
+                userService, learnerHistoryService, srsService);
         lenient().when(userService.getByUsername("taro")).thenReturn(User.builder().id(USER_ID).build());
         lenient().when(learnerHistoryService.load(eq(USER_ID), anyCollection()))
                 .thenAnswer(invocation -> LearnerHistory.empty(LocalDateTime.now()));
@@ -88,14 +90,14 @@ class QuizServiceTest {
     void generate_shouldRejectRequest_whenUserExceedsQuizLimit() {
         when(rateLimiter.tryAcquire("ratelimit:quiz:taro", 30, Duration.ofSeconds(60))).thenReturn(false);
 
-        assertThatThrownBy(() -> quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE))
+        assertThatThrownBy(() -> quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false))
                 .isInstanceOf(TooManyRequestsException.class);
         verifyNoInteractions(kanjiRepository, sentenceGenerationService);
     }
 
     @Test
     void generate_shouldRejectUnknownMode() {
-        assertThatThrownBy(() -> quizService.generate("taro", TAG_ID, null, 10, "hard"))
+        assertThatThrownBy(() -> quizService.generate("taro", TAG_ID, null, 10, "hard", false))
                 .isInstanceOf(BadRequestException.class);
         verifyNoInteractions(rateLimiter, kanjiRepository);
     }
@@ -116,7 +118,7 @@ class QuizServiceTest {
         when(learnerHistoryService.load(eq(USER_ID), anyCollection()))
                 .thenReturn(new LearnerHistory(LocalDateTime.now(), dueCards, Map.of(), Map.of()));
 
-        List<QuizQuestionResponse> questions = quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE);
+        List<QuizQuestionResponse> questions = quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false);
 
         assertThat(questions).hasSize(10);
         assertThat(questions).filteredOn(question -> question.getKanjiId() <= 10).hasSizeBetween(6, 7);
@@ -127,15 +129,37 @@ class QuizServiceTest {
         givenQuizAllowed();
         when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(readyWord));
 
-        assertThat(quizService.generate("taro", TAG_ID, null, 10, QuizService.MODE_RANDOM)).hasSize(1);
+        assertThat(quizService.generate("taro", TAG_ID, null, 10, QuizService.MODE_RANDOM, false)).hasSize(1);
         verify(learnerHistoryService, never()).load(anyLong(), anyCollection());
+    }
+
+    @Test
+    void generate_shouldOnlyAskTheLearnersHardWords_whenAsked() {
+        givenQuizAllowed();
+        when(srsService.hardWordIds(USER_ID)).thenReturn(List.of(1L, 3L));
+        when(kanjiRepository.findAllById(List.of(1L, 3L))).thenReturn(List.of(failedWord, readyWord));
+
+        List<QuizQuestionResponse> questions = quizService.generate("taro", TAG_ID, "N3", 10, ADAPTIVE, true);
+
+        assertThat(questions).extracting(QuizQuestionResponse::getKanjiId).containsExactlyInAnyOrder(1L, 3L);
+        verify(kanjiRepository, never()).findAllByFilters(any(), any());
+    }
+
+    @Test
+    void generate_shouldRejectHardWordQuiz_whenTheLearnerHasNoHardWords() {
+        givenQuizAllowed();
+        when(srsService.hardWordIds(USER_ID)).thenReturn(List.of());
+        when(kanjiRepository.findAllById(List.of())).thenReturn(List.of());
+
+        assertThatThrownBy(() -> quizService.generate("taro", null, null, 10, ADAPTIVE, true))
+                .isInstanceOf(BadRequestException.class);
     }
 
     @Test
     void generate_shouldNotSendWordsThatFailedRecently() {
         givenLessonWithGeminiAnswer(Optional.of(Map.of()));
 
-        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE);
+        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<Kanji>> batch = ArgumentCaptor.forClass(List.class);
@@ -147,7 +171,7 @@ class QuizServiceTest {
     void generate_shouldRecordFailure_whenGeminiAnsweredWithoutAUsableSentence() {
         givenLessonWithGeminiAnswer(Optional.of(Map.of()));
 
-        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE);
+        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false);
 
         verify(rateLimiter).increment("sentence:failures:2", Duration.ofHours(24));
     }
@@ -156,7 +180,7 @@ class QuizServiceTest {
     void generate_shouldNotRecordFailure_whenGeminiDidNotAnswer() {
         givenLessonWithGeminiAnswer(Optional.empty());
 
-        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE);
+        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false);
 
         verify(rateLimiter, never()).increment(startsWith("sentence:failures:"), any());
     }
@@ -165,7 +189,7 @@ class QuizServiceTest {
     void generate_shouldSaveNewSentence_andNotCountItAsFailure() {
         givenLessonWithGeminiAnswer(Optional.of(Map.of(2L, "のどが渇く。")));
 
-        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE);
+        quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false);
 
         verify(kanjiRepository).saveExampleSentenceIfAbsent(2L, "のどが渇く。");
         verify(rateLimiter, never()).increment(startsWith("sentence:failures:"), any());
@@ -179,7 +203,7 @@ class QuizServiceTest {
                 .toList();
         when(kanjiRepository.findAllByTagNamePrefix("N3-%")).thenReturn(level);
 
-        assertThat(quizService.generate("taro", null, "n3", 1000, ADAPTIVE)).hasSize(50);
+        assertThat(quizService.generate("taro", null, "n3", 1000, ADAPTIVE, false)).hasSize(50);
     }
 
     @Test
@@ -318,7 +342,7 @@ class QuizServiceTest {
     /** Hướng hỏi được chọn ngẫu nhiên - tạo lại tới khi gặp câu cần kiểm tra (xác suất trượt 2^-100). */
     private QuizQuestionResponse firstQuestionAsking(String direction, String... character) {
         for (int attempt = 0; attempt < 100; attempt++) {
-            for (QuizQuestionResponse question : quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE)) {
+            for (QuizQuestionResponse question : quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false)) {
                 if (question.getDirection().equals(direction)
                         && (character.length == 0 || question.getCharacter().equals(character[0]))) {
                     return question;

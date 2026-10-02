@@ -44,6 +44,11 @@ public class UserKanjiSrs {
     @Column(name = "next_review_at", nullable = false)
     private LocalDateTime nextReviewAt;
 
+    /** Số lần quên sau khi đã học - xem {@link com.kanjimastery.backend.config.SrsProperties#getHardWordLapses()}. */
+    @Column(name = "lapse_count", nullable = false)
+    @Builder.Default
+    private Integer lapseCount = 0;
+
     @Column(name = "last_reviewed_at")
     private LocalDateTime lastReviewedAt;
 }
