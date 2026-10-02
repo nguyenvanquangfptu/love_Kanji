@@ -35,6 +35,9 @@ export function ExamWorkspacePage() {
   const [confirmingSubmit, setConfirmingSubmit] = useState(false)
 
   const saveTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>())
+  // Mốc hết giờ trên đồng hồ đơn điệu của trình duyệt (performance.now()), tính từ remainingSeconds Backend trả về.
+  const deadline = useRef<number | null>(null)
+  const autoSubmitted = useRef(false)
 
   useEffect(() => {
     let cancelled = false
@@ -49,6 +52,7 @@ export function ExamWorkspacePage() {
         if (cancelled) return
         if (cached) setQuestions(cached.questions)
         setAnswers(Object.fromEntries(Object.entries(session.answers).map(([k, v]) => [Number(k), v])))
+        deadline.current = performance.now() + session.remainingSeconds * 1000
         setRemainingSeconds(session.remainingSeconds)
         setSessionLoaded(true)
       } catch (err) {
@@ -65,26 +69,41 @@ export function ExamWorkspacePage() {
   const submitMutation = useMutation({
     mutationFn: () => examApi.submit(attemptId),
     onSuccess: () => navigate(`/exam/${attemptId}/result`, { replace: true }),
-    // Nộp bài lỗi (mất mạng, backend gián đoạn...) không được để người dùng kẹt
-    // vĩnh viễn ở trạng thái khoá (locked=true) mà không có cách nộp lại.
-    onError: () => setLocked(false),
+    onError: async () => {
+      // Máy chủ có thể đã tự chốt bài khi hết giờ (Redis, job dự phòng) trước khi trình duyệt kịp nộp: bài đã có
+      // kết quả thì sang trang kết quả luôn.
+      try {
+        await examApi.getReview(attemptId)
+        navigate(`/exam/${attemptId}/result`, { replace: true })
+      } catch {
+        // Nộp bài lỗi (mất mạng, backend gián đoạn...) không được để người dùng kẹt
+        // vĩnh viễn ở trạng thái khoá (locked=true) mà không có cách nộp lại.
+        setLocked(false)
+      }
+    },
   })
+  const submitExam = submitMutation.mutate
 
-  // Đếm ngược cục bộ dựa trên remainingSeconds Backend trả về, KHÔNG so sánh
-  // với đồng hồ máy client (new Date()) để tránh lệch giờ do clock drift.
+  // Đếm ngược tới mốc hết giờ tính từ remainingSeconds Backend trả về, theo đồng hồ đơn điệu performance.now() chứ
+  // KHÔNG theo giờ máy client (new Date()) để tránh lệch giờ do clock drift. Mỗi nhịp tính lại từ mốc, nên tab bị
+  // trình duyệt hãm timer (chạy nền) vẫn hiện đúng thời gian còn lại. Hết giờ thì tự nộp một lần; lỗi thì để người
+  // dùng bấm nộp lại.
   useEffect(() => {
-    if (remainingSeconds === null || locked) return
-    const t = setTimeout(() => {
-      if (remainingSeconds <= 1) {
+    if (!sessionLoaded || locked || autoSubmitted.current || deadline.current === null) return
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((deadline.current! - performance.now()) / 1000))
+      setRemainingSeconds(left)
+      if (left === 0 && !autoSubmitted.current) {
+        autoSubmitted.current = true
         setLocked(true)
         setAutoSubmitNotice(true)
-        submitMutation.mutate()
-      } else {
-        setRemainingSeconds(remainingSeconds - 1)
+        submitExam()
       }
-    }, 1000)
-    return () => clearTimeout(t)
-  }, [remainingSeconds, locked, submitMutation])
+    }
+    tick()
+    const t = setInterval(tick, 1000)
+    return () => clearInterval(t)
+  }, [sessionLoaded, locked, submitExam])
 
   // Cảnh báo rời trang - chỉ là lớp UX best-effort (trình duyệt hiện đại không
   // cho custom message, mobile Safari phần lớn bỏ qua). Lớp bảo vệ dữ liệu
