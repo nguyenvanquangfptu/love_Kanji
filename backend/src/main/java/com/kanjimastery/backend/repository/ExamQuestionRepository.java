@@ -23,10 +23,13 @@ public interface ExamQuestionRepository extends JpaRepository<ExamQuestion, Long
     List<ExamQuestion> findRandomByLevelAndSkill(@Param("level") String level, @Param("skill") String skill,
                                                  @Param("count") int count);
 
-    /** Câu chưa phân loại kỹ năng. */
+    /**
+     * Câu chưa phân loại kỹ năng (câu mẫu cũ). Câu ngữ pháp của đề JLPT cũng không gắn kỹ năng nhưng có dạng câu, và chỉ
+     * dùng trong đề JLPT - thi nhanh chỉ hỏi từ vựng.
+     */
     @Query(value = """
             SELECT * FROM exam_questions
-            WHERE jlpt_level = :level AND skill IS NULL AND status = 'APPROVED'
+            WHERE jlpt_level = :level AND skill IS NULL AND question_type IS NULL AND status = 'APPROVED'
             ORDER BY RANDOM() LIMIT :count
             """, nativeQuery = true)
     List<ExamQuestion> findRandomUnclassifiedByLevel(@Param("level") String level, @Param("count") int count);

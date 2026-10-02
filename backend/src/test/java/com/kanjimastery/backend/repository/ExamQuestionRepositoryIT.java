@@ -3,6 +3,7 @@ package com.kanjimastery.backend.repository;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionSource;
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.QuizDirection;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,22 @@ class ExamQuestionRepositoryIT extends AbstractIntegrationTest {
             String character = words.get(question.getKanjiIds().iterator().next()).getCharacter();
             assertThat(question.getQuestionText() + correctAnswer(question)).contains(character);
         });
+    }
+
+    @Test
+    @Transactional
+    void findRandomUnclassifiedByLevel_shouldLeaveOutJlptGrammarQuestions() {
+        ExamQuestion untyped = questionRepository.save(question("Câu cũ chưa phân loại", null));
+        questionRepository.save(question("Câu ngữ pháp", JlptQuestionType.GRAMMAR_FORM));
+
+        // Thi nhanh chỉ hỏi từ vựng: câu ngữ pháp (không kỹ năng, có dạng câu) chỉ vào đề JLPT.
+        assertThat(questionRepository.findRandomUnclassifiedByLevel("N8", 10)).extracting(ExamQuestion::getId)
+                .containsExactly(untyped.getId());
+    }
+
+    private static ExamQuestion question(String text, String questionType) {
+        return ExamQuestion.builder().jlptLevel("N8").questionText(text).optionA("1").optionB("2").optionC("3")
+                .optionD("4").correctOption("A").questionType(questionType).build();
     }
 
     private static String correctAnswer(ExamQuestion question) {
