@@ -42,6 +42,8 @@ public class StudyPlanService {
     static final int REVISION_DAYS_BEFORE_EXAM = 14;
     /** Nhịp học từ mới tính trên chừng này ngày gần nhất. */
     static final int PACE_WINDOW_DAYS = 14;
+    /** Dùng app chưa đủ chừng này ngày thì nhịp học còn quá nhiễu để dự báo ngày học xong. */
+    static final int MIN_PACE_DAYS = 7;
     /** Từ dễ đến khó: mục tiêu N4 gồm cả từ của các bài N5. */
     static final List<String> JLPT_LEVELS = List.of("N5", "N4", "N3", "N2", "N1");
 
@@ -150,13 +152,15 @@ public class StudyPlanService {
     }
 
     /**
-     * Số từ mới trung bình mỗi ngày trong {@value #PACE_WINDOW_DAYS} ngày gần đây; người mới dùng app chưa đủ 2 tuần
-     * thì chia cho số ngày đã dùng, để vài ngày đầu không bị kéo nhịp xuống.
+     * Số từ mới trung bình mỗi ngày trong {@value #PACE_WINDOW_DAYS} ngày gần đây; người dùng app chưa đủ 2 tuần thì
+     * chia cho số ngày đã dùng. Chưa đủ {@value #MIN_PACE_DAYS} ngày thì 0: một hai ngày đầu không nói lên nhịp học.
      */
     private double recentNewWordsPerDay(Long userId, LocalDate today) {
         return reviewLogRepository.firstReviewAt(userId)
-                .map(first -> {
-                    long days = Math.min(PACE_WINDOW_DAYS, ChronoUnit.DAYS.between(calendar.dayOf(first), today) + 1);
+                .map(first -> ChronoUnit.DAYS.between(calendar.dayOf(first), today) + 1)
+                .filter(daysUsed -> daysUsed >= MIN_PACE_DAYS)
+                .map(daysUsed -> {
+                    long days = Math.min(PACE_WINDOW_DAYS, daysUsed);
                     LocalDateTime since = calendar.startOf(today.minusDays(days - 1));
                     return reviewLogRepository.countNewWordsLearnedSince(userId, since) / (double) days;
                 })

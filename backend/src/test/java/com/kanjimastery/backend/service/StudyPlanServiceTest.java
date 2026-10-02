@@ -136,6 +136,23 @@ class StudyPlanServiceTest {
     }
 
     @Test
+    void today_shouldNotForecast_fromLessThanAWeekOfHistory() {
+        givenPace(null, 0);
+        givenProfile("N4", TODAY.plusDays(60), 30, null);
+        givenScope(List.of("N5", "N4"), 1697, 197);
+        givenLoad(0, 0, 1, 100);
+        // Mới dùng app từ hôm qua: 2 ngày, chưa đủ để nói lên nhịp học.
+        when(reviewLogRepository.firstReviewAt(USER_ID)).thenReturn(Optional.of(START_OF_TODAY.minusHours(10)));
+
+        DailyPlanResponse plan = service.today(USER_ID);
+
+        assertThat(plan.getRecentNewPerDay()).isZero();
+        assertThat(plan.getProjectedFinish()).isNull();
+        assertThat(plan.getOnTrack()).isNull();
+        assertThat(plan.getNewPerDayWanted()).isEqualTo(33);
+    }
+
+    @Test
     void today_shouldWarn_whenTheDailyTimeCannotFitTheWordsNeededForTheExam() {
         givenPace(null, 0);
         givenProfile("N4", TODAY.plusDays(20), 10, null);
