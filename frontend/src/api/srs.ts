@@ -21,6 +21,10 @@ export const srsApi = {
 
   getHardWords: () => apiClient.get<HardWordsResponse>('/srs/hard-words').then((r) => r.data),
 
+  /** Để trống là xoá ghi chú. */
+  saveNote: (vars: { kanjiId: number; note: string }) =>
+    apiClient.put<void>(`/srs/cards/${vars.kanjiId}/note`, { note: vars.note }).then((r) => r.data),
+
   addCards: (kanjiIds: number[]) =>
     apiClient.post<AddSrsCardsResponse>('/srs/cards', { kanjiIds }).then((r) => r.data),
 

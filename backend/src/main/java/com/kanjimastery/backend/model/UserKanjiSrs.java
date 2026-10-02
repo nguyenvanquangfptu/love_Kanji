@@ -51,4 +51,8 @@ public class UserKanjiSrs {
 
     @Column(name = "last_reviewed_at")
     private LocalDateTime lastReviewedAt;
+
+    /** Cách nhớ riêng người học tự ghi cho từ này. */
+    @Column(name = "personal_note", columnDefinition = "TEXT")
+    private String personalNote;
 }

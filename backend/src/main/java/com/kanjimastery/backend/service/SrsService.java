@@ -18,6 +18,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -84,6 +85,7 @@ public class SrsService {
                         .lastReviewedAt(srs.getLastReviewedAt())
                         .lapseCount(srs.getLapseCount())
                         .hardWord(isHardWord(srs))
+                        .personalNote(srs.getPersonalNote())
                         .build())
                 .toList();
         return new PageImpl<>(hardWordsUpFrontOnly(cards), pageable, duePage.getTotalElements());
@@ -123,9 +125,19 @@ public class SrsService {
                                 .kanji(KanjiResponse.from(kanjiById.get(card.getKanjiId())))
                                 .lapseCount(card.getLapseCount())
                                 .nextReviewAt(card.getNextReviewAt())
+                                .personalNote(card.getPersonalNote())
                                 .build())
                         .toList())
                 .build();
+    }
+
+    /** Ghi chú/cách nhớ riêng của người học cho một từ trong lịch ôn của họ; để trống là xoá. */
+    @Transactional
+    public void saveNote(Long userId, Long kanjiId, String note) {
+        UserKanjiSrs card = srsRepository.findByUserIdAndKanjiId(userId, kanjiId)
+                .orElseThrow(() -> new ResourceNotFoundException("Từ này chưa có trong Ôn tập của bạn"));
+        card.setPersonalNote(StringUtils.hasText(note) ? note.trim() : null);
+        srsRepository.save(card);
     }
 
     /** Id các từ khó của người học - nguồn cho trắc nghiệm chỉ gồm từ khó. */

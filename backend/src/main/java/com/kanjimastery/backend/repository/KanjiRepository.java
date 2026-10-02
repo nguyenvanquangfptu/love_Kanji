@@ -2,6 +2,7 @@ package com.kanjimastery.backend.repository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -55,4 +56,13 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
     @Modifying
     @Query("UPDATE Kanji k SET k.exampleSentence = :sentence WHERE k.id = :id AND k.exampleSentence IS NULL")
     int saveExampleSentenceIfAbsent(@Param("id") Long id, @Param("sentence") String sentence);
+
+    /** Chỉ lưu khi từ chưa có mẹo nhớ, để hai người cùng nhờ AI một lúc vẫn thấy chung một mẹo nhớ. */
+    @Transactional
+    @Modifying
+    @Query("UPDATE Kanji k SET k.mnemonic = :mnemonic WHERE k.id = :id AND k.mnemonic IS NULL")
+    int saveMnemonicIfAbsent(@Param("id") Long id, @Param("mnemonic") String mnemonic);
+
+    @Query("SELECT k.mnemonic FROM Kanji k WHERE k.id = :id")
+    Optional<String> findMnemonicById(@Param("id") Long id);
 }

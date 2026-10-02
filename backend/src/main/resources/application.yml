@@ -62,6 +62,9 @@ app:
     quiz-answer:        # gửi kết quả từng câu trắc nghiệm, theo tài khoản
       limit: 120
       window-seconds: 60
+    mnemonic:           # nhờ AI sinh mẹo nhớ, theo tài khoản
+      limit: 20
+      window-seconds: 3600
     login-lock:         # sai mật khẩu 10 lần trong 15 phút -> khoá tài khoản đó 15 phút, dù đổi IP
       max-failures: 10
       window-seconds: 900

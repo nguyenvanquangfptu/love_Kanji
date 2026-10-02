@@ -2,6 +2,7 @@ package com.kanjimastery.backend.controller;
 
 import com.kanjimastery.backend.dto.KanjiRequest;
 import com.kanjimastery.backend.dto.KanjiResponse;
+import com.kanjimastery.backend.dto.MnemonicResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -12,8 +13,10 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import com.kanjimastery.backend.service.KanjiService;
+import com.kanjimastery.backend.service.MnemonicService;
 
 @RestController
 @RequestMapping("/api/v1/kanji")
@@ -22,6 +25,7 @@ import com.kanjimastery.backend.service.KanjiService;
 public class KanjiController {
 
     private final KanjiService kanjiService;
+    private final MnemonicService mnemonicService;
 
     @GetMapping
     public ResponseEntity<Page<KanjiResponse>> search(
@@ -57,5 +61,13 @@ public class KanjiController {
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         kanjiService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "Mẹo nhớ của một từ",
+            description = "Có sẵn thì trả luôn; chưa có thì nhờ AI (Gemini) sinh dựa trên âm Hán Việt rồi lưu lại "
+                    + "cho mọi người dùng chung. Chưa cấu hình GEMINI_API_KEY thì trả 400.")
+    @PostMapping("/{id}/mnemonic")
+    public ResponseEntity<MnemonicResponse> mnemonic(Authentication authentication, @PathVariable Long id) {
+        return ResponseEntity.ok(mnemonicService.getOrGenerate(authentication.getName(), id));
     }
 }

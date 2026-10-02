@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { StatTile } from '@/components/StatTile'
 import { EmptyState } from '@/components/EmptyState'
 import { SpeakButton } from '@/components/SpeakButton'
+import { MemoryAidPanel } from '@/components/MemoryAidPanel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
@@ -91,6 +92,8 @@ export function FlashcardPage() {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!current) return
+      // Đang gõ ghi chú cách nhớ: phím số và Space là chữ, không phải phím tắt.
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return
       if (e.code === 'Space') {
         e.preventDefault()
         toggleFlip()
@@ -204,6 +207,15 @@ export function FlashcardPage() {
 
           {flipped ? (
             <div className="animate-pop-in">
+              {(current.hardWord || current.kanji.mnemonic || current.personalNote) && (
+                <MemoryAidPanel
+                  key={current.kanji.id}
+                  kanjiId={current.kanji.id}
+                  mnemonic={current.kanji.mnemonic}
+                  personalNote={current.personalNote}
+                  className="mb-4"
+                />
+              )}
               <p className="mb-3 text-center text-sm font-extrabold text-muted-foreground">Bạn nhớ từ này thế nào?</p>
               <div className="grid grid-cols-4 gap-2">
                 {RATING_OPTIONS.map(({ rating, label, hint, className }) => (

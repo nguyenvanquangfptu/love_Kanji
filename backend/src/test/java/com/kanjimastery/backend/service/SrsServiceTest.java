@@ -6,6 +6,7 @@ import com.kanjimastery.backend.dto.DailyCardResponse;
 import com.kanjimastery.backend.dto.HardWordsResponse;
 import com.kanjimastery.backend.dto.ReviewRequest;
 import com.kanjimastery.backend.dto.SrsTagStatusResponse;
+import com.kanjimastery.backend.exception.ResourceNotFoundException;
 import com.kanjimastery.backend.model.CardState;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.ReviewLog;
@@ -32,6 +33,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -242,6 +244,26 @@ class SrsServiceTest {
         // Từ khó thứ 3 (id 4) dồn xuống cuối; thứ tự còn lại giữ nguyên.
         assertThat(cards).extracting(card -> card.getKanji().getId()).containsExactly(1L, 2L, 3L, 5L, 4L);
         assertThat(cards).extracting(DailyCardResponse::isHardWord).containsExactly(true, false, true, false, true);
+    }
+
+    @Test
+    void saveNote_shouldTrimTheNote_andClearItWhenBlank() {
+        UserKanjiSrs card = card(2, "2.50", 6, LocalDateTime.now().plusDays(2));
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.of(card));
+
+        srsService.saveNote(USER_ID, KANJI_ID, "  KHAI = mở  ");
+        assertThat(card.getPersonalNote()).isEqualTo("KHAI = mở");
+
+        srsService.saveNote(USER_ID, KANJI_ID, "   ");
+        assertThat(card.getPersonalNote()).isNull();
+    }
+
+    @Test
+    void saveNote_shouldRefuse_whenTheWordIsNotInTheLearnersReviews() {
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> srsService.saveNote(USER_ID, KANJI_ID, "ghi chú"))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test

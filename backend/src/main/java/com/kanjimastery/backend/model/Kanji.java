@@ -48,6 +48,10 @@ public class Kanji {
     @Column(name = "example_sentence", columnDefinition = "TEXT")
     private String exampleSentence;
 
+    /** Mẹo nhớ chung do AI sinh (dựa trên âm Hán Việt / hình chữ), sinh một lần rồi dùng cho mọi người. */
+    @Column(columnDefinition = "TEXT")
+    private String mnemonic;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 

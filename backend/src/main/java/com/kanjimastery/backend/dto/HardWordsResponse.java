@@ -23,5 +23,6 @@ public class HardWordsResponse {
         private KanjiResponse kanji;
         private int lapseCount;
         private LocalDateTime nextReviewAt;
+        private String personalNote;
     }
 }

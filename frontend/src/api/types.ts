@@ -63,7 +63,13 @@ export interface KanjiResponse {
   meaning: string
   /** Câu ví dụ dùng trong trắc nghiệm (do AI sinh hoặc admin sửa); null nếu chưa có. */
   exampleSentence: string | null
+  /** Mẹo nhớ chung do AI sinh (dựa trên âm Hán Việt); null nếu chưa có. */
+  mnemonic: string | null
   tags: TagResponse[]
+}
+
+export interface MnemonicResponse {
+  mnemonic: string
 }
 
 export interface KanjiRequest {
@@ -88,6 +94,8 @@ export interface DailyCardResponse {
   lapseCount: number
   /** Quên đủ nhiều lần để thành từ khó. */
   hardWord: boolean
+  /** Cách nhớ riêng người học tự ghi; null nếu chưa có. */
+  personalNote: string | null
 }
 
 /** 1 Quên, 2 Khó, 3 Nhớ, 4 Dễ. */
@@ -121,7 +129,7 @@ export interface HardWordsResponse {
   /** Quên từ chừng này lần trở lên là từ khó. */
   lapseThreshold: number
   /** Quên nhiều lần nhất trước. */
-  words: { kanji: KanjiResponse; lapseCount: number; nextReviewAt: string }[]
+  words: { kanji: KanjiResponse; lapseCount: number; nextReviewAt: string; personalNote: string | null }[]
 }
 
 export interface AddSrsCardsResponse {

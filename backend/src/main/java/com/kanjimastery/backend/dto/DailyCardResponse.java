@@ -22,4 +22,5 @@ public class DailyCardResponse {
     private Integer lapseCount;
     /** Quên đủ nhiều lần để thành từ khó - hiện nhãn "Từ khó". */
     private boolean hardWord;
+    private String personalNote;
 }

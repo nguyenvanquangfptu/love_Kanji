@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { KanjiRequest, KanjiResponse, Page } from './types'
+import type { KanjiRequest, KanjiResponse, MnemonicResponse, Page } from './types'
 
 export const kanjiApi = {
   search: (params: { level?: string; keyword?: string; tagId?: number; page?: number; size?: number }) =>
@@ -13,4 +13,7 @@ export const kanjiApi = {
     apiClient.put<KanjiResponse>(`/kanji/${id}`, payload).then((r) => r.data),
 
   delete: (id: number) => apiClient.delete<void>(`/kanji/${id}`).then((r) => r.data),
+
+  /** Mẹo nhớ có sẵn, hoặc nhờ AI sinh (lưu lại dùng chung cho mọi người). */
+  getMnemonic: (id: number) => apiClient.post<MnemonicResponse>(`/kanji/${id}/mnemonic`).then((r) => r.data),
 }

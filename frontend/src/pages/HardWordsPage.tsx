@@ -6,6 +6,7 @@ import { extractErrorMessage } from '@/api/client'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { SpeakButton } from '@/components/SpeakButton'
+import { MemoryAidPanel } from '@/components/MemoryAidPanel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -52,22 +53,30 @@ export function HardWordsPage() {
       )}
 
       <div className="flex flex-col gap-2">
-        {words.map(({ kanji, lapseCount }) => (
-          <Card key={kanji.id} className="flex items-center gap-3 p-3">
-            <div className="flex min-w-[4.5rem] shrink-0 flex-col items-center">
-              {kanji.reading && <span className="font-jp text-xs font-bold text-secondary-dark">{kanji.reading}</span>}
-              <span className="font-jp text-2xl font-bold">{kanji.character}</span>
+        {words.map(({ kanji, lapseCount, personalNote }) => (
+          <Card key={kanji.id} className="p-3">
+            <div className="flex items-center gap-3">
+              <div className="flex min-w-[4.5rem] shrink-0 flex-col items-center">
+                {kanji.reading && <span className="font-jp text-xs font-bold text-secondary-dark">{kanji.reading}</span>}
+                <span className="font-jp text-2xl font-bold">{kanji.character}</span>
+              </div>
+              <div className="min-w-0 flex-1">
+                {kanji.hanViet && (
+                  <p className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground">{kanji.hanViet}</p>
+                )}
+                <p className="text-sm font-semibold">{kanji.meaning}</p>
+              </div>
+              <Badge variant="destructive" className="shrink-0">
+                Quên {lapseCount} lần
+              </Badge>
+              <SpeakButton text={kanji.reading ?? kanji.character} />
             </div>
-            <div className="min-w-0 flex-1">
-              {kanji.hanViet && (
-                <p className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground">{kanji.hanViet}</p>
-              )}
-              <p className="text-sm font-semibold">{kanji.meaning}</p>
-            </div>
-            <Badge variant="destructive" className="shrink-0">
-              Quên {lapseCount} lần
-            </Badge>
-            <SpeakButton text={kanji.reading ?? kanji.character} />
+            <MemoryAidPanel
+              kanjiId={kanji.id}
+              mnemonic={kanji.mnemonic}
+              personalNote={personalNote}
+              className="mt-3"
+            />
           </Card>
         ))}
       </div>

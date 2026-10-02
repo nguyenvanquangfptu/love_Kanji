@@ -4,6 +4,7 @@ import com.kanjimastery.backend.dto.AddSrsCardsRequest;
 import com.kanjimastery.backend.dto.AddSrsCardsResponse;
 import com.kanjimastery.backend.dto.DailyCardResponse;
 import com.kanjimastery.backend.dto.HardWordsResponse;
+import com.kanjimastery.backend.dto.NoteRequest;
 import com.kanjimastery.backend.dto.ReviewRequest;
 import com.kanjimastery.backend.dto.ReviewResponse;
 import com.kanjimastery.backend.dto.SrsStatsResponse;
@@ -67,6 +68,16 @@ public class SrsController {
             @RequestParam Long tagId) {
         Long userId = currentUserId(authentication);
         return ResponseEntity.ok(srsService.getTagStatus(userId, tagId));
+    }
+
+    @Operation(summary = "Lưu ghi chú/cách nhớ riêng cho một từ trong Ôn tập", description = "Để trống là xoá ghi chú.")
+    @PutMapping("/cards/{kanjiId}/note")
+    public ResponseEntity<Void> saveNote(
+            Authentication authentication,
+            @PathVariable Long kanjiId,
+            @Valid @RequestBody NoteRequest request) {
+        srsService.saveNote(currentUserId(authentication), kanjiId, request.getNote());
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Danh sách từ khó",
