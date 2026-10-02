@@ -7,17 +7,23 @@ import com.kanjimastery.backend.model.ReviewLog;
 import com.kanjimastery.backend.model.ReviewRating;
 import com.kanjimastery.backend.model.ReviewSource;
 import com.kanjimastery.backend.model.User;
+import com.kanjimastery.backend.repository.ReviewLogRepository.DirectionStats;
 import com.kanjimastery.backend.repository.ReviewLogRepository.ResponseTimeStats;
+import com.kanjimastery.backend.repository.ReviewLogRepository.WordDirectionStats;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Truy vấn trung vị thời gian trả lời chạy trên PostgreSQL thật (percentile_cont, LIMIT trong subquery). */
+/** Các truy vấn thống kê review_logs chạy trên PostgreSQL thật (percentile_cont, FILTER, mốc thời gian). */
 class ReviewLogRepositoryIT extends AbstractIntegrationTest {
 
     private static final String DIRECTION = "KANJI_TO_READING";
@@ -82,6 +88,44 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
 
         assertThat(stats.getSamples()).isEqualTo(3);
         assertThat(stats.getMedianMs()).isEqualTo(2_000.0);
+    }
+
+    @Test
+    void wordDirectionStats_shouldCountAnswersMistakesAndRecentMistakesPerDirection() {
+        LocalDateTime now = LocalDateTime.now();
+        save(now.minusDays(20), ReviewSource.QUIZ, DIRECTION, false, 1_000);
+        save(now.minusDays(1), ReviewSource.QUIZ, DIRECTION, true, 1_000);
+        save(now.minusDays(1), ReviewSource.QUIZ, "READING_TO_KANJI", false, 1_000);
+        save(now.minusHours(1), ReviewSource.FLASHCARD, null, false, null);
+
+        Map<String, WordDirectionStats> byDirection = reviewLogRepository
+                .wordDirectionStats(userId, List.of(kanjiId), now.minusDays(14)).stream()
+                .collect(Collectors.toMap(row -> String.valueOf(row.getDirection()), Function.identity()));
+
+        assertThat(byDirection).containsOnlyKeys(DIRECTION, "READING_TO_KANJI", "null");
+        assertThat(byDirection.get(DIRECTION)).extracting(
+                WordDirectionStats::getAnswers, WordDirectionStats::getErrors, WordDirectionStats::getRecentErrors)
+                .containsExactly(2L, 1L, 0L);
+        assertThat(byDirection.get("READING_TO_KANJI").getRecentErrors()).isEqualTo(1);
+        assertThat(byDirection.get("null").getRecentErrors()).isEqualTo(1);
+        assertThat(byDirection.values()).allSatisfy(row -> assertThat(row.getKanjiId()).isEqualTo(kanjiId));
+    }
+
+    @Test
+    void quizDirectionStats_shouldOnlyCountQuizAnswersSinceTheGivenTime() {
+        LocalDateTime now = LocalDateTime.now();
+        save(now.minusDays(40), ReviewSource.QUIZ, DIRECTION, false, 1_000);
+        save(now.minusDays(2), ReviewSource.QUIZ, DIRECTION, false, 1_000);
+        save(now.minusDays(2), ReviewSource.QUIZ, DIRECTION, true, 1_000);
+        save(now.minusDays(2), ReviewSource.FLASHCARD, null, false, null);
+
+        List<DirectionStats> rows = reviewLogRepository.quizDirectionStats(userId, now.minusDays(30));
+
+        assertThat(rows).singleElement().satisfies(row -> {
+            assertThat(row.getDirection()).isEqualTo(DIRECTION);
+            assertThat(row.getAnswers()).isEqualTo(2);
+            assertThat(row.getErrors()).isEqualTo(1);
+        });
     }
 
     private void save(LocalDateTime at, String source, String direction, boolean correct, Integer responseMs) {

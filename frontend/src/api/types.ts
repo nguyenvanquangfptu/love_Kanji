@@ -206,6 +206,9 @@ export type JlptLevel = (typeof JLPT_LEVELS)[number]
 
 export type QuizDirection = 'KANJI_TO_READING' | 'READING_TO_KANJI' | 'MEANING'
 
+/** adaptive: ưu tiên từ người học hay sai (mặc định); random: chọn đều trong cả bài. */
+export type QuizMode = 'adaptive' | 'random'
+
 export interface QuizQuestionResponse {
   kanjiId: number
   direction: QuizDirection

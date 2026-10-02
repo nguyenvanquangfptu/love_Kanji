@@ -24,14 +24,17 @@ public class QuizController {
     private final QuizService quizService;
     private final QuizAnswerService quizAnswerService;
 
-    @Operation(summary = "Sinh bộ câu hỏi trắc nghiệm từ danh sách từ vựng lọc theo tag và/hoặc cấp độ JLPT")
+    @Operation(summary = "Sinh bộ câu hỏi trắc nghiệm từ danh sách từ vựng lọc theo tag và/hoặc cấp độ JLPT",
+            description = "mode=adaptive (mặc định): khoảng 60% từ đang yếu, 25% từ chưa gặp, 15% từ đã thuộc, hướng hỏi "
+                    + "nghiêng về chiều người học hay sai. mode=random: chọn từ và hướng hỏi ngẫu nhiên đều.")
     @GetMapping("/generate")
     public ResponseEntity<List<QuizQuestionResponse>> generate(
             Authentication authentication,
             @RequestParam(required = false) Long tagId,
             @RequestParam(required = false) String level,
-            @RequestParam(required = false, defaultValue = "10") Integer size) {
-        return ResponseEntity.ok(quizService.generate(authentication.getName(), tagId, level, size));
+            @RequestParam(required = false, defaultValue = "10") Integer size,
+            @RequestParam(required = false, defaultValue = QuizService.MODE_ADAPTIVE) String mode) {
+        return ResponseEntity.ok(quizService.generate(authentication.getName(), tagId, level, size, mode));
     }
 
     @Operation(summary = "Gửi kết quả một câu trắc nghiệm",

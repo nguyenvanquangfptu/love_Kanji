@@ -9,12 +9,15 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import com.kanjimastery.backend.model.UserKanjiSrs;
 
 public interface UserKanjiSrsRepository extends JpaRepository<UserKanjiSrs, Long> {
 
     Optional<UserKanjiSrs> findByUserIdAndKanjiId(Long userId, Long kanjiId);
+
+    List<UserKanjiSrs> findAllByUserIdAndKanjiIdIn(Long userId, Collection<Long> kanjiIds);
 
     // Tận dụng composite index idx_user_next_review (user_id, next_review_at)
     Page<UserKanjiSrs> findByUserIdAndNextReviewAtLessThanEqualOrderByNextReviewAtAsc(

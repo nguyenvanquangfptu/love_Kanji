@@ -31,6 +31,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Predicate;
+import java.util.random.RandomGenerator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -41,7 +42,9 @@ import static com.kanjimastery.backend.model.QuizDirection.READING_TO_KANJI;
 
 /**
  * Sinh bộ câu hỏi trắc nghiệm ôn tập (kết quả từng câu được ghi qua {@link QuizAnswerService}) từ
- * danh sách từ vựng đã lọc theo tag (một bài) hoặc cấp độ (cả cấp độ). Câu hỏi có câu ví dụ theo kiểu đề JLPT
+ * danh sách từ vựng đã lọc theo tag (một bài) hoặc cấp độ (cả cấp độ). Mặc định chọn từ và hướng hỏi theo điểm yếu
+ * của người học ({@link AdaptiveQuizPlanner}); chế độ {@link #MODE_RANDOM} chọn ngẫu nhiên đều để kiểm tra cả bài.
+ * Câu hỏi có câu ví dụ theo kiểu đề JLPT
  * (問題1 漢字読み / 問題2 表記) khi đã sinh được câu ví dụ cho từ đó. Đáp án nhiễu là chữ Hán trông gần giống
  * hoặc cách đọc bẫy trường âm/âm ngắt/âm đục ({@link QuizDistractorGenerator}), thiếu mới bù bằng từ khác trong bài.
  */
@@ -50,6 +53,8 @@ import static com.kanjimastery.backend.model.QuizDirection.READING_TO_KANJI;
 @RequiredArgsConstructor
 public class QuizService {
 
+    public static final String MODE_ADAPTIVE = "adaptive";
+    public static final String MODE_RANDOM = "random";
     private static final int DEFAULT_QUESTIONS = 10;
     /** Trắc nghiệm cả cấp độ có hàng nghìn từ - chặn số câu mỗi lượt để một request không dựng quá nhiều câu hỏi. */
     private static final int MAX_QUESTIONS = 50;
@@ -68,6 +73,8 @@ public class QuizService {
     private final RateLimiterService rateLimiter;
     private final RateLimitProperties rateLimitProperties;
     private final QuizDistractorGenerator distractorGenerator;
+    private final UserService userService;
+    private final LearnerHistoryService learnerHistoryService;
     private final ExecutorService sentenceExecutor = Executors.newFixedThreadPool(4);
     /** Từ đang được sinh câu ở một request khác - tránh gửi trùng khi người học mở quiz liên tục. */
     private final Set<Long> sentencesInFlight = ConcurrentHashMap.newKeySet();
@@ -78,7 +85,12 @@ public class QuizService {
     }
 
     @Transactional(readOnly = true)
-    public List<QuizQuestionResponse> generate(String username, Long tagId, String level, Integer size) {
+    public List<QuizQuestionResponse> generate(String username, Long tagId, String level, Integer size, String mode) {
+        boolean adaptive = switch (mode == null ? MODE_ADAPTIVE : mode) {
+            case MODE_ADAPTIVE -> true;
+            case MODE_RANDOM -> false;
+            default -> throw new BadRequestException("mode phải là " + MODE_ADAPTIVE + " hoặc " + MODE_RANDOM);
+        };
         RateLimitProperties.Bucket limit = rateLimitProperties.getQuiz();
         if (!rateLimiter.tryAcquire("ratelimit:quiz:" + username, limit.getLimit(), Duration.ofSeconds(limit.getWindowSeconds()))) {
             throw new TooManyRequestsException("Bạn tạo trắc nghiệm quá nhanh. Vui lòng đợi một chút rồi thử lại.");
@@ -93,14 +105,25 @@ public class QuizService {
             throw new BadRequestException("Không có từ vựng nào phù hợp bộ lọc đã chọn");
         }
 
-        List<Kanji> shuffledPool = new ArrayList<>(pool);
-        Collections.shuffle(shuffledPool);
         int requested = size == null || size < 1 ? DEFAULT_QUESTIONS : Math.min(size, MAX_QUESTIONS);
-        List<Kanji> selected = shuffledPool.subList(0, Math.min(requested, shuffledPool.size()));
+        RandomGenerator random = ThreadLocalRandom.current();
+        // Chế độ ngẫu nhiên không cần lịch sử học: null = chọn từ và hướng hỏi ngẫu nhiên đều.
+        LearnerHistory history = adaptive
+                ? learnerHistoryService.load(userService.getByUsername(username).getId(),
+                        pool.stream().map(Kanji::getId).toList())
+                : null;
+        List<Kanji> selected;
+        if (history != null) {
+            selected = AdaptiveQuizPlanner.selectWords(pool, requested, history, random);
+        } else {
+            List<Kanji> shuffledPool = new ArrayList<>(pool);
+            Collections.shuffle(shuffledPool, random);
+            selected = shuffledPool.subList(0, Math.min(requested, shuffledPool.size()));
+        }
 
         Map<Long, String> newSentences = generateMissingSentences(selected, pool);
 
-        List<PlannedQuestion> plans = selected.stream().map(this::plan).toList();
+        List<PlannedQuestion> plans = selected.stream().map(kanji -> plan(kanji, history, random)).toList();
         Map<String, Set<String>> existingWordReadings = readingsOfExistingWords(plans);
 
         List<QuizQuestionResponse> questions = new ArrayList<>();
@@ -118,11 +141,14 @@ public class QuizService {
     private record PlannedQuestion(Kanji kanji, String direction, List<String> nearMisses) {
     }
 
-    private PlannedQuestion plan(Kanji kanji) {
+    private PlannedQuestion plan(Kanji kanji, LearnerHistory history, RandomGenerator random) {
         if (!StringUtils.hasText(kanji.getReading())) {
             return new PlannedQuestion(kanji, MEANING, List.of());
         }
-        return ThreadLocalRandom.current().nextBoolean()
+        boolean askReading = history != null
+                ? KANJI_TO_READING.equals(AdaptiveQuizPlanner.chooseDirection(kanji, history, random))
+                : random.nextBoolean();
+        return askReading
                 ? new PlannedQuestion(kanji, KANJI_TO_READING,
                         distractorGenerator.trapReadings(kanji.getReading(), kanji.getCharacter()))
                 : new PlannedQuestion(kanji, READING_TO_KANJI,

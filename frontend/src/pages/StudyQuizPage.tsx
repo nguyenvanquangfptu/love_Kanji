@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Check, CheckCircle2, Flame, Layers, Plus, RotateCcw, Target, Trophy, X } from 'lucide-react'
 import { quizApi } from '@/api/quiz'
 import { extractErrorMessage } from '@/api/client'
-import type { QuizDirection, QuizQuestionResponse } from '@/api/types'
+import type { QuizDirection, QuizMode, QuizQuestionResponse } from '@/api/types'
 import { useLessonParams, useLevelQuizParams } from '@/lib/lesson'
 import { describeAddResult, useAddToReview } from '@/lib/review'
 import { cn } from '@/lib/utils'
@@ -60,6 +60,9 @@ export function StudyQuizPage() {
   // Không có tagId mà có level: trắc nghiệm tổng hợp cả cấp độ (mở từ trang Học bài).
   const { level, size } = useLevelQuizParams()
   const levelQuiz = tagId === null ? level : null
+  // Mặc định ưu tiên từ người học hay sai; ?mode=random để kiểm tra đều cả bài.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const mode: QuizMode = searchParams.get('mode') === 'random' ? 'random' : 'adaptive'
 
   const [index, setIndex] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
@@ -73,9 +76,9 @@ export function StudyQuizPage() {
   const shownAt = useRef(0)
 
   const { data: questions, isLoading, isError, error } = useQuery({
-    queryKey: ['study-quiz', tagId, levelQuiz, size, attempt],
+    queryKey: ['study-quiz', tagId, levelQuiz, size, mode, attempt],
     queryFn: () =>
-      quizApi.generate(levelQuiz ? { level: levelQuiz, size } : { tagId: tagId ?? undefined, size: 10 }),
+      quizApi.generate(levelQuiz ? { level: levelQuiz, size, mode } : { tagId: tagId ?? undefined, size: 10, mode }),
     enabled: tagId !== null || levelQuiz !== null,
     staleTime: Infinity,
     gcTime: 0,
@@ -148,6 +151,18 @@ export function StudyQuizPage() {
     setAttempt((a) => a + 1)
   }
 
+  function switchMode(next: QuizMode) {
+    setSearchParams(
+      (params) => {
+        if (next === 'random') params.set('mode', 'random')
+        else params.delete('mode')
+        return params
+      },
+      { replace: true },
+    )
+    restart()
+  }
+
   if (tagId === null && levelQuiz === null) return <Navigate to="/study" replace />
 
   const exitTo = levelQuiz ? '/study' : `/study/vocab?${query}`
@@ -187,6 +202,8 @@ export function StudyQuizPage() {
             bestStreak={bestStreak}
             mistakes={mistakes}
             unsyncedMistakeIds={unsyncedMistakeIds}
+            mode={mode}
+            onSwitchMode={switchMode}
             onRestart={restart}
             onFlashcards={levelQuiz ? undefined : () => navigate(`/study/flashcards?${query}`)}
             exitTo={exitTo}
@@ -322,6 +339,8 @@ function QuizResults({
   bestStreak,
   mistakes,
   unsyncedMistakeIds,
+  mode,
+  onSwitchMode,
   onRestart,
   onFlashcards,
   exitTo,
@@ -332,6 +351,8 @@ function QuizResults({
   bestStreak: number
   mistakes: QuizQuestionResponse[]
   unsyncedMistakeIds: number[]
+  mode: QuizMode
+  onSwitchMode: (mode: QuizMode) => void
   onRestart: () => void
   /** Không có khi làm trắc nghiệm cả cấp độ - thẻ học chỉ mở theo từng bài. */
   onFlashcards?: () => void
@@ -406,7 +427,16 @@ function QuizResults({
           </Button>
         )}
       </div>
-      <Link to={exitTo} className="mt-5 text-sm font-extrabold text-secondary hover:underline">
+      <button
+        type="button"
+        onClick={() => onSwitchMode(mode === 'adaptive' ? 'random' : 'adaptive')}
+        className="mt-4 text-sm font-bold text-muted-foreground hover:text-foreground hover:underline"
+      >
+        {mode === 'adaptive'
+          ? 'Bộ câu hỏi này ưu tiên từ bạn hay sai · Đổi sang chọn ngẫu nhiên cả bài'
+          : 'Bộ câu hỏi này chọn ngẫu nhiên · Đổi sang ưu tiên từ bạn hay sai'}
+      </button>
+      <Link to={exitTo} className="mt-3 text-sm font-extrabold text-secondary hover:underline">
         {exitLabel}
       </Link>
     </div>

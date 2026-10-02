@@ -37,7 +37,8 @@ import com.kanjimastery.backend.repository.UserKanjiSrsRepository;
 @RequiredArgsConstructor
 public class SrsService {
 
-    private static final int MASTERED_INTERVAL_DAYS_THRESHOLD = 21;
+    /** Khoảng ôn từ chừng này ngày trở lên thì coi là "đã thuộc". */
+    static final int MASTERED_INTERVAL_DAYS_THRESHOLD = 21;
 
     private final UserKanjiSrsRepository srsRepository;
     private final KanjiRepository kanjiRepository;
