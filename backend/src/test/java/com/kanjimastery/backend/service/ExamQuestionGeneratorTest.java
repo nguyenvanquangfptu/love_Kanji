@@ -41,8 +41,8 @@ class ExamQuestionGeneratorTest {
     private ExamQuestionGenerator generator;
 
     private final Kanji newspaper = word(1L, "新聞", "しんぶん", "毎朝新聞を読みます。", "Báo");
-    private final Kanji school = word(2L, "学校", "がっこう", "学校へ行きます。", "Trường học");
-    private final Kanji teacher = word(3L, "先生", "せんせい", "先生に聞きます。", "Giáo viên");
+    private final Kanji school = word(2L, "学校", "がっこう", "毎日歩いて学校へ行きます。", "Trường học");
+    private final Kanji teacher = word(3L, "先生", "せんせい", "分からないことは先生に聞きます。", "Giáo viên");
     private final Kanji see = word(4L, "見る", "み(る)", "テレビを見る。", "Xem, nhìn");
     private final Kanji yes = word(5L, "はい", null, null, "Vâng, có");
     private final Kanji hospital = word(6L, "病院", "びょういん", null, "Bệnh viện");
@@ -109,6 +109,52 @@ class ExamQuestionGeneratorTest {
         assertThat(List.of(context.getOptionA(), context.getOptionB(), context.getOptionC(), context.getOptionD()))
                 .containsExactlyInAnyOrder("新聞", "学校", "先生", "病院");
         assertThat(context.getSkill()).isEqualTo(MEANING);
+    }
+
+    @Test
+    void generate_shouldAskContextOnlyForNounsAndVerbs_inSentencesWithEnoughContext_withoutNearSynonymChoices() {
+        Kanji work = word(11L, "仕事", "しごと", "父は毎日遅くまで仕事をしています。", "Công việc, việc làm");
+        // Gần nghĩa với 仕事: điền vào câu trên cũng đúng.
+        Kanji task = word(12L, "作業", "さぎょう", null, "Công việc (tay chân), thao tác");
+        Kanji company = word(13L, "会社", "かいしゃ", null, "Công ty");
+        Kanji bank = word(14L, "銀行", "ぎんこう", null, "Ngân hàng");
+        Kanji film = word(15L, "映画", "えいが", null, "Phim");
+        // Câu ngắn: 「（　　）へ行く。」 hợp với gần như mọi nơi chốn.
+        Kanji school = word(16L, "学校", "がっこう", "学校へ行く。", "Trường học");
+        // Tính từ: đủ 3 tính từ khác làm đáp án nhiễu nhưng vẫn không hỏi.
+        Kanji small = word(17L, "小さい", "ちいさい", "この箱は小さいので、本が入りません。", "Nhỏ, bé");
+        Kanji big = word(18L, "大きい", "おおきい", null, "To, lớn");
+        Kanji fresh = word(19L, "新しい", "あたらしい", null, "Mới");
+        Kanji high = word(20L, "高い", "たかい", null, "Cao, đắt");
+        when(kanjiRepository.findAllByTagNamePrefix("N5-%"))
+                .thenReturn(List.of(work, task, company, bank, film, school, small, big, fresh, high));
+        when(questionRepository.generatedQuestionWords("N5")).thenReturn(List.of());
+
+        generator.generate("N5");
+
+        List<ExamQuestion> context = savedQuestions().stream()
+                .filter(question -> CONTEXT.equals(question.getQuestionType()))
+                .toList();
+        // Chỉ 仕事 được hỏi; đáp án nhiễu là danh từ khác (学校 vẫn làm đáp án nhiễu được), trừ 作業.
+        assertThat(context).singleElement().satisfies(question -> {
+            assertThat(question.getSentence()).isEqualTo("父は毎日遅くまで（　　）をしています。");
+            assertThat(List.of(question.getOptionA(), question.getOptionB(), question.getOptionC(),
+                    question.getOptionD()))
+                    .contains("仕事")
+                    .doesNotContain("作業")
+                    .isSubsetOf("仕事", "会社", "銀行", "映画", "学校");
+        });
+    }
+
+    @Test
+    void sharesMeaning_shouldCompareMeaningPhrases_ignoringNotesInBrackets() {
+        assertThat(ExamQuestionGenerator.sharesMeaning("Nhỏ, bé", "Nhỏ, chi tiết")).isTrue();
+        assertThat(ExamQuestionGenerator.sharesMeaning("Công việc, việc làm", "Công việc (tay chân), thao tác")).isTrue();
+        // Chỉ chung ghi chú "(tha động từ)", hoặc chung một tiếng trong cụm: không tính.
+        assertThat(ExamQuestionGenerator.sharesMeaning("Tìm thấy (tha động từ)", "Làm chuyển động (tha động từ)"))
+                .isFalse();
+        assertThat(ExamQuestionGenerator.sharesMeaning("Phòng", "Phòng học")).isFalse();
+        assertThat(ExamQuestionGenerator.sharesMeaning(null, "Phòng")).isFalse();
     }
 
     @Test

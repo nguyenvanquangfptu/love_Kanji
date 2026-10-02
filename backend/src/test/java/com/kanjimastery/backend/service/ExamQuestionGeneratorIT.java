@@ -44,10 +44,10 @@ class ExamQuestionGeneratorIT extends AbstractIntegrationTest {
         lesson = tagRepository.save(Tag.builder().name(LEVEL + "-01").build());
         String[][] words = {
                 {"新聞", "しんぶん", "毎朝新聞を読みます。", "Báo"},
-                {"学校", "がっこう", "学校へ行きます。", "Trường học"},
-                {"先生", "せんせい", "先生に聞きます。", "Giáo viên"},
-                {"病院", "びょういん", "病院で働きます。", "Bệnh viện"},
-                {"電車", "でんしゃ", "電車に乗ります。", "Tàu điện"},
+                {"学校", "がっこう", "毎日歩いて学校へ行きます。", "Trường học"},
+                {"先生", "せんせい", "分からないことは先生に聞きます。", "Giáo viên"},
+                {"病院", "びょういん", "姉は駅の近くの病院で働きます。", "Bệnh viện"},
+                {"電車", "でんしゃ", "毎朝七時の電車に乗ります。", "Tàu điện"},
         };
         for (String[] word : words) {
             wordIds.add(kanjiRepository.save(Kanji.builder()

@@ -16,11 +16,14 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -37,7 +40,8 @@ import static com.kanjimastery.backend.model.QuizDirection.READING_TO_KANJI;
  * Sinh câu thi từ kho từ vựng, cùng cách dựng câu hỏi với trắc nghiệm ({@link QuestionBuilder}). Mỗi từ trong các bài
  * của một cấp độ (tag "N4-01", "N4-02"...) có câu ví dụ chứa từ (đứng riêng, không nằm trong từ khác) thì được các câu
  * theo kiểu đề JLPT: đọc chữ Hán gạch chân (問題1 漢字読み) và viết bằng chữ Hán (問題2 表記) khi từ có chữ Hán và cách
- * đọc, chọn từ hợp ngữ cảnh (問題3 文脈規定) khi đủ 3 từ khác cùng từ loại làm đáp án nhiễu. Từ nào có nghĩa cũng được
+ * đọc, chọn từ hợp ngữ cảnh (問題3 文脈規定) với danh từ, động từ khi đủ 3 từ khác cùng từ loại làm đáp án nhiễu. Từ nào
+ * có nghĩa cũng được
  * một câu hỏi nghĩa (đáp án tiếng Việt, chỉ dùng cho thi nhanh). Đáp án nhiễu lấy từ các từ khác cùng cấp độ. Mỗi câu
  * gắn với từ của nó; chạy lại chỉ sinh câu cho cặp (từ, dạng câu) chưa có.
  */
@@ -51,6 +55,13 @@ public class ExamQuestionGenerator {
     /** Cột option_a..option_d là VARCHAR(255). */
     private static final int MAX_OPTION_LENGTH = 255;
     static final String BLANK = "（　　）";
+    /** Câu điền từ cần đủ ngữ cảnh: phần còn lại của câu ngắn quá (「空が（　　）。」) thì nhiều từ cùng hợp. */
+    static final int MIN_CONTEXT_LENGTH = 8;
+    /**
+     * Chỉ hỏi điền từ với danh từ, động từ: câu với tính từ, phó từ thường hợp với nhiều đáp án (「（　　）猫がいます」:
+     * 白い, 汚い đều được), máy không phân biệt được.
+     */
+    private static final Set<PartOfSpeech> CONTEXT_CLASSES = EnumSet.of(PartOfSpeech.NOUN, PartOfSpeech.VERB);
 
     private final KanjiRepository kanjiRepository;
     private final ExamQuestionRepository questionRepository;
@@ -179,7 +190,8 @@ public class ExamQuestionGenerator {
         List<ExamQuestion> questions = new ArrayList<>();
         for (Kanji word : words) {
             PartOfSpeech partOfSpeech = classes.get(word.getId());
-            if (partOfSpeech == null || partOfSpeech == PartOfSpeech.OTHER) {
+            if (!CONTEXT_CLASSES.contains(partOfSpeech)
+                    || word.getExampleSentence().length() - word.getCharacter().length() < MIN_CONTEXT_LENGTH) {
                 continue;
             }
             List<String> distractors = contextDistractors(word, byClass.getOrDefault(partOfSpeech, List.of()));
@@ -202,8 +214,8 @@ public class ExamQuestionGenerator {
     }
 
     /**
-     * Đáp án nhiễu cho 文脈規定: cùng từ loại; khác cách viết, cách đọc và nghĩa với từ đang hỏi (từ đồng nghĩa trong
-     * kho cũng "đúng"); không có sẵn trong câu; ưu tiên từ dài gần bằng, ngẫu nhiên trong từng nhóm.
+     * Đáp án nhiễu cho 文脈規定: cùng từ loại; khác cách viết, cách đọc với từ đang hỏi và không gần nghĩa (từ đồng
+     * nghĩa trong kho cũng "đúng"); không có sẵn trong câu; ưu tiên từ dài gần bằng, ngẫu nhiên trong từng nhóm.
      */
     private static List<String> contextDistractors(Kanji word, List<Kanji> sameClass) {
         String sentence = word.getExampleSentence();
@@ -212,6 +224,7 @@ public class ExamQuestionGenerator {
                 .filter(other -> !other.getCharacter().equals(word.getCharacter()))
                 .filter(other -> other.getReading() == null || !other.getReading().equals(word.getReading()))
                 .filter(other -> !Objects.equals(other.getMeaning(), word.getMeaning()))
+                .filter(other -> !sharesMeaning(other.getMeaning(), word.getMeaning()))
                 .filter(other -> !sentence.contains(other.getCharacter()))
                 .collect(Collectors.toCollection(ArrayList::new));
         Collections.shuffle(candidates);
@@ -225,6 +238,25 @@ public class ExamQuestionGenerator {
             distractors.add(candidate.getCharacter());
         }
         return new ArrayList<>(distractors);
+    }
+
+    /**
+     * Hai nghĩa tiếng Việt có chung một cụm nghĩa (「Nhỏ, bé」 và 「Nhỏ, chi tiết」): gần nghĩa. Bỏ qua phần ghi chú trong
+     * ngoặc như 「(tha động từ)」.
+     */
+    static boolean sharesMeaning(String meaning, String other) {
+        Set<String> phrases = meaningPhrases(meaning);
+        return meaningPhrases(other).stream().anyMatch(phrases::contains);
+    }
+
+    private static Set<String> meaningPhrases(String meaning) {
+        if (meaning == null) {
+            return Set.of();
+        }
+        return Arrays.stream(meaning.replaceAll("\\([^)]*\\)|（[^）]*）", "").toLowerCase(Locale.ROOT).split("[,;/、]"))
+                .map(String::strip)
+                .filter(phrase -> phrase.length() >= 2)
+                .collect(Collectors.toSet());
     }
 
     private static ExamQuestion.ExamQuestionBuilder question(String level, Kanji word, String questionText,
