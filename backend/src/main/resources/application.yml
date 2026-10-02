@@ -76,6 +76,8 @@ app:
     day-start-hour: 4         # ngày học mới bắt đầu lúc 4 giờ sáng: học quá nửa đêm vẫn tính vào hôm trước
     default-daily-minutes: 20 # khi người học chưa đặt mục tiêu
     default-new-words-per-day: 10
+    fsrs-min-first-reviews: 50 # tối ưu FSRS riêng cho một mức chấm khi đã có chừng này từ học với mức đó và ôn lại
+    fsrs-optimize-cron: "0 30 4 * * MON" # tối ưu lại tham số FSRS mỗi sáng thứ Hai (giờ day-zone)
   exam:
     duration-seconds: 1800        # 30 phút làm bài
     default-question-count: 20

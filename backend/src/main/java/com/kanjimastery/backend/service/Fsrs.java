@@ -19,6 +19,7 @@ public final class Fsrs {
     static final double MIN_DIFFICULTY = 1;
     static final double MAX_DIFFICULTY = 10;
     static final int MAXIMUM_INTERVAL = 36_500;
+    private static final Fsrs DEFAULT = new Fsrs(DEFAULT_PARAMETERS);
 
     /** Trạng thái trí nhớ của một thẻ. */
     public record Memory(double stability, double difficulty) {
@@ -38,7 +39,18 @@ public final class Fsrs {
     }
 
     public static Fsrs withDefaults() {
-        return new Fsrs(DEFAULT_PARAMETERS);
+        return DEFAULT;
+    }
+
+    /** Tham số mặc định, riêng độ ổn định sau lần học đầu (w0-w3, theo mức Quên, Khó, Nhớ, Dễ) thay bằng giá trị cho trước. */
+    public static Fsrs withInitialStabilities(double[] initialStabilities) {
+        double[] parameters = DEFAULT_PARAMETERS.clone();
+        System.arraycopy(initialStabilities, 0, parameters, 0, 4);
+        return new Fsrs(parameters);
+    }
+
+    public double[] parameters() {
+        return w.clone();
     }
 
     /** Lần học đầu tiên của một thẻ. {@code rating}: 1 Quên, 2 Khó, 3 Nhớ, 4 Dễ. */

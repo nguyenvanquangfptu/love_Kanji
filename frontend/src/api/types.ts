@@ -149,9 +149,24 @@ export interface LearningProfileResponse {
   scheduler: Scheduler
   /** Tỉ lệ nhớ mong muốn khi xếp lịch bằng FSRS (0.8 = 80%). */
   desiredRetention: number
+  fsrs: FsrsParametersResponse
 }
 
-export type LearningProfileRequest = Omit<LearningProfileResponse, 'configured'>
+export type LearningProfileRequest = Omit<LearningProfileResponse, 'configured' | 'fsrs'>
+
+/** Mô hình trí nhớ FSRS của người học: thông số chung hay đã tối ưu theo lịch sử ôn của chính họ. */
+export interface FsrsParametersResponse {
+  personalized: boolean
+  optimizedAt: string | null
+  /** Số từ đã học và ôn lại vào một ngày khác, theo mức chấm lần đầu Quên, Khó, Nhớ, Dễ. */
+  firstReviews: number[]
+  /** Một mức chấm cần chừng này từ mới tối ưu được. */
+  minFirstReviews: number
+  /** Số ngày còn nhớ 90% một từ mới, theo mức chấm lần đầu - đang dùng để xếp lịch. */
+  initialStabilities: number[]
+  /** Như trên với thông số chung của FSRS. */
+  defaultInitialStabilities: number[]
+}
 
 /** Thuật toán xếp lịch ôn: SM-2 cổ điển hoặc mô hình trí nhớ FSRS. */
 export type Scheduler = 'SM2' | 'FSRS'

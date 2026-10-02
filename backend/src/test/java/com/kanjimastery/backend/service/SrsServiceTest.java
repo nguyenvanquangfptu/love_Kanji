@@ -252,6 +252,21 @@ class SrsServiceTest {
     }
 
     @Test
+    void submitReview_shouldUseTheLearnersOwnMemoryModel_onceItWasOptimized() {
+        // Người này nhớ từ mới lâu hơn người học nói chung: chấm "Nhớ" lần đầu là còn nhớ 90% sau 5 ngày.
+        givenScheduling(SchedulerType.FSRS, 0.9, Fsrs.withInitialStabilities(new double[]{0.5, 1.5, 5, 12}));
+        when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.empty());
+        givenSaveReturnsCard();
+
+        srsService.submitReview(USER_ID, reviewRequest(ReviewRating.GOOD, 2_000));
+
+        UserKanjiSrs saved = savedCard();
+        assertThat(saved.getStability()).isEqualTo(5);
+        assertThat(saved.getReviewIntervalDays()).isEqualTo(5);
+    }
+
+    @Test
     void submitReview_shouldLogRelearning_whenCardWasForgottenLastTime() {
         UserKanjiSrs card = card(0, "2.18", 1, LocalDateTime.now().minusMinutes(5));
         when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
@@ -530,7 +545,12 @@ class SrsServiceTest {
     }
 
     private void givenScheduling(String scheduler, double desiredRetention) {
-        when(learningProfileService.scheduling(USER_ID)).thenReturn(new SchedulingSettings(scheduler, desiredRetention));
+        givenScheduling(scheduler, desiredRetention, Fsrs.withDefaults());
+    }
+
+    private void givenScheduling(String scheduler, double desiredRetention, Fsrs fsrs) {
+        when(learningProfileService.scheduling(USER_ID))
+                .thenReturn(new SchedulingSettings(scheduler, desiredRetention, fsrs));
     }
 
     private void givenSaveReturnsCard() {

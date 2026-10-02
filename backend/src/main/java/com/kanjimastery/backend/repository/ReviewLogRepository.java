@@ -163,4 +163,36 @@ public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
             WHERE r.userId = :userId AND r.reviewedAt >= :since
             """)
     List<Activity> activitySince(@Param("userId") Long userId, @Param("since") LocalDateTime since);
+
+    /** Lần học đầu của một từ và lần ôn kế tiếp. */
+    interface FirstReviewOutcome {
+        Short getRating();
+
+        LocalDateTime getFirstAt();
+
+        LocalDateTime getNextAt();
+
+        Boolean getRecalled();
+    }
+
+    /**
+     * Với mỗi từ người học đã học (lần trả lời tính lịch đầu tiên là từ mới) và đã ôn lại ít nhất một lần: mức chấm
+     * lần đầu, lúc học, lúc ôn kế tiếp và lần đó còn nhớ không - dữ liệu để tối ưu độ ổn định ban đầu của FSRS.
+     */
+    @Query(value = """
+            SELECT reviews.rating AS "rating", reviews.reviewed_at AS "firstAt", reviews.next_at AS "nextAt",
+                   reviews.next_correct AS "recalled"
+            FROM (SELECT rating, reviewed_at, state_before,
+                         ROW_NUMBER() OVER card_reviews AS position,
+                         LEAD(reviewed_at) OVER card_reviews AS next_at,
+                         LEAD(correct) OVER card_reviews AS next_correct
+                  FROM review_logs
+                  WHERE user_id = :userId AND scheduled
+                  WINDOW card_reviews AS (PARTITION BY kanji_id ORDER BY reviewed_at, id)) reviews
+            WHERE reviews.position = 1 AND reviews.state_before = 'NEW' AND reviews.next_at IS NOT NULL
+            """, nativeQuery = true)
+    List<FirstReviewOutcome> firstReviewOutcomes(@Param("userId") Long userId);
+
+    @Query("SELECT DISTINCT r.userId FROM ReviewLog r WHERE r.reviewedAt >= :since")
+    List<Long> userIdsActiveSince(@Param("since") LocalDateTime since);
 }

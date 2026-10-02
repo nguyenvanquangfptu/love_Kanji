@@ -4,7 +4,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Target } from 'lucide-react'
 import { profileApi } from '@/api/profile'
 import { extractErrorMessage } from '@/api/client'
-import { JLPT_LEVELS, type JlptLevel, type LearningProfileResponse, type Scheduler } from '@/api/types'
+import {
+  JLPT_LEVELS,
+  type FsrsParametersResponse,
+  type JlptLevel,
+  type LearningProfileResponse,
+  type Scheduler,
+} from '@/api/types'
 import { formatDay, toIsoDay, upcomingJlptDays } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
@@ -17,6 +23,20 @@ import { PageSpinner } from '@/components/ui/spinner'
 
 const MINUTE_OPTIONS = [10, 15, 20, 30, 45, 60]
 const RETENTION_OPTIONS = [0.8, 0.85, 0.9, 0.95]
+const RATING_LABELS = ['Quên', 'Khó', 'Nhớ', 'Dễ']
+
+// Đường quên của FSRS-6 với thông số chung: còn nhớ R = (1 + FACTOR·t/S)^DECAY sau t ngày (S: số ngày còn nhớ 90%).
+const FSRS_DECAY = -0.1542
+const FSRS_FACTOR = 0.9 ** (1 / FSRS_DECAY) - 1
+
+/** Số ngày tới lần ôn sau để lúc đó còn nhớ `retention`, với một từ có độ ổn định `stability` ngày. */
+function fsrsInterval(stability: number, retention: number) {
+  return Math.max(1, Math.round((stability / FSRS_FACTOR) * (retention ** (1 / FSRS_DECAY) - 1)))
+}
+
+function formatDays(days: number) {
+  return days.toLocaleString('vi-VN', { maximumFractionDigits: 1 })
+}
 
 /** Mục tiêu học: cấp độ JLPT nhắm tới, ngày thi, thời gian ôn mỗi ngày - để app tính số từ mới mỗi ngày. */
 export function GoalPage() {
@@ -183,8 +203,10 @@ function GoalForm({ profile }: { profile: LearningProfileResponse }) {
             </div>
             <p className="text-sm font-semibold text-muted-foreground">
               Đến lượt ôn, bạn còn nhớ chừng ấy phần trăm số từ. Càng cao càng chắc nhưng phải ôn nhiều hơn hẳn; 90% là
-              mức cân bằng.
+              mức cân bằng. Ví dụ một từ sau 10 ngày bạn vẫn còn 90% khả năng nhớ: ôn lại sau{' '}
+              {fsrsInterval(10, desiredRetention)} ngày.
             </p>
+            <MemoryModel fsrs={profile.fsrs} />
           </>
         )}
       </section>
@@ -200,6 +222,94 @@ function GoalForm({ profile }: { profile: LearningProfileResponse }) {
         </Button>
       </div>
     </Card>
+  )
+}
+
+/** Thông số FSRS đang dùng: chung hay đã tối ưu theo trí nhớ của người học, kèm nút tối ưu ngay. */
+function MemoryModel({ fsrs }: { fsrs: FsrsParametersResponse }) {
+  const queryClient = useQueryClient()
+  const optimize = useMutation({
+    mutationFn: profileApi.optimizeFsrs,
+    onSuccess: (next) => {
+      queryClient.setQueryData<LearningProfileResponse>(['profile', 'learning'], (old) => old && { ...old, fsrs: next })
+      queryClient.invalidateQueries({ queryKey: ['srs'] })
+    },
+  })
+  const learned = fsrs.firstReviews.reduce((sum, count) => sum + count, 0)
+
+  return (
+    <div className="mt-2 flex flex-col gap-3 rounded-xl border-2 border-border p-4">
+      <p className="text-sm font-extrabold">Trí nhớ của riêng bạn</p>
+      <p className="text-sm font-semibold text-muted-foreground">
+        {fsrs.personalized ? (
+          <>
+            FSRS đã được chỉnh theo {learned} từ bạn đã học và ôn lại
+            {fsrs.optimizedAt && ` (cập nhật ${formatDay(fsrs.optimizedAt.slice(0, 10))})`}. Bảng dưới là số ngày bạn
+            còn nhớ 90% một từ mới, tuỳ lần đầu bạn chấm nó thế nào.
+          </>
+        ) : (
+          <>
+            Đang dùng thông số chung của FSRS. Khi một mức chấm có đủ {fsrs.minFirstReviews} từ bạn học lần đầu với
+            mức đó và đã ôn lại vào hôm khác, app chỉnh FSRS theo trí nhớ của bạn (tự chạy mỗi sáng thứ Hai).
+          </>
+        )}
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-muted-foreground">
+              <th className="py-1 pr-3 text-left font-bold">Lần đầu chấm</th>
+              {RATING_LABELS.map((label) => (
+                <th key={label} className="px-2 py-1 text-right font-bold">
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="font-semibold">
+            {fsrs.personalized && (
+              <tr className="border-t border-border">
+                <th className="py-1 pr-3 text-left font-bold">Bạn</th>
+                {fsrs.initialStabilities.map((days, i) => (
+                  <td key={i} className="px-2 py-1 text-right tabular-nums">
+                    {formatDays(days)} ngày
+                  </td>
+                ))}
+              </tr>
+            )}
+            <tr className="border-t border-border">
+              <th className="py-1 pr-3 text-left font-bold">Người học nói chung</th>
+              {fsrs.defaultInitialStabilities.map((days, i) => (
+                <td key={i} className="px-2 py-1 text-right tabular-nums">
+                  {formatDays(days)} ngày
+                </td>
+              ))}
+            </tr>
+            <tr className="border-t border-border text-muted-foreground">
+              <th className="py-1 pr-3 text-left font-bold">Từ đã học và ôn lại</th>
+              {fsrs.firstReviews.map((count, i) => (
+                <td key={i} className="px-2 py-1 text-right tabular-nums">
+                  {count}/{fsrs.minFirstReviews}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="secondary" size="sm" disabled={optimize.isPending} onClick={() => optimize.mutate()}>
+          {optimize.isPending ? 'Đang tối ưu...' : 'Tối ưu ngay'}
+        </Button>
+        {optimize.isSuccess && (
+          <span className="text-sm font-semibold text-muted-foreground">
+            {optimize.data.personalized ? 'Đã cập nhật theo dữ liệu mới nhất.' : 'Chưa mức chấm nào đủ dữ liệu.'}
+          </span>
+        )}
+        {optimize.isError && (
+          <span className="text-sm font-semibold text-destructive">{extractErrorMessage(optimize.error)}</span>
+        )}
+      </div>
+    </div>
   )
 }
 

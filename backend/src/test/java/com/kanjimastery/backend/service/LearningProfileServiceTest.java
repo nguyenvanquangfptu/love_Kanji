@@ -23,6 +23,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,6 +36,9 @@ class LearningProfileServiceTest {
     @Mock
     private LearningProfileRepository profileRepository;
 
+    @Mock
+    private FsrsParametersService fsrsParametersService;
+
     private LearningProfileService service;
 
     @BeforeEach
@@ -42,7 +46,8 @@ class LearningProfileServiceTest {
         SrsProperties properties = new SrsProperties();
         // 10:00 UTC ngày 02/10 = ngày học 02/10 ở Việt Nam.
         StudyCalendar calendar = new StudyCalendar(properties, Clock.fixed(Instant.parse("2026-10-02T10:00:00Z"), ZoneOffset.UTC));
-        service = new LearningProfileService(profileRepository, properties, calendar);
+        service = new LearningProfileService(profileRepository, properties, calendar, fsrsParametersService);
+        lenient().when(fsrsParametersService.fsrsFor(USER_ID)).thenReturn(Fsrs.withDefaults());
     }
 
     @Test
@@ -68,6 +73,16 @@ class LearningProfileServiceTest {
         SchedulingSettings settings = service.scheduling(USER_ID);
         assertThat(settings.usesFsrs()).isTrue();
         assertThat(settings.desiredRetention()).isEqualTo(0.85);
+    }
+
+    @Test
+    void scheduling_shouldCarryTheLearnersOwnMemoryModel() {
+        Fsrs personal = Fsrs.withInitialStabilities(new double[]{0.5, 1.5, 5, 12});
+        when(fsrsParametersService.fsrsFor(USER_ID)).thenReturn(personal);
+        when(profileRepository.findById(USER_ID)).thenReturn(Optional.empty());
+
+        // Kể cả khi chưa đặt mục tiêu (vẫn SM-2): trí nhớ FSRS chạy song song dùng tham số riêng.
+        assertThat(service.scheduling(USER_ID).fsrs()).isSameAs(personal);
     }
 
     @Test

@@ -23,25 +23,30 @@ public class LearningProfileService {
     private final LearningProfileRepository profileRepository;
     private final SrsProperties srsProperties;
     private final StudyCalendar calendar;
+    private final FsrsParametersService fsrsParametersService;
 
     @Transactional(readOnly = true)
     public LearningProfileResponse get(Long userId) {
         return profileRepository.findById(userId)
-                .map(LearningProfileService::toResponse)
+                .map(this::toResponse)
                 .orElseGet(() -> LearningProfileResponse.builder()
                         .configured(false)
                         .dailyMinutes(srsProperties.getDefaultDailyMinutes())
                         .scheduler(SchedulingSettings.DEFAULT.scheduler())
                         .desiredRetention(SchedulingSettings.DEFAULT.desiredRetention())
+                        .fsrs(fsrsParametersService.status(userId))
                         .build());
     }
 
     /** Cách xếp lịch ôn của người học; chưa đặt mục tiêu thì SM-2 như trước. */
     @Transactional(readOnly = true)
     public SchedulingSettings scheduling(Long userId) {
+        Fsrs fsrs = fsrsParametersService.fsrsFor(userId);
         return profileRepository.findById(userId)
-                .map(profile -> new SchedulingSettings(profile.getScheduler(), profile.getDesiredRetention().doubleValue()))
-                .orElse(SchedulingSettings.DEFAULT);
+                .map(profile -> new SchedulingSettings(profile.getScheduler(),
+                        profile.getDesiredRetention().doubleValue(), fsrs))
+                .orElseGet(() -> new SchedulingSettings(SchedulingSettings.DEFAULT.scheduler(),
+                        SchedulingSettings.DEFAULT.desiredRetention(), fsrs));
     }
 
     @Transactional
@@ -63,7 +68,7 @@ public class LearningProfileService {
         return toResponse(profileRepository.save(profile));
     }
 
-    private static LearningProfileResponse toResponse(LearningProfile profile) {
+    private LearningProfileResponse toResponse(LearningProfile profile) {
         return LearningProfileResponse.builder()
                 .configured(true)
                 .targetLevel(profile.getTargetLevel())
@@ -72,6 +77,7 @@ public class LearningProfileService {
                 .newWordsPerDay(profile.getNewWordsPerDay())
                 .scheduler(profile.getScheduler())
                 .desiredRetention(profile.getDesiredRetention().doubleValue())
+                .fsrs(fsrsParametersService.status(profile.getUserId()))
                 .build();
     }
 }

@@ -22,4 +22,9 @@ public class SrsProperties {
     private int defaultDailyMinutes = 20;
     /** Số từ mới mỗi ngày khi người học chưa đặt mục tiêu. */
     private int defaultNewWordsPerDay = 10;
+    /**
+     * Tối ưu độ ổn định ban đầu của FSRS cho một mức chấm khi người học đã có chừng này từ được học với mức đó và ôn
+     * lại ở một ngày khác.
+     */
+    private int fsrsMinFirstReviews = 50;
 }

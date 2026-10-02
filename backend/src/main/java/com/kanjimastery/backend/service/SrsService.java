@@ -60,7 +60,6 @@ public class SrsService {
     private final StudyPlanService studyPlanService;
     private final LearningProfileService learningProfileService;
     private final StudyCalendar calendar;
-    private final Fsrs fsrs = Fsrs.withDefaults();
 
     /**
      * Một lần người học trả lời một từ.
@@ -88,7 +87,7 @@ public class SrsService {
                 userId, now, PageRequest.of(0, MAX_DUE_CARDS)).getContent();
         SchedulingSettings settings = learningProfileService.scheduling(userId);
         Comparator<UserKanjiSrs> riskiestFirst = settings.usesFsrs()
-                ? Comparator.comparingDouble((UserKanjiSrs card) -> recall(card, now))
+                ? Comparator.comparingDouble((UserKanjiSrs card) -> recall(card, now, settings.fsrs()))
                 : DailySessionOrder.mostOverdueFirst(now);
         List<UserKanjiSrs> session;
         if (extra) {
@@ -192,7 +191,8 @@ public class SrsService {
         Answer answer = new Answer(ReviewSource.FLASHCARD, null, rating != ReviewRating.AGAIN, rating,
                 ResponseTimeRater.normalize(request.getResponseMs()), null);
         UserKanjiSrs card = srsRepository.findByUserIdAndKanjiId(userId, request.getKanjiId()).orElse(null);
-        UserKanjiSrs saved = schedule(userId, request.getKanjiId(), card, answer, LocalDateTime.now());
+        UserKanjiSrs saved = schedule(userId, request.getKanjiId(), card, answer, LocalDateTime.now(),
+                learningProfileService.scheduling(userId));
 
         return ReviewResponse.builder()
                 .kanjiId(saved.getKanjiId())
@@ -219,9 +219,10 @@ public class SrsService {
     @Transactional
     public Optional<LocalDateTime> recordQuizAnswer(Long userId, Long kanjiId, Answer answer) {
         LocalDateTime now = LocalDateTime.now();
+        SchedulingSettings settings = learningProfileService.scheduling(userId);
         UserKanjiSrs card = srsRepository.findByUserIdAndKanjiId(userId, kanjiId).orElse(null);
         if (card == null) {
-            log(userId, kanjiId, null, answer, false, now);
+            log(userId, kanjiId, null, answer, false, now, settings.fsrs());
             if (answer.correct()) {
                 return Optional.empty();
             }
@@ -229,9 +230,9 @@ public class SrsService {
             return Optional.of(now);
         }
         if (!answer.correct() || !card.getNextReviewAt().isAfter(now)) {
-            return Optional.of(schedule(userId, kanjiId, card, answer, now).getNextReviewAt());
+            return Optional.of(schedule(userId, kanjiId, card, answer, now, settings).getNextReviewAt());
         }
-        log(userId, kanjiId, card, answer, false, now);
+        log(userId, kanjiId, card, answer, false, now, settings.fsrs());
         return Optional.of(card.getNextReviewAt());
     }
 
@@ -241,10 +242,11 @@ public class SrsService {
      * thì thành từ khó. Quên tiếp khi đang học lại không tính thêm: trắc nghiệm thích ứng hay hỏi lại từ vừa sai, nên
      * sai nhiều lần liền trong một buổi vẫn chỉ là một lần quên.
      */
-    private UserKanjiSrs schedule(Long userId, Long kanjiId, UserKanjiSrs card, Answer answer, LocalDateTime now) {
-        log(userId, kanjiId, card, answer, true, now);
+    private UserKanjiSrs schedule(Long userId, Long kanjiId, UserKanjiSrs card, Answer answer, LocalDateTime now,
+                                  SchedulingSettings settings) {
+        log(userId, kanjiId, card, answer, true, now, settings.fsrs());
         boolean lapse = answer.rating() == ReviewRating.AGAIN && CardState.REVIEW.equals(CardState.of(card));
-        Outcome outcome = outcome(card, answer.rating(), now, learningProfileService.scheduling(userId));
+        Outcome outcome = outcome(card, answer.rating(), now, settings);
 
         UserKanjiSrs srs = card != null ? card : UserKanjiSrs.builder()
                 .userId(userId)
@@ -277,7 +279,8 @@ public class SrsService {
                 card == null ? new BigDecimal("2.50") : card.getEasinessFactor(),
                 card == null ? 0 : card.getReviewIntervalDays(),
                 ReviewRating.toSm2Quality(rating));
-        Fsrs.Memory before = memoryBefore(card);
+        Fsrs fsrs = settings.fsrs();
+        Fsrs.Memory before = memoryBefore(card, fsrs);
         Fsrs.Memory memory = before == null ? fsrs.first(rating) : fsrs.next(before, rating, elapsedDays(card, now));
         int intervalDays = settings.usesFsrs()
                 ? fsrs.interval(memory.stability(), settings.desiredRetention())
@@ -297,7 +300,7 @@ public class SrsService {
      * ước lượng từ SM-2: vừa quên thì như một thẻ mới quên; còn lại độ ổn định bằng khoảng ôn hiện tại (SM-2 xếp lịch
      * quanh mức nhớ 90%, đúng nghĩa độ ổn định của FSRS) và độ khó suy từ hệ số dễ EF (2,5 như thẻ "Nhớ", 1,3 là 10).
      */
-    private Fsrs.Memory memoryBefore(UserKanjiSrs card) {
+    private Fsrs.Memory memoryBefore(UserKanjiSrs card, Fsrs fsrs) {
         if (card == null || card.getLastReviewedAt() == null) {
             return null;
         }
@@ -323,12 +326,13 @@ public class SrsService {
      * dự đoán lúc đó.
      */
     /** Xác suất FSRS còn nhớ thẻ lúc {@code now}; null nếu chưa học lần nào. */
-    private Double recall(UserKanjiSrs card, LocalDateTime now) {
-        Fsrs.Memory memory = memoryBefore(card);
+    private Double recall(UserKanjiSrs card, LocalDateTime now, Fsrs fsrs) {
+        Fsrs.Memory memory = memoryBefore(card, fsrs);
         return memory == null ? null : fsrs.retrievability(memory.stability(), elapsedDays(card, now));
     }
 
-    private void log(Long userId, Long kanjiId, UserKanjiSrs card, Answer answer, boolean scheduled, LocalDateTime now) {
+    private void log(Long userId, Long kanjiId, UserKanjiSrs card, Answer answer, boolean scheduled, LocalDateTime now,
+                     Fsrs fsrs) {
         reviewLogRepository.save(ReviewLog.builder()
                 .userId(userId)
                 .kanjiId(kanjiId)
@@ -341,7 +345,7 @@ public class SrsService {
                 .stateBefore(CardState.of(card))
                 .efBefore(card == null ? null : card.getEasinessFactor())
                 .intervalBefore(card == null ? null : card.getReviewIntervalDays())
-                .retrievability(recall(card, now))
+                .retrievability(recall(card, now, fsrs))
                 .scheduled(scheduled)
                 .reviewedAt(now)
                 .build());

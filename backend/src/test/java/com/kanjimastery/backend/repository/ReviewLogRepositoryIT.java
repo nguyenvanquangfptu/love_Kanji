@@ -8,6 +8,7 @@ import com.kanjimastery.backend.model.ReviewRating;
 import com.kanjimastery.backend.model.ReviewSource;
 import com.kanjimastery.backend.model.User;
 import com.kanjimastery.backend.repository.ReviewLogRepository.DirectionStats;
+import com.kanjimastery.backend.repository.ReviewLogRepository.FirstReviewOutcome;
 import com.kanjimastery.backend.repository.ReviewLogRepository.QuizMistake;
 import com.kanjimastery.backend.repository.ReviewLogRepository.ResponseTimeStats;
 import com.kanjimastery.backend.repository.ReviewLogRepository.WordDirectionStats;
@@ -17,6 +18,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -39,6 +42,7 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
 
     private Long userId;
     private Long kanjiId;
+    private final List<Long> otherKanjiIds = new ArrayList<>();
 
     @BeforeEach
     void setUp() {
@@ -62,6 +66,7 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
         // ON DELETE CASCADE dọn luôn review_logs của người dùng/từ thử.
         userRepository.deleteById(userId);
         kanjiRepository.deleteById(kanjiId);
+        kanjiRepository.deleteAllById(otherKanjiIds);
     }
 
     @Test
@@ -208,6 +213,63 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
         assertThat(activity).extracting(ReviewLogRepository.Activity::getStateBefore,
                         ReviewLogRepository.Activity::getScheduled, ReviewLogRepository.Activity::getCorrect)
                 .containsExactlyInAnyOrder(tuple(CardState.REVIEW, true, true), tuple(CardState.NEW, false, true));
+    }
+
+    @Test
+    void firstReviewOutcomes_shouldPairEachWordsFirstReviewWithItsNextScheduledReview() {
+        LocalDateTime learned = LocalDateTime.now().truncatedTo(ChronoUnit.SECONDS).minusDays(10);
+        // Học "Khó", 2 ngày sau ôn thì quên; câu trắc nghiệm đúng ở giữa chỉ được ghi lại, không tính.
+        saveReview(kanjiId, learned, CardState.NEW, ReviewRating.HARD, true);
+        saveReview(kanjiId, learned.plusDays(1), CardState.REVIEW, ReviewRating.GOOD, false);
+        saveReview(kanjiId, learned.plusDays(2), CardState.REVIEW, ReviewRating.AGAIN, true);
+        saveReview(kanjiId, learned.plusDays(3), CardState.RELEARNING, ReviewRating.GOOD, true);
+        // Mới học, chưa ôn lại lần nào.
+        Long notReviewedYet = otherKanji("未");
+        saveReview(notReviewedYet, learned, CardState.NEW, ReviewRating.GOOD, true);
+        // Đã ôn từ trước khi có log: không biết lần học đầu ra sao.
+        Long learnedBeforeLogs = otherKanji("既");
+        saveReview(learnedBeforeLogs, learned, CardState.REVIEW, ReviewRating.GOOD, true);
+        saveReview(learnedBeforeLogs, learned.plusDays(4), CardState.REVIEW, ReviewRating.GOOD, true);
+
+        assertThat(reviewLogRepository.firstReviewOutcomes(userId))
+                .extracting(FirstReviewOutcome::getRating, FirstReviewOutcome::getFirstAt, FirstReviewOutcome::getNextAt,
+                        FirstReviewOutcome::getRecalled)
+                .containsExactly(tuple((short) ReviewRating.HARD, learned, learned.plusDays(2), false));
+    }
+
+    @Test
+    void userIdsActiveSince_shouldListLearnersWhoAnsweredSinceTheGivenTime() {
+        LocalDateTime now = LocalDateTime.now();
+        saveReview(now.minusDays(2), CardState.NEW, true);
+
+        assertThat(reviewLogRepository.userIdsActiveSince(now.minusDays(7))).contains(userId);
+        assertThat(reviewLogRepository.userIdsActiveSince(now.minusDays(1))).doesNotContain(userId);
+    }
+
+    private Long otherKanji(String character) {
+        String suffix = String.valueOf(System.nanoTime());
+        Long id = kanjiRepository.save(Kanji.builder()
+                .character(character + suffix.substring(suffix.length() - 4))
+                .hanViet("THÍ")
+                .strokeCount(5)
+                .jlptLevel("N4")
+                .meaning("Thử")
+                .build()).getId();
+        otherKanjiIds.add(id);
+        return id;
+    }
+
+    private void saveReview(Long kanji, LocalDateTime at, String stateBefore, int rating, boolean scheduled) {
+        reviewLogRepository.save(ReviewLog.builder()
+                .userId(userId)
+                .kanjiId(kanji)
+                .source(ReviewSource.FLASHCARD)
+                .correct(rating != ReviewRating.AGAIN)
+                .rating((short) rating)
+                .stateBefore(stateBefore)
+                .scheduled(scheduled)
+                .reviewedAt(at)
+                .build());
     }
 
     private void saveReview(LocalDateTime at, String stateBefore, boolean scheduled) {

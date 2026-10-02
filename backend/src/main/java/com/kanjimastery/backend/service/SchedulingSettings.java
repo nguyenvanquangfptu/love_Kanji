@@ -7,10 +7,12 @@ import com.kanjimastery.backend.model.SchedulerType;
  *
  * @param scheduler        {@link SchedulerType}
  * @param desiredRetention tỉ lệ nhớ mong muốn khi xếp lịch bằng FSRS
+ * @param fsrs             mô hình trí nhớ của người học (tham số riêng nếu đã tối ưu) - luôn được cập nhật, kể cả khi
+ *                         lịch ôn đang theo SM-2
  */
-public record SchedulingSettings(String scheduler, double desiredRetention) {
+public record SchedulingSettings(String scheduler, double desiredRetention, Fsrs fsrs) {
 
-    public static final SchedulingSettings DEFAULT = new SchedulingSettings(SchedulerType.SM2, 0.9);
+    public static final SchedulingSettings DEFAULT = new SchedulingSettings(SchedulerType.SM2, 0.9, Fsrs.withDefaults());
 
     public boolean usesFsrs() {
         return SchedulerType.FSRS.equals(scheduler);
