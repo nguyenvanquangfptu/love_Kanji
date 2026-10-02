@@ -14,6 +14,18 @@ public interface ExamQuestionRepository extends JpaRepository<ExamQuestion, Long
             nativeQuery = true)
     List<ExamQuestion> findRandomByLevel(@Param("level") String level, @Param("count") int count);
 
+    @Query(value = """
+            SELECT * FROM exam_questions WHERE jlpt_level = :level AND skill = :skill ORDER BY RANDOM() LIMIT :count
+            """, nativeQuery = true)
+    List<ExamQuestion> findRandomByLevelAndSkill(@Param("level") String level, @Param("skill") String skill,
+                                                 @Param("count") int count);
+
+    /** Câu chưa phân loại kỹ năng. */
+    @Query(value = """
+            SELECT * FROM exam_questions WHERE jlpt_level = :level AND skill IS NULL ORDER BY RANDOM() LIMIT :count
+            """, nativeQuery = true)
+    List<ExamQuestion> findRandomUnclassifiedByLevel(@Param("level") String level, @Param("count") int count);
+
     /** Một câu thi đã sinh: kiểm tra kỹ năng nào của từ nào. */
     interface GeneratedQuestionWord {
         Long getKanjiId();

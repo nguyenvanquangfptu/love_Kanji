@@ -27,6 +27,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -104,14 +105,19 @@ class ExamServiceTest {
     }
 
     @Test
-    void start_shouldAskAtMostOneQuestionPerWord() {
-        // Câu 1 và 2 cùng hỏi 水 (nghĩa ghi kèm cách đọc sẽ lộ đáp án câu đọc): chỉ lấy câu đầu.
-        when(questionRepository.findRandomByLevel("N5", 6)).thenReturn(List.of(
-                question(1L, QuizDirection.MEANING, 15L), question(2L, QuizDirection.KANJI_TO_READING, 15L),
-                question(3L, QuizDirection.MEANING, 16L), question(4L, QuizDirection.MEANING, 17L)));
-        when(questionRepository.findAllWithWordsByIdIn(List.of(1L, 2L, 3L, 4L))).thenReturn(List.of(
-                question(1L, QuizDirection.MEANING, 15L), question(2L, QuizDirection.KANJI_TO_READING, 15L),
-                question(3L, QuizDirection.MEANING, 16L), question(4L, QuizDirection.MEANING, 17L)));
+    void start_shouldSpreadQuestionsOverTheSkills_andAskAtMostOneQuestionPerWord() {
+        // Câu đọc 2 hỏi lại 水 của câu đọc 1 nên bị bỏ; câu nghĩa 4 cũng hỏi 水. Lấy lần lượt đọc - viết - nghĩa.
+        List<ExamQuestion> reading = List.of(question(1L, QuizDirection.KANJI_TO_READING, 15L),
+                question(2L, QuizDirection.KANJI_TO_READING, 15L), question(6L, QuizDirection.KANJI_TO_READING, 19L));
+        List<ExamQuestion> writing = List.of(question(3L, QuizDirection.READING_TO_KANJI, 16L));
+        List<ExamQuestion> meaning = List.of(question(4L, QuizDirection.MEANING, 15L),
+                question(5L, QuizDirection.MEANING, 17L), question(7L, QuizDirection.MEANING, 18L));
+        when(questionRepository.findRandomByLevelAndSkill("N5", QuizDirection.KANJI_TO_READING, 8)).thenReturn(reading);
+        when(questionRepository.findRandomByLevelAndSkill("N5", QuizDirection.READING_TO_KANJI, 8)).thenReturn(writing);
+        when(questionRepository.findRandomByLevelAndSkill("N5", QuizDirection.MEANING, 8)).thenReturn(meaning);
+        when(questionRepository.findRandomUnclassifiedByLevel("N5", 8)).thenReturn(List.of());
+        when(questionRepository.findAllWithWordsByIdIn(List.of(1L, 2L, 6L, 3L, 4L, 5L, 7L)))
+                .thenReturn(Stream.of(reading, writing, meaning).flatMap(List::stream).toList());
         when(attemptRepository.save(any(UserExamAttempt.class))).thenAnswer(invocation -> {
             UserExamAttempt attempt = invocation.getArgument(0);
             attempt.setId(ATTEMPT_ID);
@@ -119,12 +125,14 @@ class ExamServiceTest {
         });
         StartExamRequest request = new StartExamRequest();
         request.setJlptLevel("n5");
-        request.setQuestionCount(2);
+        request.setQuestionCount(4);
 
         StartExamResponse response = examService.start(USER_ID, request);
 
-        assertThat(response.getQuestions()).extracting(ExamQuestionPublicResponse::getId).containsExactly(1L, 3L);
-        verify(examSessionStore).initSession(eq(ATTEMPT_ID), eq(List.of(1L, 3L)));
+        // Vòng 1: đọc 1, viết 3, nghĩa 5 (4 trùng 水); vòng 2: đọc 6.
+        assertThat(response.getQuestions()).extracting(ExamQuestionPublicResponse::getId)
+                .containsExactlyInAnyOrder(1L, 3L, 5L, 6L);
+        verify(examSessionStore).initSession(eq(ATTEMPT_ID), any());
     }
 
     private static UserExamAnswer answer(Long questionId, String selected, boolean correct) {

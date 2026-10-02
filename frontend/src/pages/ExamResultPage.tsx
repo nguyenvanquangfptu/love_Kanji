@@ -190,9 +190,11 @@ function SkillCard({ skills }: { skills: ExamReviewResponse['skills'] }) {
     <Card className="p-4 sm:p-5">
       <h2 className="text-lg font-black">Theo kỹ năng</h2>
       <p className="text-sm font-semibold text-muted-foreground">
-        {uneven
-          ? `Cần luyện thêm nhất: ${SKILL_LABELS[weakest.skill].toLowerCase()}.`
-          : 'Các kỹ năng đều nhau trong bài này.'}
+        {skills.length < 2
+          ? 'Bài này chỉ có câu hỏi một kỹ năng.'
+          : uneven
+            ? `Cần luyện thêm nhất: ${SKILL_LABELS[weakest.skill].toLowerCase()}.`
+            : 'Các kỹ năng đều nhau trong bài này.'}
       </p>
       <div className="mt-4 flex flex-col gap-4">
         {skills.map((s) => (
