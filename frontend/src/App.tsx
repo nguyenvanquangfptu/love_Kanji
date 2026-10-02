@@ -6,6 +6,7 @@ import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { FlashcardPage } from '@/pages/FlashcardPage'
 import { HardWordsPage } from '@/pages/HardWordsPage'
+import { GoalPage } from '@/pages/GoalPage'
 import { ExamSetupPage } from '@/pages/ExamSetupPage'
 import { ExamWorkspacePage } from '@/pages/ExamWorkspacePage'
 import { ExamResultPage } from '@/pages/ExamResultPage'
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="study/vocab" element={<StudyVocabListPage />} />
           <Route path="flashcards" element={<FlashcardPage />} />
           <Route path="flashcards/hard-words" element={<HardWordsPage />} />
+          <Route path="goals" element={<GoalPage />} />
           <Route path="exam" element={<ExamSetupPage />} />
           <Route path="exam/:attemptId/result" element={<ExamResultPage />} />
           <Route element={<AdminRoute />}>

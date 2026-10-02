@@ -42,6 +42,11 @@ public class StudyCalendar {
         return ZonedDateTime.now(clock.withZone(dayZone)).minusHours(dayStartHour).toLocalDate();
     }
 
+    /** Ngày học chứa một thời điểm (theo giờ JVM). */
+    public LocalDate dayOf(LocalDateTime time) {
+        return time.atZone(clock.getZone()).withZoneSameInstant(dayZone).minusHours(dayStartHour).toLocalDate();
+    }
+
     /** Thời điểm bắt đầu ngày học hiện tại, theo giờ JVM. */
     public LocalDateTime startOfToday() {
         return startOf(today());

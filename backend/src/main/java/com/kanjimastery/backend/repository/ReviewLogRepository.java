@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
 
@@ -50,6 +51,9 @@ public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
             WHERE gaps.gap_ms > 0 AND gaps.gap_ms <= 120000
             """, nativeQuery = true)
     ResponseTimeStats flashcardPace(@Param("userId") Long userId, @Param("limit") int limit);
+
+    @Query("SELECT MIN(r.reviewedAt) FROM ReviewLog r WHERE r.userId = :userId")
+    Optional<LocalDateTime> firstReviewAt(@Param("userId") Long userId);
 
     /** Số từ mới (lần đầu được tính vào lịch ôn) người học đã học từ {@code since}. */
     @Query(value = """

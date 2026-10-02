@@ -110,6 +110,9 @@ export interface DailyPlanResponse {
   dueReviews: number
   reviewsToday: number
   newPerDay: number
+  /** Số từ mới mỗi ngày người học muốn: tự đặt, cần để kịp ngày thi, hoặc mặc định. */
+  newPerDayWanted: number
+  newPerDaySource: 'DEFAULT' | 'CUSTOM' | 'EXAM'
   /** Số từ mới mỗi ngày đã bị giảm vì thời gian ôn không đủ cho lượng ôn sắp tới. */
   newPerDayLimitedByTime: boolean
   newLearnedToday: number
@@ -117,7 +120,33 @@ export interface DailyPlanResponse {
   newWaiting: number
   newToday: number
   estimatedMinutes: number
+  goalSet: boolean
+  targetLevel: JlptLevel | null
+  /** Ngày dạng ISO (2026-12-06). */
+  examDate: string | null
+  /** Từ trong các bài từ N5 tới cấp mục tiêu mà bạn chưa học lần nào; null nếu chưa chọn cấp độ. */
+  wordsToLearn: number | null
+  /** Số từ mới học được trung bình mỗi ngày trong 2 tuần gần đây. */
+  recentNewPerDay: number
+  /** Ngày học xong mục tiêu nếu giữ nhịp 2 tuần gần đây; null nếu chưa có nhịp. */
+  projectedFinish: string | null
+  /** Kịp học xong trước ngày thi 2 tuần không; null nếu chưa đủ dữ liệu. */
+  onTrack: boolean | null
+  /** Bài nên thêm vào Ôn tập khi sắp hết từ mới. */
+  nextLesson: { tagId: number; name: string; words: number } | null
 }
+
+/** Mục tiêu học. */
+export interface LearningProfileResponse {
+  configured: boolean
+  targetLevel: JlptLevel | null
+  examDate: string | null
+  dailyMinutes: number
+  /** null = để app tự tính. */
+  newWordsPerDay: number | null
+}
+
+export type LearningProfileRequest = Omit<LearningProfileResponse, 'configured'>
 
 /** 1 Quên, 2 Khó, 3 Nhớ, 4 Dễ. */
 export type ReviewRating = 1 | 2 | 3 | 4

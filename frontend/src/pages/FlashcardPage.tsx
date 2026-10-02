@@ -1,11 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Brain, BrainCircuit, CalendarCheck, ChevronRight, Clock, Dumbbell, PartyPopper, RotateCcw, Sprout } from 'lucide-react'
+import {
+  BookOpen,
+  Brain,
+  BrainCircuit,
+  CalendarCheck,
+  ChevronRight,
+  Clock,
+  Dumbbell,
+  PartyPopper,
+  RotateCcw,
+  Sprout,
+  Target,
+} from 'lucide-react'
 import { srsApi } from '@/api/srs'
 import type { DailyCardResponse, DailyPlanResponse, Page, ReviewRating, ReviewRequest } from '@/api/types'
 import { extractErrorMessage } from '@/api/client'
 import { cn, wordSizeClass } from '@/lib/utils'
+import { addDays, formatDay } from '@/lib/dates'
+import { lessonQuery } from '@/lib/lesson'
+import { lessonTitle } from '@/lib/levels'
 import { FlipCard } from '@/components/FlipCard'
 import { PageHeader } from '@/components/PageHeader'
 import { StatTile } from '@/components/StatTile'
@@ -279,7 +294,7 @@ export function FlashcardPage() {
   )
 }
 
-/** Phần còn lại của kế hoạch hôm nay, cùng lý do nếu có thẻ hay từ mới được để dành cho những ngày sau. */
+/** Phần còn lại của kế hoạch hôm nay, lý do nếu có thẻ hay từ mới được để dành, và tiến độ so với mục tiêu. */
 function TodayPlan({ plan }: { plan: DailyPlanResponse }) {
   const reviewsLater = plan.dueReviews - plan.reviewsToday
   const newLater = plan.newWaiting - plan.newToday
@@ -308,16 +323,68 @@ function TodayPlan({ plan }: { plan: DailyPlanResponse }) {
             {plan.newPerDayLimitedByTime ? ', đã giảm vì đang có nhiều thẻ cần ôn' : ''}).
           </li>
         )}
-        {noNewWords && (
+        {plan.nextLesson ? (
           <li>
-            Không còn từ mới nào chờ học -{' '}
-            <Link to="/study" className="font-bold text-secondary hover:underline">
-              thêm một bài học vào Ôn tập
+            Sắp hết từ mới để học -{' '}
+            <Link
+              to={`/study/vocab?${lessonQuery({ id: plan.nextLesson.tagId, name: plan.nextLesson.name })}`}
+              className="font-bold text-secondary hover:underline"
+            >
+              thêm {lessonTitle(plan.nextLesson.name)} ({plan.nextLesson.words} từ) vào Ôn tập
             </Link>
             .
           </li>
+        ) : (
+          noNewWords && (
+            <li>
+              Không còn từ mới nào chờ học -{' '}
+              <Link to="/study" className="font-bold text-secondary hover:underline">
+                thêm một bài học vào Ôn tập
+              </Link>
+              .
+            </li>
+          )
         )}
       </ul>
+      <GoalProgress plan={plan} />
+    </div>
+  )
+}
+
+/** Tiến độ so với mục tiêu (cấp độ + ngày thi), hoặc lời mời đặt mục tiêu. */
+function GoalProgress({ plan }: { plan: DailyPlanResponse }) {
+  if (!plan.goalSet || plan.targetLevel === null || plan.wordsToLearn === null) {
+    return (
+      <Link to="/goals" className="mt-2 flex items-center gap-1 pl-8 text-sm font-bold text-secondary hover:underline">
+        <Target className="h-4 w-4" />
+        {plan.goalSet ? 'Chọn cấp độ nhắm tới' : 'Đặt mục tiêu học'} để app tính số từ mới mỗi ngày theo ngày thi
+      </Link>
+    )
+  }
+  const revisionStart = plan.examDate ? addDays(plan.examDate, -14) : null
+  return (
+    <div className="mt-2 border-t-2 border-border pt-2 pl-8 text-sm font-semibold">
+      <p>
+        <span className="font-extrabold">Mục tiêu {plan.targetLevel}</span>
+        {plan.examDate && <> · thi {formatDay(plan.examDate)}</>}: còn {plan.wordsToLearn} từ chưa học.
+        {plan.newPerDaySource === 'EXAM' && (
+          <> Cần {plan.newPerDayWanted} từ mới mỗi ngày để học xong trước kỳ thi 2 tuần.</>
+        )}{' '}
+        <Link to="/goals" className="font-bold text-secondary hover:underline">
+          Sửa mục tiêu
+        </Link>
+      </p>
+      {plan.newPerDaySource === 'EXAM' && plan.newPerDayLimitedByTime && (
+        <p className="text-orange-dark">
+          {plan.dailyMinutes} phút mỗi ngày chỉ đủ cho {plan.newPerDay} từ mới vì còn thẻ cần ôn - tăng thời gian học để kịp.
+        </p>
+      )}
+      {plan.projectedFinish && plan.onTrack !== null && revisionStart && (
+        <p className={plan.onTrack ? 'text-primary-dark' : 'text-destructive-dark'}>
+          Giữ nhịp 2 tuần qua (khoảng {Math.round(plan.recentNewPerDay)} từ/ngày), bạn học xong vào{' '}
+          {formatDay(plan.projectedFinish)} - {plan.onTrack ? 'kịp' : 'trễ'} so với mốc {formatDay(revisionStart)}.
+        </p>
+      )}
     </div>
   )
 }

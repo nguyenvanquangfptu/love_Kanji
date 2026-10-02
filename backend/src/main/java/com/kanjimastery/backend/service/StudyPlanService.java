@@ -2,22 +2,34 @@ package com.kanjimastery.backend.service;
 
 import com.kanjimastery.backend.config.SrsProperties;
 import com.kanjimastery.backend.dto.DailyPlanResponse;
+import com.kanjimastery.backend.model.LearningProfile;
+import com.kanjimastery.backend.repository.LearningProfileRepository;
 import com.kanjimastery.backend.repository.ReviewLogRepository;
 import com.kanjimastery.backend.repository.ReviewLogRepository.ResponseTimeStats;
+import com.kanjimastery.backend.repository.TagRepository;
+import com.kanjimastery.backend.repository.TagRepository.ScopeProgress;
 import com.kanjimastery.backend.repository.UserKanjiSrsRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 /**
  * Kế hoạch ôn mỗi ngày vừa với thời gian người học có: ôn bao nhiêu thẻ, học bao nhiêu từ mới. Từ mới chỉ được
- * thêm khi còn chỗ sau phần ôn, vì mỗi từ mới kéo theo các lượt ôn những ngày sau.
+ * thêm khi còn chỗ sau phần ôn, vì mỗi từ mới kéo theo các lượt ôn những ngày sau. Có mục tiêu (cấp độ + ngày thi)
+ * thì số từ mới mỗi ngày tính sao cho học xong trước ngày thi, kèm dự báo theo nhịp học thật.
  */
 @Service
 @RequiredArgsConstructor
 public class StudyPlanService {
+
+    public static final String SOURCE_DEFAULT = "DEFAULT";
+    public static final String SOURCE_CUSTOM = "CUSTOM";
+    public static final String SOURCE_EXAM = "EXAM";
 
     static final int DEFAULT_SECONDS_PER_CARD = 8;
     static final int PACE_SAMPLES = 300;
@@ -26,16 +38,29 @@ public class StudyPlanService {
     /** Nạp n từ mới mỗi ngày thì khi vào nhịp, mỗi ngày có thêm khoảng 4n lượt ôn (ngày học, rồi sau 1, 6, 15 ngày). */
     static final int REVIEWS_PER_NEW_WORD = 4;
     static final int FORECAST_DAYS = 7;
+    /** Học xong từ mới trước ngày thi chừng này ngày để còn ôn tổng. */
+    static final int REVISION_DAYS_BEFORE_EXAM = 14;
+    /** Nhịp học từ mới tính trên chừng này ngày gần nhất. */
+    static final int PACE_WINDOW_DAYS = 14;
+    /** Từ dễ đến khó: mục tiêu N4 gồm cả từ của các bài N5. */
+    static final List<String> JLPT_LEVELS = List.of("N5", "N4", "N3", "N2", "N1");
 
     private final UserKanjiSrsRepository srsRepository;
     private final ReviewLogRepository reviewLogRepository;
+    private final LearningProfileRepository profileRepository;
+    private final TagRepository tagRepository;
     private final SrsProperties srsProperties;
     private final StudyCalendar calendar;
 
     @Transactional(readOnly = true)
     public DailyPlanResponse today(Long userId) {
         LocalDateTime now = calendar.now();
-        int dailyMinutes = srsProperties.getDefaultDailyMinutes();
+        LocalDate today = calendar.today();
+        LearningProfile profile = profileRepository.findById(userId).orElse(null);
+        String targetLevel = profile == null ? null : profile.getTargetLevel();
+        LocalDate examDate = profile == null ? null : profile.getExamDate();
+
+        int dailyMinutes = profile != null ? profile.getDailyMinutes() : srsProperties.getDefaultDailyMinutes();
         int secondsPerCard = secondsPerCard(userId);
         int capacity = Math.max(1, dailyMinutes * 60 / secondsPerCard);
 
@@ -44,13 +69,44 @@ public class StudyPlanService {
                 userId, now, now.plusDays(FORECAST_DAYS)) / (double) FORECAST_DAYS;
         int reviewsToday = (int) Math.min(dueReviews, capacity);
 
-        int wanted = srsProperties.getDefaultNewWordsPerDay();
+        Long wordsToLearn = null;
+        if (targetLevel != null) {
+            ScopeProgress progress = tagRepository.scopeProgress(userId, levelsUpTo(targetLevel));
+            wordsToLearn = progress.getTotal() - progress.getStarted();
+        }
+
+        int wanted;
+        String source;
+        if (profile != null && profile.getNewWordsPerDay() != null) {
+            wanted = profile.getNewWordsPerDay();
+            source = SOURCE_CUSTOM;
+        } else if (wordsToLearn != null && examDate != null) {
+            long daysToLearn = Math.max(1, ChronoUnit.DAYS.between(today, examDate) - REVISION_DAYS_BEFORE_EXAM);
+            wanted = (int) Math.ceil(wordsToLearn / (double) daysToLearn);
+            source = SOURCE_EXAM;
+        } else {
+            wanted = srsProperties.getDefaultNewWordsPerDay();
+            source = SOURCE_DEFAULT;
+        }
         // Chỗ còn lại sau phần ôn nặng hơn trong hai mức: hôm nay, hoặc trung bình tuần tới.
         int roomForNewWords = (int) (Math.max(0, capacity - Math.max(dueReviews, upcomingPerDay)) / REVIEWS_PER_NEW_WORD);
-        int newPerDay = Math.min(wanted, roomForNewWords);
+        // Số người học tự đặt được giữ nguyên: họ đã chọn đánh đổi thời gian.
+        int newPerDay = SOURCE_CUSTOM.equals(source) ? wanted : Math.min(wanted, roomForNewWords);
         long newLearnedToday = reviewLogRepository.countNewWordsLearnedSince(userId, calendar.startOfToday());
         long newWaiting = srsRepository.countByUserIdAndLastReviewedAtIsNull(userId);
         int newToday = (int) Math.min(Math.max(0, newPerDay - newLearnedToday), newWaiting);
+
+        double recentNewPerDay = wordsToLearn == null ? 0 : recentNewWordsPerDay(userId, today);
+        LocalDate projectedFinish = projectedFinish(wordsToLearn, recentNewPerDay, today);
+        Boolean onTrack = examDate == null || wordsToLearn == null || projectedFinish == null
+                ? null
+                : !projectedFinish.isAfter(examDate.minusDays(REVISION_DAYS_BEFORE_EXAM));
+
+        DailyPlanResponse.NextLesson nextLesson = newWaiting < newPerDay
+                ? tagRepository.nextLessonToAdd(userId, levelsUpTo(targetLevel))
+                        .map(lesson -> new DailyPlanResponse.NextLesson(lesson.getTagId(), lesson.getName(), lesson.getWords()))
+                        .orElse(null)
+                : null;
 
         return DailyPlanResponse.builder()
                 .dailyMinutes(dailyMinutes)
@@ -59,11 +115,21 @@ public class StudyPlanService {
                 .dueReviews(dueReviews)
                 .reviewsToday(reviewsToday)
                 .newPerDay(newPerDay)
+                .newPerDayWanted(wanted)
+                .newPerDaySource(source)
                 .newPerDayLimitedByTime(newPerDay < wanted)
                 .newLearnedToday(newLearnedToday)
                 .newWaiting(newWaiting)
                 .newToday(newToday)
                 .estimatedMinutes((int) Math.ceil((reviewsToday + newToday) * secondsPerCard / 60.0))
+                .goalSet(profile != null)
+                .targetLevel(targetLevel)
+                .examDate(examDate)
+                .wordsToLearn(wordsToLearn)
+                .recentNewPerDay(recentNewPerDay)
+                .projectedFinish(projectedFinish)
+                .onTrack(onTrack)
+                .nextLesson(nextLesson)
                 .build();
     }
 
@@ -74,5 +140,36 @@ public class StudyPlanService {
             return DEFAULT_SECONDS_PER_CARD;
         }
         return (int) Math.min(60, Math.max(3, Math.round(pace.getMedianMs() / 1000.0)));
+    }
+
+    /** Các cấp độ từ N5 tới cấp mục tiêu; chưa có mục tiêu thì mọi cấp độ. */
+    static List<String> levelsUpTo(String targetLevel) {
+        // List.of không cho tìm null (ném NullPointerException).
+        int index = targetLevel == null ? -1 : JLPT_LEVELS.indexOf(targetLevel);
+        return index < 0 ? JLPT_LEVELS : JLPT_LEVELS.subList(0, index + 1);
+    }
+
+    /**
+     * Số từ mới trung bình mỗi ngày trong {@value #PACE_WINDOW_DAYS} ngày gần đây; người mới dùng app chưa đủ 2 tuần
+     * thì chia cho số ngày đã dùng, để vài ngày đầu không bị kéo nhịp xuống.
+     */
+    private double recentNewWordsPerDay(Long userId, LocalDate today) {
+        return reviewLogRepository.firstReviewAt(userId)
+                .map(first -> {
+                    long days = Math.min(PACE_WINDOW_DAYS, ChronoUnit.DAYS.between(calendar.dayOf(first), today) + 1);
+                    LocalDateTime since = calendar.startOf(today.minusDays(days - 1));
+                    return reviewLogRepository.countNewWordsLearnedSince(userId, since) / (double) days;
+                })
+                .orElse(0.0);
+    }
+
+    private static LocalDate projectedFinish(Long wordsToLearn, double newPerDay, LocalDate today) {
+        if (wordsToLearn == null) {
+            return null;
+        }
+        if (wordsToLearn == 0) {
+            return today;
+        }
+        return newPerDay > 0 ? today.plusDays((long) Math.ceil(wordsToLearn / newPerDay)) : null;
     }
 }
