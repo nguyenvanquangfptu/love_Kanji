@@ -6,6 +6,7 @@ import com.kanjimastery.backend.dto.ExamSessionResponse;
 import com.kanjimastery.backend.dto.SaveAnswerRequest;
 import com.kanjimastery.backend.dto.StartExamRequest;
 import com.kanjimastery.backend.dto.StartExamResponse;
+import com.kanjimastery.backend.service.ExamQuestionGenerator;
 import com.kanjimastery.backend.service.ExamService;
 import com.kanjimastery.backend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,6 +26,7 @@ public class ExamController {
 
     private final ExamService examService;
     private final UserService userService;
+    private final ExamQuestionGenerator examQuestionGenerator;
 
     @Operation(summary = "Bắt đầu bài thi",
             description = "Lấy N câu hỏi ngẫu nhiên theo cấp độ, tạo attempt IN_PROGRESS. remainingSeconds dùng để Frontend đếm ngược cục bộ, tránh lệch giờ do đồng hồ client sai (clock drift).")
@@ -56,6 +59,15 @@ public class ExamController {
     @GetMapping("/attempts/{attemptId}/review")
     public ResponseEntity<ExamReviewResponse> getReview(Authentication authentication, @PathVariable Long attemptId) {
         return ResponseEntity.ok(examService.getReview(currentUserId(authentication), attemptId));
+    }
+
+    @Operation(summary = "Sinh câu thi từ kho từ vựng (chỉ ADMIN)",
+            description = "Với các từ trong bài của cấp độ (tag N4-01...): câu đọc và viết chữ Hán kiểu đề JLPT khi từ có "
+                    + "câu ví dụ, và câu hỏi nghĩa. Chỉ sinh câu chưa có - cũng tự chạy mỗi sáng.")
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/questions/generate")
+    public ResponseEntity<ExamQuestionGenerator.Result> generateQuestions(@RequestParam String level) {
+        return ResponseEntity.ok(examQuestionGenerator.generate(level));
     }
 
     private Long currentUserId(Authentication authentication) {

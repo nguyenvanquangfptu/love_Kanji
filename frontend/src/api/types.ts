@@ -252,6 +252,9 @@ export interface ExamQuestionPublicResponse {
   optionB: string
   optionC: string
   optionD: string
+  /** Câu ví dụ kiểu đề JLPT, gạch chân `highlight`; null nếu không có. */
+  sentence: string | null
+  highlight: string | null
 }
 
 export interface StartExamResponse {
@@ -286,6 +289,8 @@ export interface ExamResultResponse {
 export interface QuestionReviewItem {
   questionId: number
   questionText: string
+  sentence: string | null
+  highlight: string | null
   optionA: string
   optionB: string
   optionC: string

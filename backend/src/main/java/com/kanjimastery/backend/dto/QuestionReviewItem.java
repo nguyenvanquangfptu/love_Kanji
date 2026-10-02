@@ -10,6 +10,9 @@ import lombok.Getter;
 public class QuestionReviewItem {
     private Long questionId;
     private String questionText;
+    /** Câu ví dụ kiểu đề JLPT, gạch chân {@code highlight}; null nếu không có. */
+    private String sentence;
+    private String highlight;
     private String optionA;
     private String optionB;
     private String optionC;

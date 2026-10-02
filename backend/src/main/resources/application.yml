@@ -83,6 +83,7 @@ app:
     default-question-count: 20
     session-buffer-seconds: 1800  # TTL Redis Hash = duration + buffer, tránh mất dữ liệu
     reconciliation-interval-ms: 90000
+    question-generation-cron: "0 15 5 * * *" # mỗi sáng sinh câu thi cho từ mới thêm vào bài học (giờ app.srs.day-zone)
   ai:
     # Để trống thì tính năng sinh câu ví dụ tự tắt (quiz vẫn chạy được, chỉ không có câu ngữ cảnh).
     # Nhiều key/model phân tách bằng dấu phẩy. Hạn mức miễn phí tính theo project + model,

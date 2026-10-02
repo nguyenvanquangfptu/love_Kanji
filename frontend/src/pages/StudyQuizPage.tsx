@@ -9,6 +9,7 @@ import { useLessonParams, useLevelQuizParams } from '@/lib/lesson'
 import { describeAddResult, useAddToReview } from '@/lib/review'
 import { cn } from '@/lib/utils'
 import { SessionHeader } from '@/components/SessionHeader'
+import { SentenceWithTarget } from '@/components/SentenceWithTarget'
 import { SpeakButton } from '@/components/SpeakButton'
 import { StatTile } from '@/components/StatTile'
 import { EmptyState } from '@/components/EmptyState'
@@ -39,20 +40,6 @@ const CHOICE_TEXT: Record<QuizDirection, string> = {
 }
 
 const PRAISES = ['Chính xác!', 'Tuyệt vời!', 'Giỏi lắm!', 'Xuất sắc!', 'Quá đỉnh!']
-
-function SentenceWithTarget({ sentence, target }: { sentence: string; target: string }) {
-  const at = sentence.indexOf(target)
-  if (at < 0) return <>{sentence}</>
-  return (
-    <>
-      {sentence.slice(0, at)}
-      <span className="rounded-md bg-accent-soft px-1 font-bold underline decoration-accent-dark decoration-[3px] underline-offset-[7px]">
-        {target}
-      </span>
-      {sentence.slice(at + target.length)}
-    </>
-  )
-}
 
 export function StudyQuizPage() {
   const navigate = useNavigate()

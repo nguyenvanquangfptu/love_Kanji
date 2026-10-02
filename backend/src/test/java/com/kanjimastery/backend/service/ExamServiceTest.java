@@ -1,7 +1,10 @@
 package com.kanjimastery.backend.service;
 
 import com.kanjimastery.backend.config.ExamProperties;
+import com.kanjimastery.backend.dto.ExamQuestionPublicResponse;
 import com.kanjimastery.backend.dto.ExamReviewResponse;
+import com.kanjimastery.backend.dto.StartExamRequest;
+import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.Kanji;
@@ -27,7 +30,10 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -95,6 +101,30 @@ class ExamServiceTest {
         // Câu 2 bỏ trống (hết giờ) không tính; 水 sai ở hai câu chỉ hiện một lần.
         assertThat(review.getWrongWords()).extracting(ExamReviewResponse.Word::getCharacter).containsExactly("水");
         assertThat(review.isAddedToReview()).isTrue();
+    }
+
+    @Test
+    void start_shouldAskAtMostOneQuestionPerWord() {
+        // Câu 1 và 2 cùng hỏi 水 (nghĩa ghi kèm cách đọc sẽ lộ đáp án câu đọc): chỉ lấy câu đầu.
+        when(questionRepository.findRandomByLevel("N5", 6)).thenReturn(List.of(
+                question(1L, QuizDirection.MEANING, 15L), question(2L, QuizDirection.KANJI_TO_READING, 15L),
+                question(3L, QuizDirection.MEANING, 16L), question(4L, QuizDirection.MEANING, 17L)));
+        when(questionRepository.findAllWithWordsByIdIn(List.of(1L, 2L, 3L, 4L))).thenReturn(List.of(
+                question(1L, QuizDirection.MEANING, 15L), question(2L, QuizDirection.KANJI_TO_READING, 15L),
+                question(3L, QuizDirection.MEANING, 16L), question(4L, QuizDirection.MEANING, 17L)));
+        when(attemptRepository.save(any(UserExamAttempt.class))).thenAnswer(invocation -> {
+            UserExamAttempt attempt = invocation.getArgument(0);
+            attempt.setId(ATTEMPT_ID);
+            return attempt;
+        });
+        StartExamRequest request = new StartExamRequest();
+        request.setJlptLevel("n5");
+        request.setQuestionCount(2);
+
+        StartExamResponse response = examService.start(USER_ID, request);
+
+        assertThat(response.getQuestions()).extracting(ExamQuestionPublicResponse::getId).containsExactly(1L, 3L);
+        verify(examSessionStore).initSession(eq(ATTEMPT_ID), eq(List.of(1L, 3L)));
     }
 
     private static UserExamAnswer answer(Long questionId, String selected, boolean correct) {

@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Leaderboard } from '@/components/Leaderboard'
 import { StatTile } from '@/components/StatTile'
 import { Meter } from '@/components/Meter'
+import { SentenceWithTarget } from '@/components/SentenceWithTarget'
 
 const SKILL_LABELS: Record<QuizDirection, string> = {
   KANJI_TO_READING: 'Đọc chữ Hán',
@@ -92,9 +93,16 @@ export function ExamResultPage() {
                   ) : (
                     <XCircle className="mt-0.5 h-6 w-6 shrink-0 text-destructive" strokeWidth={2.5} />
                   )}
-                  <p className="font-jp text-lg font-bold">
-                    <span className="font-sans text-muted-foreground">Câu {idx + 1}.</span> {q.questionText}
-                  </p>
+                  <div>
+                    <p className="font-jp text-lg font-bold">
+                      <span className="font-sans text-muted-foreground">Câu {idx + 1}.</span> {q.questionText}
+                    </p>
+                    {q.sentence && (
+                      <p className="mt-2 font-jp text-lg leading-loose">
+                        <SentenceWithTarget sentence={q.sentence} target={q.highlight} />
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {(['A', 'B', 'C', 'D'] as const).map((opt) => {

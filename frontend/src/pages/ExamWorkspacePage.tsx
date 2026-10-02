@@ -8,6 +8,7 @@ import { getCachedExamQuestions } from '@/lib/examCache'
 import type { ExamQuestionPublicResponse } from '@/api/types'
 import { Countdown } from '@/components/Countdown'
 import { QuestionPalette } from '@/components/QuestionPalette'
+import { SentenceWithTarget } from '@/components/SentenceWithTarget'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
@@ -249,6 +250,11 @@ export function ExamWorkspacePage() {
               Câu {currentIndex + 1} / {total}
             </p>
             <h1 className="mt-2 font-jp text-xl font-bold leading-relaxed sm:text-2xl">{current.questionText}</h1>
+            {current.sentence && (
+              <p className="mt-4 rounded-2xl border-2 border-border bg-card px-4 py-3 font-jp text-xl leading-loose sm:text-2xl">
+                <SentenceWithTarget sentence={current.sentence} target={current.highlight} />
+              </p>
+            )}
 
             <div className="mt-6 flex flex-col gap-3">
               {OPTIONS.map((opt) => {

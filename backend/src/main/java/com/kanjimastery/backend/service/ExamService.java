@@ -8,6 +8,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -53,7 +56,7 @@ public class ExamService {
         String level = request.getJlptLevel().toUpperCase();
         int count = request.getQuestionCount() != null ? request.getQuestionCount() : examProperties.getDefaultQuestionCount();
 
-        List<ExamQuestion> questions = questionRepository.findRandomByLevel(level, count);
+        List<ExamQuestion> questions = oneQuestionPerWord(questionRepository.findRandomByLevel(level, count * 3), count);
         if (questions.isEmpty()) {
             throw new BadRequestException("Không có câu hỏi nào cho cấp độ: " + level);
         }
@@ -79,6 +82,29 @@ public class ExamService {
                 .remainingSeconds(examProperties.getDurationSeconds())
                 .startedAt(attempt.getStartedAt())
                 .build();
+    }
+
+    /**
+     * Lấy dư câu ngẫu nhiên rồi giữ tối đa {@code count} câu không hỏi lại một từ đã có câu: câu hỏi nghĩa ghi kèm
+     * cách đọc sẽ lộ đáp án câu hỏi đọc của cùng từ đó.
+     */
+    private List<ExamQuestion> oneQuestionPerWord(List<ExamQuestion> candidates, int count) {
+        Map<Long, ExamQuestion> withWords = questionRepository
+                .findAllWithWordsByIdIn(candidates.stream().map(ExamQuestion::getId).toList()).stream()
+                .collect(Collectors.toMap(ExamQuestion::getId, Function.identity()));
+        Set<Long> askedWords = new HashSet<>();
+        List<ExamQuestion> picked = new ArrayList<>();
+        for (ExamQuestion candidate : candidates) {
+            if (picked.size() >= count) {
+                break;
+            }
+            ExamQuestion question = withWords.get(candidate.getId());
+            if (question != null && Collections.disjoint(question.getKanjiIds(), askedWords)) {
+                picked.add(question);
+                askedWords.addAll(question.getKanjiIds());
+            }
+        }
+        return picked;
     }
 
     public void saveAnswer(Long userId, Long attemptId, SaveAnswerRequest request) {
@@ -125,6 +151,8 @@ public class ExamService {
                     return QuestionReviewItem.builder()
                             .questionId(answer.getQuestionId())
                             .questionText(question.getQuestionText())
+                            .sentence(question.getSentence())
+                            .highlight(question.getHighlight())
                             .optionA(question.getOptionA())
                             .optionB(question.getOptionB())
                             .optionC(question.getOptionC())

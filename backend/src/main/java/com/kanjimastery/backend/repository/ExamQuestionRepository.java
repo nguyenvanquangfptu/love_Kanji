@@ -14,6 +14,21 @@ public interface ExamQuestionRepository extends JpaRepository<ExamQuestion, Long
             nativeQuery = true)
     List<ExamQuestion> findRandomByLevel(@Param("level") String level, @Param("count") int count);
 
+    /** Một câu thi đã sinh: kiểm tra kỹ năng nào của từ nào. */
+    interface GeneratedQuestionWord {
+        Long getKanjiId();
+
+        String getSkill();
+    }
+
+    @Query(value = """
+            SELECT link.kanji_id AS "kanjiId", question.skill AS "skill"
+            FROM exam_questions question
+            JOIN exam_question_kanji link ON link.question_id = question.id
+            WHERE question.source = 'GENERATED' AND question.jlpt_level = :level
+            """, nativeQuery = true)
+    List<GeneratedQuestionWord> generatedQuestionWords(@Param("level") String level);
+
     /** Các câu hỏi kèm luôn từ vựng mỗi câu kiểm tra, trong một truy vấn. */
     @Query("SELECT DISTINCT q FROM ExamQuestion q LEFT JOIN FETCH q.kanjiIds WHERE q.id IN :ids")
     List<ExamQuestion> findAllWithWordsByIdIn(@Param("ids") Collection<Long> ids);

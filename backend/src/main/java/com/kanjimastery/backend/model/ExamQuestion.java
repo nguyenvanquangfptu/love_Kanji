@@ -47,6 +47,14 @@ public class ExamQuestion {
     @Column(columnDefinition = "TEXT")
     private String explanation;
 
+    /** Câu ví dụ kiểu đề JLPT; null nếu câu hỏi không có câu ví dụ. */
+    @Column(columnDefinition = "TEXT")
+    private String sentence;
+
+    /** Phần được gạch chân trong {@link #sentence}. */
+    @Column(length = 100)
+    private String highlight;
+
     /** Kỹ năng câu hỏi kiểm tra, như hướng hỏi trắc nghiệm ({@link QuizDirection}); null nếu chưa phân loại. */
     @Column(length = 20)
     private String skill;

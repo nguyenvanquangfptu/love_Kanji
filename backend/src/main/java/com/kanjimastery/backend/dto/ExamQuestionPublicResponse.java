@@ -16,6 +16,9 @@ public class ExamQuestionPublicResponse {
     private String optionB;
     private String optionC;
     private String optionD;
+    /** Câu ví dụ kiểu đề JLPT, gạch chân {@code highlight}; null nếu không có. */
+    private String sentence;
+    private String highlight;
 
     public static ExamQuestionPublicResponse from(ExamQuestion q) {
         return ExamQuestionPublicResponse.builder()
@@ -25,6 +28,8 @@ public class ExamQuestionPublicResponse {
                 .optionB(q.getOptionB())
                 .optionC(q.getOptionC())
                 .optionD(q.getOptionD())
+                .sentence(q.getSentence())
+                .highlight(q.getHighlight())
                 .build();
     }
 }
