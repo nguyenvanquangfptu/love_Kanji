@@ -172,7 +172,7 @@ public class QuestionBuilder {
      * Câu ví dụ chỉ dùng được khi từ xuất hiện đúng một lần, và từ một chữ Hán không dính chữ Hán khác ở hai bên:
      * 日 trong 今日, 年 trong 今年, 十 trong 十個 là một phần của từ khác, đọc khác hẳn.
      */
-    private static boolean standsAlone(String sentence, String word) {
+    static boolean standsAlone(String sentence, String word) {
         int at = sentence.indexOf(word);
         if (at < 0 || sentence.indexOf(word, at + word.length()) >= 0) {
             return false;

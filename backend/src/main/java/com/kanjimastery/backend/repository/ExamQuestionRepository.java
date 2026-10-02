@@ -10,31 +10,36 @@ import com.kanjimastery.backend.model.ExamQuestion;
 
 public interface ExamQuestionRepository extends JpaRepository<ExamQuestion, Long> {
 
-    @Query(value = "SELECT * FROM exam_questions WHERE jlpt_level = :level ORDER BY RANDOM() LIMIT :count",
-            nativeQuery = true)
+    @Query(value = """
+            SELECT * FROM exam_questions WHERE jlpt_level = :level AND status = 'APPROVED' ORDER BY RANDOM() LIMIT :count
+            """, nativeQuery = true)
     List<ExamQuestion> findRandomByLevel(@Param("level") String level, @Param("count") int count);
 
     @Query(value = """
-            SELECT * FROM exam_questions WHERE jlpt_level = :level AND skill = :skill ORDER BY RANDOM() LIMIT :count
+            SELECT * FROM exam_questions
+            WHERE jlpt_level = :level AND skill = :skill AND status = 'APPROVED'
+            ORDER BY RANDOM() LIMIT :count
             """, nativeQuery = true)
     List<ExamQuestion> findRandomByLevelAndSkill(@Param("level") String level, @Param("skill") String skill,
                                                  @Param("count") int count);
 
     /** Câu chưa phân loại kỹ năng. */
     @Query(value = """
-            SELECT * FROM exam_questions WHERE jlpt_level = :level AND skill IS NULL ORDER BY RANDOM() LIMIT :count
+            SELECT * FROM exam_questions
+            WHERE jlpt_level = :level AND skill IS NULL AND status = 'APPROVED'
+            ORDER BY RANDOM() LIMIT :count
             """, nativeQuery = true)
     List<ExamQuestion> findRandomUnclassifiedByLevel(@Param("level") String level, @Param("count") int count);
 
-    /** Một câu thi đã sinh: kiểm tra kỹ năng nào của từ nào. */
+    /** Một câu thi đã sinh: kiểm tra từ nào, theo dạng câu JLPT (hoặc kỹ năng, với câu hỏi nghĩa của thi nhanh). */
     interface GeneratedQuestionWord {
         Long getKanjiId();
 
-        String getSkill();
+        String getKind();
     }
 
     @Query(value = """
-            SELECT link.kanji_id AS "kanjiId", question.skill AS "skill"
+            SELECT link.kanji_id AS "kanjiId", COALESCE(question.question_type, question.skill) AS "kind"
             FROM exam_questions question
             JOIN exam_question_kanji link ON link.question_id = question.id
             WHERE question.source = 'GENERATED' AND question.jlpt_level = :level

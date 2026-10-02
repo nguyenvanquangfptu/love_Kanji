@@ -59,6 +59,15 @@ public class ExamQuestion {
     @Column(length = 20)
     private String skill;
 
+    /** Dạng câu trong đề JLPT ({@link JlptQuestionType}); null = chỉ dùng cho thi nhanh. */
+    @Column(name = "question_type", length = 20)
+    private String questionType;
+
+    /** {@link ExamQuestionStatus} - chỉ câu đã duyệt mới được lấy vào đề. */
+    @Column(nullable = false, length = 10)
+    @Builder.Default
+    private String status = ExamQuestionStatus.APPROVED;
+
     /** {@link ExamQuestionSource} */
     @Column(nullable = false, length = 10)
     @Builder.Default

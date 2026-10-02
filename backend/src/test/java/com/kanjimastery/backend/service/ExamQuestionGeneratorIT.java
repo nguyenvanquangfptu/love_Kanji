@@ -3,6 +3,7 @@ package com.kanjimastery.backend.service;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionSource;
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.Tag;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
@@ -67,8 +68,9 @@ class ExamQuestionGeneratorIT extends AbstractIntegrationTest {
     }
 
     @Test
-    void generate_shouldSaveThreeQuestionsPerWord_andNothingMoreTheSecondTime() {
-        assertThat(generator.generate(LEVEL).created()).isEqualTo(15);
+    void generate_shouldSaveFourQuestionsPerWord_andNothingMoreTheSecondTime() {
+        // Mỗi từ: đọc, viết, điền từ (4 danh từ còn lại làm đáp án nhiễu), nghĩa.
+        assertThat(generator.generate(LEVEL).created()).isEqualTo(20);
         assertThat(generator.generate(LEVEL).created()).isZero();
 
         List<Long> ids = questionRepository.findAll().stream()
@@ -76,12 +78,15 @@ class ExamQuestionGeneratorIT extends AbstractIntegrationTest {
                 .map(ExamQuestion::getId)
                 .toList();
         List<ExamQuestion> saved = questionRepository.findAllWithWordsByIdIn(ids);
-        assertThat(saved).hasSize(15).allSatisfy(question -> {
+        assertThat(saved).hasSize(20).allSatisfy(question -> {
             assertThat(question.getSource()).isEqualTo(ExamQuestionSource.GENERATED);
             assertThat(question.getKanjiIds()).hasSize(1).isSubsetOf(wordIds);
             assertThat(question.getSentence()).isNotBlank();
-            assertThat(question.getSentence()).contains(question.getHighlight());
+            assertThat(question.getSentence()).contains(JlptQuestionType.CONTEXT.equals(question.getQuestionType())
+                    ? ExamQuestionGenerator.BLANK
+                    : question.getHighlight());
         });
-        assertThat(questionRepository.generatedQuestionWords(LEVEL)).hasSize(15);
+        assertThat(saved).filteredOn(question -> JlptQuestionType.CONTEXT.equals(question.getQuestionType())).hasSize(5);
+        assertThat(questionRepository.generatedQuestionWords(LEVEL)).hasSize(20);
     }
 }

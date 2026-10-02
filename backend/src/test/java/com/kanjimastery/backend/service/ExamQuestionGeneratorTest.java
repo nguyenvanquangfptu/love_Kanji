@@ -17,9 +17,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-import static com.kanjimastery.backend.model.QuizDirection.KANJI_TO_READING;
+import static com.kanjimastery.backend.model.JlptQuestionType.CONTEXT;
+import static com.kanjimastery.backend.model.JlptQuestionType.KANJI_READING;
+import static com.kanjimastery.backend.model.JlptQuestionType.ORTHOGRAPHY;
 import static com.kanjimastery.backend.model.QuizDirection.MEANING;
-import static com.kanjimastery.backend.model.QuizDirection.READING_TO_KANJI;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -55,7 +56,7 @@ class ExamQuestionGeneratorTest {
     }
 
     @Test
-    void generate_shouldAskReadingAndWritingInJlptStyle_andMeaningForEveryWord_skippingWhatExists() {
+    void generate_shouldAskEveryJlptTypeTheWordAllows_andMeaningForEveryWord_skippingWhatExists() {
         when(kanjiRepository.findAllByTagNamePrefix("N4-%"))
                 .thenReturn(List.of(newspaper, school, teacher, see, yes, hospital));
         when(questionRepository.generatedQuestionWords("N4")).thenReturn(List.of(generated(2L, MEANING)));
@@ -63,16 +64,17 @@ class ExamQuestionGeneratorTest {
         ExamQuestionGenerator.Result result = generator.generate("n4");
 
         List<ExamQuestion> saved = savedQuestions();
-        // 新聞, 先生: đọc + viết + nghĩa; 学校 đã có câu nghĩa; 見る: cách đọc "み(る)" không thay vào câu được nên
-        // không hỏi viết; はい không có chữ Hán, 病院 không có câu ví dụ: chỉ hỏi nghĩa.
-        assertThat(saved).extracting(question -> question.getKanjiIds().iterator().next(), ExamQuestion::getSkill)
+        // 新聞, 先生: đọc + viết + điền từ + nghĩa; 学校 đã có câu nghĩa; 見る: cách đọc "み(る)" không thay vào câu
+        // được nên không hỏi viết, và là động từ duy nhất nên không đủ đáp án nhiễu cho câu điền từ; はい không có
+        // chữ Hán, 病院 không có câu ví dụ: chỉ hỏi nghĩa.
+        assertThat(saved).extracting(question -> question.getKanjiIds().iterator().next(), ExamQuestionGeneratorTest::kind)
                 .containsExactlyInAnyOrder(
-                        tuple(1L, KANJI_TO_READING), tuple(1L, READING_TO_KANJI), tuple(1L, MEANING),
-                        tuple(2L, KANJI_TO_READING), tuple(2L, READING_TO_KANJI),
-                        tuple(3L, KANJI_TO_READING), tuple(3L, READING_TO_KANJI), tuple(3L, MEANING),
-                        tuple(4L, KANJI_TO_READING), tuple(4L, MEANING),
+                        tuple(1L, KANJI_READING), tuple(1L, ORTHOGRAPHY), tuple(1L, CONTEXT), tuple(1L, MEANING),
+                        tuple(2L, KANJI_READING), tuple(2L, ORTHOGRAPHY), tuple(2L, CONTEXT),
+                        tuple(3L, KANJI_READING), tuple(3L, ORTHOGRAPHY), tuple(3L, CONTEXT), tuple(3L, MEANING),
+                        tuple(4L, KANJI_READING), tuple(4L, MEANING),
                         tuple(5L, MEANING), tuple(6L, MEANING));
-        assertThat(result).isEqualTo(new ExamQuestionGenerator.Result("N4", 6, 12));
+        assertThat(result).isEqualTo(new ExamQuestionGenerator.Result("N4", 6, 15));
         assertThat(saved).allSatisfy(question -> {
             assertThat(question.getJlptLevel()).isEqualTo("N4");
             assertThat(question.getSource()).isEqualTo(ExamQuestionSource.GENERATED);
@@ -80,12 +82,12 @@ class ExamQuestionGeneratorTest {
                     question.getOptionD())).doesNotHaveDuplicates();
         });
 
-        ExamQuestion reading = question(saved, 1L, KANJI_TO_READING);
+        ExamQuestion reading = question(saved, 1L, KANJI_READING);
         assertThat(reading.getSentence()).isEqualTo("毎朝新聞を読みます。");
         assertThat(reading.getHighlight()).isEqualTo("新聞");
         assertThat(correctAnswer(reading)).isEqualTo("しんぶん");
 
-        ExamQuestion writing = question(saved, 1L, READING_TO_KANJI);
+        ExamQuestion writing = question(saved, 1L, ORTHOGRAPHY);
         assertThat(writing.getSentence()).isEqualTo("毎朝しんぶんを読みます。");
         assertThat(writing.getHighlight()).isEqualTo("しんぶん");
         assertThat(correctAnswer(writing)).isEqualTo("新聞");
@@ -98,6 +100,15 @@ class ExamQuestionGeneratorTest {
         assertThat(question(saved, 6L, MEANING).getSentence()).isNull();
         assertThat(correctAnswer(meaning)).isEqualTo("Báo");
         assertThat(meaning.getExplanation()).isEqualTo("新聞 (しんぶん): Báo");
+
+        // 文脈規定: từ được khoét khỏi câu, 3 đáp án nhiễu là các danh từ khác cùng cấp độ.
+        ExamQuestion context = question(saved, 1L, CONTEXT);
+        assertThat(context.getSentence()).isEqualTo("毎朝（　　）を読みます。");
+        assertThat(context.getHighlight()).isNull();
+        assertThat(correctAnswer(context)).isEqualTo("新聞");
+        assertThat(List.of(context.getOptionA(), context.getOptionB(), context.getOptionC(), context.getOptionD()))
+                .containsExactlyInAnyOrder("新聞", "学校", "先生", "病院");
+        assertThat(context.getSkill()).isEqualTo(MEANING);
     }
 
     @Test
@@ -118,11 +129,16 @@ class ExamQuestionGeneratorTest {
         return all;
     }
 
-    private static ExamQuestion question(List<ExamQuestion> questions, Long kanjiId, String skill) {
+    private static ExamQuestion question(List<ExamQuestion> questions, Long kanjiId, String kind) {
         return questions.stream()
-                .filter(question -> question.getKanjiIds().equals(Set.of(kanjiId)) && skill.equals(question.getSkill()))
+                .filter(question -> question.getKanjiIds().equals(Set.of(kanjiId)) && kind.equals(kind(question)))
                 .findFirst()
                 .orElseThrow();
+    }
+
+    /** Dạng câu JLPT, hoặc kỹ năng với câu hỏi nghĩa (chỉ dùng cho thi nhanh). */
+    private static String kind(ExamQuestion question) {
+        return question.getQuestionType() != null ? question.getQuestionType() : question.getSkill();
     }
 
     private static String correctAnswer(ExamQuestion question) {
@@ -142,7 +158,7 @@ class ExamQuestionGeneratorTest {
             }
 
             @Override
-            public String getSkill() {
+            public String getKind() {
                 return skill;
             }
         };
