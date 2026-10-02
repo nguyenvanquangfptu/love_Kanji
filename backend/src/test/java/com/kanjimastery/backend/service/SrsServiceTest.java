@@ -163,13 +163,13 @@ class SrsServiceTest {
     }
 
     @Test
-    void recordQuizAnswer_shouldAddWordDueNow_whenWrongAndNotInReview() {
+    void recordQuizAnswer_shouldAddTheWordAsSeenAndDueNow_whenWrongAndNotInReview() {
         when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.empty());
 
         Optional<LocalDateTime> next = srsService.recordQuizAnswer(USER_ID, KANJI_ID, quizAnswer(false, ReviewRating.AGAIN));
 
         assertThat(next).isPresent();
-        verify(srsRepository).insertCardsIfAbsent(USER_ID, Set.of(KANJI_ID), next.get());
+        verify(srsRepository).insertSeenCardIfAbsent(USER_ID, KANJI_ID, next.get());
         verify(srsRepository, never()).save(any());
         ReviewLog log = savedLog();
         assertThat(log.getScheduled()).isFalse();
@@ -184,7 +184,7 @@ class SrsServiceTest {
         Optional<LocalDateTime> next = srsService.recordQuizAnswer(USER_ID, KANJI_ID, quizAnswer(true, ReviewRating.EASY));
 
         assertThat(next).isEmpty();
-        verify(srsRepository, never()).insertCardsIfAbsent(anyLong(), any(), any());
+        verify(srsRepository, never()).insertSeenCardIfAbsent(anyLong(), anyLong(), any());
         verify(srsRepository, never()).save(any());
         assertThat(savedLog().getScheduled()).isFalse();
     }

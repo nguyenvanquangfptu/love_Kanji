@@ -173,7 +173,8 @@ public class SrsService {
     /**
      * Ghi một câu trắc nghiệm và cập nhật lịch ôn:
      * <ul>
-     *   <li>Sai, từ chưa có trong lịch ôn: thêm vào, đến hạn ngay để học trong phiên ôn hôm nay.</li>
+     *   <li>Sai, từ chưa có trong lịch ôn: thêm vào như một từ đã gặp và vừa quên (không phải từ mới, nên không bị
+     *       giới hạn số từ mới mỗi ngày giữ lại), đến hạn ngay để ôn trong phiên hôm nay.</li>
      *   <li>Sai, từ đã có: tính là một lần "Quên" - học lại từ đầu như khi lật thẻ.</li>
      *   <li>Đúng, thẻ đã đến hạn: tính là một lần ôn với {@link Answer#rating()}.</li>
      *   <li>Đúng, thẻ chưa đến hạn (hoặc chưa có trong lịch ôn): chỉ ghi lại. SM-2 không tính tới việc ôn sớm,
@@ -191,7 +192,7 @@ public class SrsService {
             if (answer.correct()) {
                 return Optional.empty();
             }
-            srsRepository.insertCardsIfAbsent(userId, Set.of(kanjiId), now);
+            srsRepository.insertSeenCardIfAbsent(userId, kanjiId, now);
             return Optional.of(now);
         }
         if (!answer.correct() || !card.getNextReviewAt().isAfter(now)) {
