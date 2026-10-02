@@ -1,5 +1,7 @@
 package com.kanjimastery.backend.dto;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -7,6 +9,7 @@ import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 @Getter
@@ -29,4 +32,13 @@ public class LearningProfileRequest {
     @Min(value = 0, message = "Số từ mới mỗi ngày không được âm")
     @Max(value = 100, message = "Mỗi ngày tối đa 100 từ mới")
     private Integer newWordsPerDay;
+
+    /** SM2 hoặc FSRS; null = giữ SM2. */
+    @Pattern(regexp = "SM2|FSRS", message = "scheduler phải là SM2 hoặc FSRS")
+    private String scheduler;
+
+    /** Tỉ lệ nhớ mong muốn khi dùng FSRS (0,70 - 0,97); null = 0,90. */
+    @DecimalMin(value = "0.70", message = "Tỉ lệ nhớ mong muốn tối thiểu 70%")
+    @DecimalMax(value = "0.97", message = "Tỉ lệ nhớ mong muốn tối đa 97%")
+    private BigDecimal desiredRetention;
 }

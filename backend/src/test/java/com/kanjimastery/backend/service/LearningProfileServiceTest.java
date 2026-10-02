@@ -5,6 +5,7 @@ import com.kanjimastery.backend.dto.LearningProfileRequest;
 import com.kanjimastery.backend.dto.LearningProfileResponse;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.model.LearningProfile;
+import com.kanjimastery.backend.model.SchedulerType;
 import com.kanjimastery.backend.repository.LearningProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -52,6 +54,37 @@ class LearningProfileServiceTest {
         assertThat(profile.isConfigured()).isFalse();
         assertThat(profile.getDailyMinutes()).isEqualTo(20);
         assertThat(profile.getTargetLevel()).isNull();
+        assertThat(profile.getScheduler()).isEqualTo(SchedulerType.SM2);
+        assertThat(profile.getDesiredRetention()).isEqualTo(0.9);
+    }
+
+    @Test
+    void scheduling_shouldKeepSm2_untilTheLearnerChoosesFsrs() {
+        when(profileRepository.findById(USER_ID)).thenReturn(Optional.empty());
+        assertThat(service.scheduling(USER_ID)).isEqualTo(SchedulingSettings.DEFAULT);
+
+        when(profileRepository.findById(USER_ID)).thenReturn(Optional.of(LearningProfile.builder().userId(USER_ID)
+                .dailyMinutes(20).scheduler(SchedulerType.FSRS).desiredRetention(new BigDecimal("0.85")).build()));
+        SchedulingSettings settings = service.scheduling(USER_ID);
+        assertThat(settings.usesFsrs()).isTrue();
+        assertThat(settings.desiredRetention()).isEqualTo(0.85);
+    }
+
+    @Test
+    void update_shouldSaveTheChosenScheduler_andFallBackToSm2At90Percent() {
+        when(profileRepository.findById(USER_ID)).thenReturn(Optional.empty());
+        when(profileRepository.save(any(LearningProfile.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        LearningProfileRequest fsrs = request("N4", null, 20, null);
+        fsrs.setScheduler(SchedulerType.FSRS);
+        fsrs.setDesiredRetention(new BigDecimal("0.85"));
+        LearningProfileResponse chosen = service.update(USER_ID, fsrs);
+        assertThat(chosen.getScheduler()).isEqualTo(SchedulerType.FSRS);
+        assertThat(chosen.getDesiredRetention()).isEqualTo(0.85);
+
+        LearningProfileResponse unset = service.update(USER_ID, request("N4", null, 20, null));
+        assertThat(unset.getScheduler()).isEqualTo(SchedulerType.SM2);
+        assertThat(unset.getDesiredRetention()).isEqualTo(0.9);
     }
 
     @Test

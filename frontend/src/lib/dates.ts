@@ -10,6 +10,13 @@ export function toIsoDay(date: Date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
+/** Khoảng ôn: 5 ngày, ~3 tháng, ~1,5 năm. */
+export function formatInterval(days: number) {
+  if (days < 30) return `${days} ngày`
+  if (days < 365) return `~${Math.round(days / 30)} tháng`
+  return `~${(days / 365).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} năm`
+}
+
 export function addDays(iso: string, days: number) {
   const date = new Date(`${iso}T00:00:00`)
   date.setDate(date.getDate() + days)

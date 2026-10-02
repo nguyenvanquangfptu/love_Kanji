@@ -33,6 +33,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import com.kanjimastery.backend.model.CardState;
 import com.kanjimastery.backend.model.ReviewLog;
 import com.kanjimastery.backend.model.ReviewRating;
@@ -56,6 +57,7 @@ public class SrsService {
     private final ReviewLogRepository reviewLogRepository;
     private final SrsProperties srsProperties;
     private final StudyPlanService studyPlanService;
+    private final LearningProfileService learningProfileService;
     private final StudyCalendar calendar;
     private final Fsrs fsrs = Fsrs.withDefaults();
 
@@ -92,6 +94,7 @@ public class SrsService {
         int from = (int) Math.min(pageable.getOffset(), session.size());
         List<UserKanjiSrs> pageCards = session.subList(from, Math.min(from + pageable.getPageSize(), session.size()));
 
+        SchedulingSettings settings = learningProfileService.scheduling(userId);
         List<Long> kanjiIds = pageCards.stream().map(UserKanjiSrs::getKanjiId).toList();
         // Batch-fetch 1 lần duy nhất thay vì gọi findById trong vòng lặp (tránh N+1 Query).
         Map<Long, Kanji> kanjiById = kanjiRepository.findAllById(kanjiIds).stream()
@@ -110,6 +113,7 @@ public class SrsService {
                         .hardWord(isHardWord(srs))
                         .personalNote(srs.getPersonalNote())
                         .newCard(srs.getLastReviewedAt() == null)
+                        .intervals(previewIntervals(srs, now, settings))
                         .build())
                 .toList();
         return new PageImpl<>(hardWordsUpFrontOnly(cards), pageable, session.size());
@@ -227,7 +231,7 @@ public class SrsService {
     }
 
     /**
-     * Tính lịch ôn mới theo SM-2 (thẻ chưa có thì tạo) và ghi lại lần trả lời trong cùng transaction.
+     * Tính lịch ôn mới (thẻ chưa có thì tạo) và ghi lại lần trả lời trong cùng transaction.
      * "Quên" một thẻ đang ôn bình thường (đã nhớ lại được kể từ lần quên trước) được đếm vào số lần quên - đủ số lần
      * thì thành từ khó. Quên tiếp khi đang học lại không tính thêm: trắc nghiệm thích ứng hay hỏi lại từ vừa sai, nên
      * sai nhiều lần liền trong một buổi vẫn chỉ là một lần quên.
@@ -235,35 +239,52 @@ public class SrsService {
     private UserKanjiSrs schedule(Long userId, Long kanjiId, UserKanjiSrs card, Answer answer, LocalDateTime now) {
         log(userId, kanjiId, card, answer, true, now);
         boolean lapse = answer.rating() == ReviewRating.AGAIN && CardState.REVIEW.equals(CardState.of(card));
-        // Trí nhớ FSRS luôn được tính song song với SM-2, nên đổi thuật toán lịch ôn lúc nào cũng có sẵn trạng thái.
-        Fsrs.Memory before = memoryBefore(card);
-        Fsrs.Memory after = before == null
-                ? fsrs.first(answer.rating())
-                : fsrs.next(before, answer.rating(), elapsedDays(card, now));
+        Outcome outcome = outcome(card, answer.rating(), now, learningProfileService.scheduling(userId));
 
         UserKanjiSrs srs = card != null ? card : UserKanjiSrs.builder()
                 .userId(userId)
                 .kanjiId(kanjiId)
-                .repetitionCount(0)
-                .easinessFactor(new BigDecimal("2.50"))
-                .reviewIntervalDays(0)
                 .nextReviewAt(now)
                 .build();
-
-        SrsCalculatorService.SrsResult result = srsCalculatorService.calculateNext(srs.getRepetitionCount(),
-                srs.getEasinessFactor(), srs.getReviewIntervalDays(), ReviewRating.toSm2Quality(answer.rating()));
-
-        srs.setRepetitionCount(result.repetitionCount());
-        srs.setEasinessFactor(result.easinessFactor());
-        srs.setReviewIntervalDays(result.reviewIntervalDays());
-        srs.setNextReviewAt(now.plusDays(result.reviewIntervalDays()));
+        srs.setRepetitionCount(outcome.sm2().repetitionCount());
+        srs.setEasinessFactor(outcome.sm2().easinessFactor());
+        srs.setReviewIntervalDays(outcome.intervalDays());
+        srs.setNextReviewAt(now.plusDays(outcome.intervalDays()));
         srs.setLastReviewedAt(now);
-        srs.setStability(after.stability());
-        srs.setDifficulty(after.difficulty());
+        srs.setStability(outcome.memory().stability());
+        srs.setDifficulty(outcome.memory().difficulty());
         if (lapse) {
             srs.setLapseCount(srs.getLapseCount() + 1);
         }
         return srsRepository.save(srs);
+    }
+
+    /**
+     * Kết quả của một mức đánh giá: SM-2 và trí nhớ FSRS luôn được tính cùng nhau (đổi thuật toán lúc nào cũng có sẵn
+     * trạng thái), khoảng ôn lấy theo thuật toán người học đang dùng - FSRS thì theo tỉ lệ nhớ mong muốn.
+     */
+    private record Outcome(SrsCalculatorService.SrsResult sm2, Fsrs.Memory memory, int intervalDays) {
+    }
+
+    private Outcome outcome(UserKanjiSrs card, int rating, LocalDateTime now, SchedulingSettings settings) {
+        SrsCalculatorService.SrsResult sm2 = srsCalculatorService.calculateNext(
+                card == null ? 0 : card.getRepetitionCount(),
+                card == null ? new BigDecimal("2.50") : card.getEasinessFactor(),
+                card == null ? 0 : card.getReviewIntervalDays(),
+                ReviewRating.toSm2Quality(rating));
+        Fsrs.Memory before = memoryBefore(card);
+        Fsrs.Memory memory = before == null ? fsrs.first(rating) : fsrs.next(before, rating, elapsedDays(card, now));
+        int intervalDays = settings.usesFsrs()
+                ? fsrs.interval(memory.stability(), settings.desiredRetention())
+                : sm2.reviewIntervalDays();
+        return new Outcome(sm2, memory, intervalDays);
+    }
+
+    /** Số ngày tới lần ôn sau nếu chấm Quên, Khó, Nhớ, Dễ - hiện ngay trên các nút chấm. */
+    private List<Integer> previewIntervals(UserKanjiSrs card, LocalDateTime now, SchedulingSettings settings) {
+        return IntStream.rangeClosed(ReviewRating.AGAIN, ReviewRating.EASY)
+                .mapToObj(rating -> outcome(card, rating, now, settings).intervalDays())
+                .toList();
     }
 
     /**

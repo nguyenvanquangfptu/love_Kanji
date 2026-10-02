@@ -5,12 +5,14 @@ import com.kanjimastery.backend.dto.LearningProfileRequest;
 import com.kanjimastery.backend.dto.LearningProfileResponse;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.model.LearningProfile;
+import com.kanjimastery.backend.model.SchedulerType;
 import com.kanjimastery.backend.repository.LearningProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /** Mục tiêu học của người học: cấp độ JLPT nhắm tới, ngày thi, thời gian ôn mỗi ngày, số từ mới tự chọn. */
@@ -29,7 +31,17 @@ public class LearningProfileService {
                 .orElseGet(() -> LearningProfileResponse.builder()
                         .configured(false)
                         .dailyMinutes(srsProperties.getDefaultDailyMinutes())
+                        .scheduler(SchedulingSettings.DEFAULT.scheduler())
+                        .desiredRetention(SchedulingSettings.DEFAULT.desiredRetention())
                         .build());
+    }
+
+    /** Cách xếp lịch ôn của người học; chưa đặt mục tiêu thì SM-2 như trước. */
+    @Transactional(readOnly = true)
+    public SchedulingSettings scheduling(Long userId) {
+        return profileRepository.findById(userId)
+                .map(profile -> new SchedulingSettings(profile.getScheduler(), profile.getDesiredRetention().doubleValue()))
+                .orElse(SchedulingSettings.DEFAULT);
     }
 
     @Transactional
@@ -43,6 +55,10 @@ public class LearningProfileService {
         profile.setExamDate(request.getExamDate());
         profile.setDailyMinutes(request.getDailyMinutes());
         profile.setNewWordsPerDay(request.getNewWordsPerDay());
+        profile.setScheduler(request.getScheduler() != null ? request.getScheduler() : SchedulerType.SM2);
+        profile.setDesiredRetention(request.getDesiredRetention() != null
+                ? request.getDesiredRetention()
+                : BigDecimal.valueOf(SchedulingSettings.DEFAULT.desiredRetention()));
         profile.setUpdatedAt(LocalDateTime.now());
         return toResponse(profileRepository.save(profile));
     }
@@ -54,6 +70,8 @@ public class LearningProfileService {
                 .examDate(profile.getExamDate())
                 .dailyMinutes(profile.getDailyMinutes())
                 .newWordsPerDay(profile.getNewWordsPerDay())
+                .scheduler(profile.getScheduler())
+                .desiredRetention(profile.getDesiredRetention().doubleValue())
                 .build();
     }
 }

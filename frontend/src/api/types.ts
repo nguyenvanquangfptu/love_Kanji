@@ -98,6 +98,8 @@ export interface DailyCardResponse {
   personalNote: string | null
   /** Từ mới, chưa học lần nào. */
   newCard: boolean
+  /** Số ngày tới lần ôn sau nếu chấm Quên, Khó, Nhớ, Dễ. */
+  intervals: number[]
 }
 
 /** Kế hoạch ôn hôm nay - số thẻ ôn và từ mới vừa với thời gian ôn mỗi ngày. */
@@ -144,9 +146,15 @@ export interface LearningProfileResponse {
   dailyMinutes: number
   /** null = để app tự tính. */
   newWordsPerDay: number | null
+  scheduler: Scheduler
+  /** Tỉ lệ nhớ mong muốn khi xếp lịch bằng FSRS (0.8 = 80%). */
+  desiredRetention: number
 }
 
 export type LearningProfileRequest = Omit<LearningProfileResponse, 'configured'>
+
+/** Thuật toán xếp lịch ôn: SM-2 cổ điển hoặc mô hình trí nhớ FSRS. */
+export type Scheduler = 'SM2' | 'FSRS'
 
 /** Tiến bộ của người học, tính từ lịch sử trả lời. */
 export interface ProgressResponse {

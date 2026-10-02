@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Target } from 'lucide-react'
 import { profileApi } from '@/api/profile'
 import { extractErrorMessage } from '@/api/client'
-import { JLPT_LEVELS, type JlptLevel, type LearningProfileResponse } from '@/api/types'
+import { JLPT_LEVELS, type JlptLevel, type LearningProfileResponse, type Scheduler } from '@/api/types'
 import { formatDay, toIsoDay, upcomingJlptDays } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
@@ -16,6 +16,7 @@ import { Alert } from '@/components/ui/alert'
 import { PageSpinner } from '@/components/ui/spinner'
 
 const MINUTE_OPTIONS = [10, 15, 20, 30, 45, 60]
+const RETENTION_OPTIONS = [0.8, 0.85, 0.9, 0.95]
 
 /** Mục tiêu học: cấp độ JLPT nhắm tới, ngày thi, thời gian ôn mỗi ngày - để app tính số từ mới mỗi ngày. */
 export function GoalPage() {
@@ -45,13 +46,22 @@ function GoalForm({ profile }: { profile: LearningProfileResponse }) {
   const [dailyMinutes, setDailyMinutes] = useState(profile.dailyMinutes)
   // null = để app tự tính số từ mới mỗi ngày.
   const [newWordsPerDay, setNewWordsPerDay] = useState<number | null>(profile.newWordsPerDay)
+  const [scheduler, setScheduler] = useState<Scheduler>(profile.scheduler)
+  const [desiredRetention, setDesiredRetention] = useState(profile.desiredRetention)
   // Chốt một lần khi mở trang: hôm nay (chặn chọn ngày đã qua) và hai kỳ JLPT sắp tới để chọn nhanh.
   const [today] = useState(() => toIsoDay(new Date()))
   const [examSuggestions] = useState(() => upcomingJlptDays(2))
 
   const save = useMutation({
     mutationFn: () =>
-      profileApi.updateLearning({ targetLevel, examDate: examDate || null, dailyMinutes, newWordsPerDay }),
+      profileApi.updateLearning({
+        targetLevel,
+        examDate: examDate || null,
+        dailyMinutes,
+        newWordsPerDay,
+        scheduler,
+        desiredRetention,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile'] })
       queryClient.invalidateQueries({ queryKey: ['srs'] })
@@ -139,6 +149,44 @@ function GoalForm({ profile }: { profile: LearningProfileResponse }) {
             ? 'Có ngày thi thì chia đều số từ còn lại cho tới 2 tuần trước kỳ thi, và bớt đi khi thời gian ôn không đủ.'
             : 'Giữ đúng số này mỗi ngày, kể cả khi đang có nhiều thẻ cần ôn.'}
         </p>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <Label>Cách xếp lịch ôn</Label>
+        <div className="flex flex-wrap gap-2">
+          <Choice active={scheduler === 'FSRS'} onClick={() => setScheduler('FSRS')}>
+            FSRS (khuyên dùng)
+          </Choice>
+          <Choice active={scheduler === 'SM2'} onClick={() => setScheduler('SM2')}>
+            SM-2
+          </Choice>
+        </div>
+        <p className="text-sm font-semibold text-muted-foreground">
+          {scheduler === 'FSRS'
+            ? 'Ước lượng khả năng bạn còn nhớ từng từ và hẹn ôn lại đúng lúc sắp quên - thường ít lượt ôn hơn SM-2 mà vẫn nhớ chắc như vậy.'
+            : 'Thuật toán cổ điển: mỗi lần nhớ được thì khoảng ôn nhân lên theo độ dễ của từ.'}{' '}
+          Đổi cách xếp lịch thì áp dụng từ lần ôn tới của mỗi từ.
+        </p>
+        {scheduler === 'FSRS' && (
+          <>
+            <Label className="mt-2">Tỉ lệ nhớ mong muốn</Label>
+            <div className="flex flex-wrap gap-2">
+              {RETENTION_OPTIONS.map((retention) => (
+                <Choice
+                  key={retention}
+                  active={Math.abs(desiredRetention - retention) < 0.001}
+                  onClick={() => setDesiredRetention(retention)}
+                >
+                  {Math.round(retention * 100)}%
+                </Choice>
+              ))}
+            </div>
+            <p className="text-sm font-semibold text-muted-foreground">
+              Đến lượt ôn, bạn còn nhớ chừng ấy phần trăm số từ. Càng cao càng chắc nhưng phải ôn nhiều hơn hẳn; 90% là
+              mức cân bằng.
+            </p>
+          </>
+        )}
       </section>
 
       {save.isError && <Alert>{extractErrorMessage(save.error)}</Alert>}

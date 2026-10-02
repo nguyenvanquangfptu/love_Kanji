@@ -4,7 +4,7 @@ import com.kanjimastery.backend.exception.BadRequestException;
 
 /**
  * Thang chấm một lần ôn, giống Anki/FSRS: 1 Quên, 2 Khó, 3 Nhớ, 4 Dễ (cột {@code review_logs.rating}).
- * Lịch ôn hiện vẫn tính bằng SM-2 (điểm 0-5) nên cần đổi qua {@link #toSm2Quality(int)}.
+ * FSRS dùng thẳng thang này; SM-2 chấm điểm 0-5 nên cần đổi qua {@link #toSm2Quality(int)}.
  */
 public final class ReviewRating {
     public static final int AGAIN = 1;

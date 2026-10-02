@@ -7,6 +7,7 @@ import lombok.Getter;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Builder
@@ -25,4 +26,6 @@ public class DailyCardResponse {
     private String personalNote;
     /** Từ mới, chưa học lần nào. */
     private boolean newCard;
+    /** Số ngày tới lần ôn sau nếu chấm Quên, Khó, Nhớ, Dễ - theo thuật toán lịch ôn người học đang dùng. */
+    private List<Integer> intervals;
 }

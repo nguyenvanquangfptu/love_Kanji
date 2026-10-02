@@ -13,10 +13,12 @@ import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.ReviewLog;
 import com.kanjimastery.backend.model.ReviewRating;
 import com.kanjimastery.backend.model.ReviewSource;
+import com.kanjimastery.backend.model.SchedulerType;
 import com.kanjimastery.backend.model.UserKanjiSrs;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.repository.ReviewLogRepository;
 import com.kanjimastery.backend.repository.UserKanjiSrsRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -30,6 +32,7 @@ import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -42,6 +45,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -73,8 +77,16 @@ class SrsServiceTest {
     @Spy
     private StudyCalendar calendar = new StudyCalendar(new SrsProperties());
 
+    @Mock
+    private LearningProfileService learningProfileService;
+
     @InjectMocks
     private SrsService srsService;
+
+    @BeforeEach
+    void scheduleWithSm2ByDefault() {
+        lenient().when(learningProfileService.scheduling(anyLong())).thenReturn(SchedulingSettings.DEFAULT);
+    }
 
     @Test
     void addCards_shouldDeduplicateIdsAndReportAlreadyInReview() {
@@ -209,6 +221,37 @@ class SrsServiceTest {
     }
 
     @Test
+    void submitReview_shouldScheduleWithFsrs_whenTheLearnerChoseIt() {
+        givenScheduling(SchedulerType.FSRS, 0.9);
+        when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.empty());
+        givenSaveReturnsCard();
+
+        srsService.submitReview(USER_ID, reviewRequest(ReviewRating.GOOD, 2_000));
+
+        // "Nhớ" lần đầu cho độ ổn định 2,3 ngày: giữ tỉ lệ nhớ 90% thì 2 ngày sau mới ôn (SM-2 là 1 ngày).
+        UserKanjiSrs saved = savedCard();
+        assertThat(saved.getReviewIntervalDays()).isEqualTo(2);
+        assertThat(ChronoUnit.DAYS.between(saved.getLastReviewedAt(), saved.getNextReviewAt())).isEqualTo(2);
+        // SM-2 vẫn chạy song song, đổi lại lúc nào cũng được.
+        assertThat(saved.getRepetitionCount()).isEqualTo(1);
+        assertThat(saved.getEasinessFactor()).isEqualByComparingTo("2.50");
+    }
+
+    @Test
+    void submitReview_shouldSpaceReviewsFurther_whenTheLearnerAcceptsForgettingMore() {
+        givenScheduling(SchedulerType.FSRS, 0.8);
+        when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.empty());
+        givenSaveReturnsCard();
+
+        srsService.submitReview(USER_ID, reviewRequest(ReviewRating.GOOD, 2_000));
+
+        // Cùng độ ổn định 2,3 ngày, chấp nhận nhớ 80% thì giãn tới 8 ngày.
+        assertThat(savedCard().getReviewIntervalDays()).isEqualTo(8);
+    }
+
+    @Test
     void submitReview_shouldLogRelearning_whenCardWasForgottenLastTime() {
         UserKanjiSrs card = card(0, "2.18", 1, LocalDateTime.now().minusMinutes(5));
         when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
@@ -317,6 +360,28 @@ class SrsServiceTest {
         assertThat(session.getTotalElements()).isEqualTo(3);
         assertThat(session.getContent()).extracting(card -> card.getKanji().getId()).containsExactly(1L, 2L, 30L);
         assertThat(session.getContent()).extracting(DailyCardResponse::isNewCard).containsExactly(false, false, true);
+    }
+
+    @Test
+    void getDailyCards_shouldPreviewTheNextReviewOfEveryRating_withTheLearnersScheduler() {
+        UserKanjiSrs newWord = UserKanjiSrs.builder().id(300L).userId(USER_ID).kanjiId(30L).repetitionCount(0)
+                .easinessFactor(new BigDecimal("2.50")).reviewIntervalDays(0).nextReviewAt(DUE).lapseCount(0).build();
+        List<UserKanjiSrs> due = List.of(dueCard(1L, 0), newWord);
+        givenDueCards(due);
+        when(kanjiRepository.findAllById(anyList())).thenReturn(due.stream().map(card -> kanji(card.getKanjiId())).toList());
+
+        // SM-2: từ mới chấm gì cũng 1 ngày; từ đã nhớ một lần thì Khó hay Dễ đều 6 ngày.
+        assertThat(srsService.getDailyCards(USER_ID, PageRequest.of(0, 20), true).getContent())
+                .extracting(card -> card.getKanji().getId(), DailyCardResponse::getIntervals)
+                .containsExactlyInAnyOrder(tuple(1L, List.of(1, 6, 6, 6)), tuple(30L, List.of(1, 1, 1, 1)));
+
+        // FSRS: mỗi mức một khoảng ôn - chấm Dễ thì 8 ngày sau mới gặp lại.
+        givenScheduling(SchedulerType.FSRS, 0.9);
+        assertThat(srsService.getDailyCards(USER_ID, PageRequest.of(0, 20), true).getContent())
+                .filteredOn(DailyCardResponse::isNewCard)
+                .singleElement()
+                .extracting(DailyCardResponse::getIntervals)
+                .isEqualTo(List.of(1, 1, 2, 8));
     }
 
     @Test
@@ -439,6 +504,10 @@ class SrsServiceTest {
     private void givenPlan(int reviewsToday, int newToday) {
         when(studyPlanService.today(USER_ID))
                 .thenReturn(DailyPlanResponse.builder().reviewsToday(reviewsToday).newToday(newToday).build());
+    }
+
+    private void givenScheduling(String scheduler, double desiredRetention) {
+        when(learningProfileService.scheduling(USER_ID)).thenReturn(new SchedulingSettings(scheduler, desiredRetention));
     }
 
     private void givenSaveReturnsCard() {

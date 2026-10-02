@@ -17,4 +17,8 @@ public class LearningProfileResponse {
     private int dailyMinutes;
     /** null = để app tính. */
     private Integer newWordsPerDay;
+    /** SM2 hoặc FSRS. */
+    private String scheduler;
+    /** Tỉ lệ nhớ mong muốn khi dùng FSRS. */
+    private double desiredRetention;
 }

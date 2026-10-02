@@ -18,7 +18,7 @@ import { srsApi } from '@/api/srs'
 import type { DailyCardResponse, DailyPlanResponse, Page, ReviewRating, ReviewRequest } from '@/api/types'
 import { extractErrorMessage } from '@/api/client'
 import { cn, wordSizeClass } from '@/lib/utils'
-import { addDays, formatDay } from '@/lib/dates'
+import { addDays, formatDay, formatInterval } from '@/lib/dates'
 import { lessonQuery } from '@/lib/lesson'
 import { lessonTitle } from '@/lib/levels'
 import { FlipCard } from '@/components/FlipCard'
@@ -269,13 +269,16 @@ export function FlashcardPage() {
                     type="button"
                     disabled={reviewMutation.isPending}
                     onClick={() => rate(rating)}
+                    title={hint}
                     className={cn(
                       'flex flex-col items-center rounded-2xl border-b-4 px-2 py-2.5 transition-all hover:brightness-105 active:translate-y-[2px] active:border-b-2 disabled:opacity-60',
                       className,
                     )}
                   >
                     <span className="text-base font-black leading-none">{label}</span>
-                    <span className="mt-1 text-[11px] font-bold leading-tight opacity-90">{hint}</span>
+                    <span className="mt-1 text-[11px] font-bold leading-tight opacity-90">
+                      {current.intervals ? formatInterval(current.intervals[rating - 1]) : hint}
+                    </span>
                   </button>
                 ))}
               </div>

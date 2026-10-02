@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -37,6 +38,16 @@ public class LearningProfile {
     /** Người học tự đặt số từ mới mỗi ngày; null = để app tính. */
     @Column(name = "new_words_per_day")
     private Integer newWordsPerDay;
+
+    /** {@link SchedulerType} */
+    @Column(nullable = false, length = 10)
+    @Builder.Default
+    private String scheduler = SchedulerType.SM2;
+
+    /** Tỉ lệ nhớ mong muốn khi xếp lịch bằng FSRS. */
+    @Column(name = "desired_retention", nullable = false, precision = 3, scale = 2)
+    @Builder.Default
+    private BigDecimal desiredRetention = new BigDecimal("0.90");
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
