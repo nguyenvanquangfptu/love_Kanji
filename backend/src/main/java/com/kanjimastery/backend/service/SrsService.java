@@ -81,7 +81,7 @@ public class SrsService {
      * {@code extra} = ôn thêm: bỏ hai giới hạn trên, lấy mọi thẻ đến hạn.
      */
     public Page<DailyCardResponse> getDailyCards(Long userId, Pageable pageable, boolean extra) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = calendar.now();
         // Composite index idx_user_next_review (user_id, next_review_at).
         List<UserKanjiSrs> due = srsRepository.findByUserIdAndNextReviewAtLessThanEqualOrderByNextReviewAtAsc(
                 userId, now, PageRequest.of(0, MAX_DUE_CARDS)).getContent();
@@ -191,7 +191,7 @@ public class SrsService {
         Answer answer = new Answer(ReviewSource.FLASHCARD, null, rating != ReviewRating.AGAIN, rating,
                 ResponseTimeRater.normalize(request.getResponseMs()), null);
         UserKanjiSrs card = srsRepository.findByUserIdAndKanjiId(userId, request.getKanjiId()).orElse(null);
-        UserKanjiSrs saved = schedule(userId, request.getKanjiId(), card, answer, LocalDateTime.now(),
+        UserKanjiSrs saved = schedule(userId, request.getKanjiId(), card, answer, calendar.now(),
                 learningProfileService.scheduling(userId));
 
         return ReviewResponse.builder()
@@ -218,7 +218,7 @@ public class SrsService {
      */
     @Transactional
     public Optional<LocalDateTime> recordQuizAnswer(Long userId, Long kanjiId, Answer answer) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = calendar.now();
         SchedulingSettings settings = learningProfileService.scheduling(userId);
         UserKanjiSrs card = srsRepository.findByUserIdAndKanjiId(userId, kanjiId).orElse(null);
         if (card == null) {
@@ -359,7 +359,7 @@ public class SrsService {
     public AddSrsCardsResponse addCards(Long userId, List<Long> kanjiIds) {
         Set<Long> uniqueIds = new HashSet<>(kanjiIds);
         long existingWords = kanjiRepository.countByIdIn(uniqueIds);
-        int added = srsRepository.insertCardsIfAbsent(userId, uniqueIds, LocalDateTime.now());
+        int added = srsRepository.insertCardsIfAbsent(userId, uniqueIds, calendar.now());
         return AddSrsCardsResponse.builder()
                 .added(added)
                 .alreadyInReview((int) existingWords - added)
@@ -374,7 +374,7 @@ public class SrsService {
     }
 
     public SrsStatsResponse getStats(Long userId) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = calendar.now();
         long total = srsRepository.countByUserId(userId);
         long due = srsRepository.countByUserIdAndNextReviewAtLessThanEqual(userId, now);
         long mastered = srsRepository.countByUserIdAndNextReviewAtAfterAndReviewIntervalDaysGreaterThanEqual(

@@ -58,7 +58,7 @@ public class FsrsParametersService {
         parameters.setFsrsVersion(FSRS_VERSION);
         parameters.setParameters(Arrays.stream(Fsrs.withInitialStabilities(fitted.get()).parameters()).boxed().toList());
         parameters.setFirstReviews(Arrays.stream(counts).sum());
-        parameters.setOptimizedAt(LocalDateTime.now());
+        parameters.setOptimizedAt(calendar.now());
         return toResponse(Optional.of(parametersRepository.save(parameters)), counts);
     }
 
