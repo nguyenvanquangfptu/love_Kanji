@@ -65,6 +65,10 @@ public class ReviewLog {
     @Column(nullable = false)
     private Boolean scheduled;
 
+    /** Xác suất nhớ FSRS dự đoán lúc trả lời; null nếu từ chưa từng được ôn. */
+    @Column(name = "retrievability")
+    private Double retrievability;
+
     @Column(name = "reviewed_at", nullable = false)
     private LocalDateTime reviewedAt;
 }

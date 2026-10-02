@@ -37,6 +37,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -68,6 +69,9 @@ class SrsServiceTest {
 
     @Mock
     private StudyPlanService studyPlanService;
+
+    @Spy
+    private StudyCalendar calendar = new StudyCalendar(new SrsProperties());
 
     @InjectMocks
     private SrsService srsService;
@@ -153,6 +157,55 @@ class SrsServiceTest {
         assertThat(log.getEfBefore()).isEqualByComparingTo("2.50");
         assertThat(log.getIntervalBefore()).isEqualTo(15);
         assertThat(log.getResponseMs()).isEqualTo(2_500);
+    }
+
+    @Test
+    void submitReview_shouldStartTheFsrsMemory_onAWordsFirstReview() {
+        when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.empty());
+        givenSaveReturnsCard();
+
+        srsService.submitReview(USER_ID, reviewRequest(ReviewRating.GOOD, 2_000));
+
+        UserKanjiSrs saved = savedCard();
+        assertThat(saved.getStability()).isEqualTo(Fsrs.DEFAULT_PARAMETERS[2]);
+        assertThat(saved.getDifficulty()).isCloseTo(2.1175, within(1e-3));
+        assertThat(savedLog().getRetrievability()).isNull();
+    }
+
+    @Test
+    void submitReview_shouldGrowTheFsrsMemory_andLogThePredictedRecall() {
+        LocalDateTime now = LocalDateTime.now();
+        UserKanjiSrs card = UserKanjiSrs.builder().userId(USER_ID).kanjiId(KANJI_ID).repetitionCount(3)
+                .easinessFactor(new BigDecimal("2.40")).reviewIntervalDays(10).nextReviewAt(now)
+                .lastReviewedAt(now.minusDays(10)).stability(10.0).difficulty(5.0).build();
+        when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.of(card));
+        givenSaveReturnsCard();
+
+        srsService.submitReview(USER_ID, reviewRequest(ReviewRating.GOOD, 2_000));
+
+        // Độ ổn định 10 ngày, ôn đúng sau 10 ngày: FSRS dự đoán nhớ 90%; nhớ được thì độ ổn định tăng.
+        assertThat(savedLog().getRetrievability()).isCloseTo(0.9, within(1e-9));
+        assertThat(card.getStability()).isGreaterThan(10.0);
+    }
+
+    @Test
+    void submitReview_shouldEstimateTheFsrsMemoryFromSm2_forACardReviewedBeforeFsrs() {
+        LocalDateTime now = LocalDateTime.now();
+        UserKanjiSrs card = UserKanjiSrs.builder().userId(USER_ID).kanjiId(KANJI_ID).repetitionCount(3)
+                .easinessFactor(new BigDecimal("2.50")).reviewIntervalDays(15).nextReviewAt(now)
+                .lastReviewedAt(now.minusDays(15)).build();
+        when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.of(card));
+        givenSaveReturnsCard();
+
+        srsService.submitReview(USER_ID, reviewRequest(ReviewRating.GOOD, 2_000));
+
+        // Ước lượng: độ ổn định = khoảng ôn SM-2 (15 ngày) nên ôn đúng hạn được dự đoán nhớ 90%.
+        assertThat(savedLog().getRetrievability()).isCloseTo(0.9, within(1e-9));
+        assertThat(card.getStability()).isGreaterThan(15.0);
+        assertThat(card.getDifficulty()).isLessThan(3.0);
     }
 
     @Test
