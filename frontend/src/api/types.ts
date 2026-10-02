@@ -294,6 +294,8 @@ export interface QuestionReviewItem {
   selectedOption: string | null
   correct: boolean
   explanation: string | null
+  /** Kỹ năng câu hỏi kiểm tra; null nếu chưa phân loại. */
+  skill: QuizDirection | null
 }
 
 export interface ExamReviewResponse {
@@ -304,6 +306,8 @@ export interface ExamReviewResponse {
   totalQuestions: number
   timeSpentSeconds: number
   questions: QuestionReviewItem[]
+  /** Điểm theo kỹ năng (đọc, viết, nghĩa); kỹ năng không có câu nào trong bài thì không có. */
+  skills: { skill: QuizDirection; correct: number; total: number }[]
 }
 
 export interface LeaderboardEntryResponse {

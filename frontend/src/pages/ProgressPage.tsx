@@ -11,6 +11,7 @@ import { ChartLegend, ColumnChart, type ChartColumn, type ColumnSeries } from '@
 import { PageHeader } from '@/components/PageHeader'
 import { StatTile } from '@/components/StatTile'
 import { EmptyState } from '@/components/EmptyState'
+import { Meter } from '@/components/Meter'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
@@ -274,31 +275,6 @@ function DirectionCard({ directions }: { directions: ProgressResponse['direction
         ))}
       </div>
     </ChartCard>
-  )
-}
-
-/** Một tỉ lệ phần trăm dạng thanh ngang, nhãn và số ghi ngay trên thanh. */
-function Meter({ label, value, detail }: { label: string; value: number; detail?: string }) {
-  return (
-    <div>
-      <div className="flex items-baseline justify-between gap-3 text-sm">
-        <span className="font-bold">{label}</span>
-        <span>
-          <span className="font-black">{value}%</span>
-          {detail && <span className="font-semibold text-muted-foreground"> ({detail})</span>}
-        </span>
-      </div>
-      <div
-        className="mt-1.5 h-3 overflow-hidden rounded-full bg-secondary-soft"
-        role="meter"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={value}
-        aria-label={label}
-      >
-        <div className="h-full rounded-full" style={{ width: `${value}%`, backgroundColor: BLUE }} />
-      </div>
-    </div>
   )
 }
 

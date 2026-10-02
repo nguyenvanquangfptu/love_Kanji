@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -23,6 +24,7 @@ import com.kanjimastery.backend.dto.StartExamRequest;
 import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamQuestion;
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.UserExamAnswer;
 import com.kanjimastery.backend.model.UserExamAttempt;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
@@ -126,6 +128,7 @@ public class ExamService {
                             .selectedOption(answer.getSelectedOption())
                             .correct(Boolean.TRUE.equals(answer.getIsCorrect()))
                             .explanation(question.getExplanation())
+                            .skill(question.getSkill())
                             .build();
                 })
                 .toList();
@@ -138,7 +141,29 @@ public class ExamService {
                 .totalQuestions(items.size())
                 .timeSpentSeconds(attempt.getTimeSpentSeconds())
                 .questions(items)
+                .skills(skillScores(items))
                 .build();
+    }
+
+    /** Số câu đúng trên số câu theo từng kỹ năng: đọc, viết, rồi nghĩa. */
+    static List<ExamReviewResponse.SkillScore> skillScores(List<QuestionReviewItem> items) {
+        Map<String, int[]> bySkill = new LinkedHashMap<>();
+        for (String skill : List.of(QuizDirection.KANJI_TO_READING, QuizDirection.READING_TO_KANJI, QuizDirection.MEANING)) {
+            bySkill.put(skill, new int[2]);
+        }
+        for (QuestionReviewItem item : items) {
+            int[] tally = item.getSkill() == null ? null : bySkill.get(item.getSkill());
+            if (tally != null) {
+                tally[1]++;
+                if (item.isCorrect()) {
+                    tally[0]++;
+                }
+            }
+        }
+        return bySkill.entrySet().stream()
+                .filter(entry -> entry.getValue()[1] > 0)
+                .map(entry -> new ExamReviewResponse.SkillScore(entry.getKey(), entry.getValue()[0], entry.getValue()[1]))
+                .toList();
     }
 
     private UserExamAttempt getOwnedAttempt(Long attemptId, Long userId) {

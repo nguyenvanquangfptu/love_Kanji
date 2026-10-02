@@ -18,4 +18,6 @@ public class QuestionReviewItem {
     private String selectedOption;
     private boolean correct;
     private String explanation;
+    /** Kỹ năng câu hỏi kiểm tra; null nếu chưa phân loại. */
+    private String skill;
 }

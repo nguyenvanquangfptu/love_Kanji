@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { BookOpen, Check, CheckCircle2, Clock, Lightbulb, RotateCcw, Target, Trophy, XCircle } from 'lucide-react'
 import { examApi } from '@/api/exam'
 import { extractErrorMessage } from '@/api/client'
+import type { ExamReviewResponse, QuizDirection } from '@/api/types'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +13,13 @@ import { Alert } from '@/components/ui/alert'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Leaderboard } from '@/components/Leaderboard'
 import { StatTile } from '@/components/StatTile'
+import { Meter } from '@/components/Meter'
+
+const SKILL_LABELS: Record<QuizDirection, string> = {
+  KANJI_TO_READING: 'Đọc chữ Hán',
+  READING_TO_KANJI: 'Viết chữ Hán',
+  MEANING: 'Hiểu nghĩa',
+}
 
 const STATUS_LABEL: Record<string, string> = {
   COMPLETED: 'Đã nộp bài',
@@ -55,6 +63,8 @@ export function ExamResultPage() {
         <StatTile label="Tỉ lệ đúng" value={`${percent}%`} tone="secondary" icon={Target} />
         <StatTile label="Thời gian" value={`${minutes}:${seconds.toString().padStart(2, '0')}`} tone="orange" icon={Clock} />
       </div>
+
+      {data.skills.length > 0 && <SkillCard skills={data.skills} />}
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <Button size="lg" className="flex-1" onClick={() => navigate('/exam')}>
@@ -123,5 +133,28 @@ export function ExamResultPage() {
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+/** Tỉ lệ đúng theo từng kỹ năng, chỉ ra kỹ năng yếu nhất khi có ít nhất hai kỹ năng. */
+function SkillCard({ skills }: { skills: ExamReviewResponse['skills'] }) {
+  const rate = (s: ExamReviewResponse['skills'][number]) => Math.round((s.correct / s.total) * 100)
+  const weakest = skills.reduce((low, s) => (rate(s) < rate(low) ? s : low), skills[0])
+  const uneven = skills.some((s) => rate(s) > rate(weakest))
+
+  return (
+    <Card className="p-4 sm:p-5">
+      <h2 className="text-lg font-black">Theo kỹ năng</h2>
+      <p className="text-sm font-semibold text-muted-foreground">
+        {uneven
+          ? `Cần luyện thêm nhất: ${SKILL_LABELS[weakest.skill].toLowerCase()}.`
+          : 'Các kỹ năng đều nhau trong bài này.'}
+      </p>
+      <div className="mt-4 flex flex-col gap-4">
+        {skills.map((s) => (
+          <Meter key={s.skill} label={SKILL_LABELS[s.skill]} value={rate(s)} detail={`${s.correct}/${s.total} câu`} />
+        ))}
+      </div>
+    </Card>
   )
 }
