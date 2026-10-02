@@ -3,6 +3,7 @@ package com.kanjimastery.backend.controller;
 import com.kanjimastery.backend.dto.AddSrsCardsRequest;
 import com.kanjimastery.backend.dto.AddSrsCardsResponse;
 import com.kanjimastery.backend.dto.DailyCardResponse;
+import com.kanjimastery.backend.dto.DailyPlanResponse;
 import com.kanjimastery.backend.dto.HardWordsResponse;
 import com.kanjimastery.backend.dto.NoteRequest;
 import com.kanjimastery.backend.dto.ReviewRequest;
@@ -23,6 +24,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.service.SrsService;
+import com.kanjimastery.backend.service.StudyPlanService;
 
 @RestController
 @RequestMapping("/api/v1/srs")
@@ -31,14 +33,24 @@ import com.kanjimastery.backend.service.SrsService;
 public class SrsController {
 
     private final SrsService srsService;
+    private final StudyPlanService studyPlanService;
     private final UserService userService;
 
     @GetMapping("/daily-cards")
     public ResponseEntity<Page<DailyCardResponse>> getDailyCards(
             Authentication authentication,
-            @PageableDefault(size = 20) Pageable pageable) {
+            @PageableDefault(size = 20) Pageable pageable,
+            @RequestParam(required = false, defaultValue = "false") boolean extra) {
         Long userId = currentUserId(authentication);
-        return ResponseEntity.ok(srsService.getDailyCards(userId, pageable));
+        return ResponseEntity.ok(srsService.getDailyCards(userId, pageable, extra));
+    }
+
+    @Operation(summary = "Kế hoạch ôn hôm nay",
+            description = "Số thẻ ôn và số từ mới của phiên hôm nay, vừa với thời gian ôn mỗi ngày của người học (đo từ nhịp ôn thật), "
+                    + "cùng số thẻ/từ mới để dành cho các ngày sau.")
+    @GetMapping("/daily-plan")
+    public ResponseEntity<DailyPlanResponse> getDailyPlan(Authentication authentication) {
+        return ResponseEntity.ok(studyPlanService.today(currentUserId(authentication)));
     }
 
     @Operation(summary = "Chấm điểm ôn tập (SM-2)",

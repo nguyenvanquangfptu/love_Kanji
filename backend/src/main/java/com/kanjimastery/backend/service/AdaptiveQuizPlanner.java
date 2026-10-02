@@ -5,7 +5,6 @@ import com.kanjimastery.backend.model.UserKanjiSrs;
 import com.kanjimastery.backend.service.LearnerHistory.Tally;
 
 import java.math.BigDecimal;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -77,8 +76,7 @@ final class AdaptiveQuizPlanner {
         double weight = 1 + 2.0 * history.recentErrors(kanji.getId());
         UserKanjiSrs card = history.card(kanji.getId());
         if (card != null) {
-            double daysLate = Duration.between(card.getNextReviewAt(), history.now()).toMinutes() / 1440.0;
-            weight += Math.min(Math.max(daysLate, 0) / Math.max(card.getReviewIntervalDays(), 1), MAX_OVERDUE_WEIGHT);
+            weight += Math.min(DailySessionOrder.overdueRatio(card, history.now()), MAX_OVERDUE_WEIGHT);
             if (card.getEasinessFactor().compareTo(LOW_EASINESS) < 0) {
                 weight += 1;
             }

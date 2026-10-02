@@ -23,4 +23,6 @@ public class DailyCardResponse {
     /** Quên đủ nhiều lần để thành từ khó - hiện nhãn "Từ khó". */
     private boolean hardWord;
     private String personalNote;
+    /** Từ mới, chưa học lần nào. */
+    private boolean newCard;
 }

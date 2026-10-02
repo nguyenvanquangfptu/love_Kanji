@@ -149,6 +149,48 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
                         tuple(DIRECTION, "しょるい", 1L));
     }
 
+    @Test
+    void flashcardPace_shouldTakeTheMedianGapBetweenFlashcardReviews_ignoringBreaks() {
+        LocalDateTime start = LocalDateTime.now().minusHours(1);
+        save(start, ReviewSource.FLASHCARD, null, true, null);
+        save(start.plusSeconds(5), ReviewSource.FLASHCARD, null, true, null);
+        save(start.plusSeconds(6), ReviewSource.QUIZ, DIRECTION, true, 1_000);   // không phải thẻ ôn
+        save(start.plusSeconds(12), ReviewSource.FLASHCARD, null, true, null);
+        save(start.plusMinutes(10), ReviewSource.FLASHCARD, null, true, null);    // nghỉ giữa chừng: bỏ
+        save(start.plusMinutes(10).plusSeconds(8), ReviewSource.FLASHCARD, null, true, null);
+
+        ResponseTimeStats pace = reviewLogRepository.flashcardPace(userId, 300);
+
+        // Các khoảng 5 s, 7 s, 8 s.
+        assertThat(pace.getSamples()).isEqualTo(3);
+        assertThat(pace.getMedianMs()).isEqualTo(7_000.0);
+    }
+
+    @Test
+    void countNewWordsLearnedSince_shouldCountFirstScheduledReviewsOnly() {
+        LocalDateTime since = LocalDateTime.now().minusHours(2);
+        saveReview(since.plusMinutes(5), CardState.NEW, true);
+        saveReview(since.plusMinutes(6), CardState.NEW, false);       // chỉ ghi lại, không vào lịch ôn
+        saveReview(since.plusMinutes(7), CardState.REVIEW, true);     // không phải lần học đầu
+        saveReview(since.minusMinutes(1), CardState.NEW, true);       // trước mốc
+
+        assertThat(reviewLogRepository.countNewWordsLearnedSince(userId, since)).isEqualTo(1);
+        assertThat(reviewLogRepository.countNewWordsLearnedSince(userId, since.plusMinutes(10))).isZero();
+    }
+
+    private void saveReview(LocalDateTime at, String stateBefore, boolean scheduled) {
+        reviewLogRepository.save(ReviewLog.builder()
+                .userId(userId)
+                .kanjiId(kanjiId)
+                .source(ReviewSource.FLASHCARD)
+                .correct(true)
+                .rating((short) ReviewRating.GOOD)
+                .stateBefore(stateBefore)
+                .scheduled(scheduled)
+                .reviewedAt(at)
+                .build());
+    }
+
     private void saveAnswer(LocalDateTime at, String direction, boolean correct, String chosenAnswer) {
         save(at, ReviewSource.QUIZ, direction, correct, 1_000, chosenAnswer);
     }

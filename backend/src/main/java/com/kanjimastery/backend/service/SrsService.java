@@ -6,6 +6,7 @@ import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.dto.KanjiResponse;
 import com.kanjimastery.backend.dto.DailyCardResponse;
+import com.kanjimastery.backend.dto.DailyPlanResponse;
 import com.kanjimastery.backend.dto.ReviewRequest;
 import com.kanjimastery.backend.dto.ReviewResponse;
 import com.kanjimastery.backend.dto.SrsStatsResponse;
@@ -15,6 +16,7 @@ import com.kanjimastery.backend.dto.HardWordsResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,12 +46,15 @@ public class SrsService {
 
     /** Khoảng ôn từ chừng này ngày trở lên thì coi là "đã thuộc". */
     static final int MASTERED_INTERVAL_DAYS_THRESHOLD = 21;
+    /** Trần số thẻ đến hạn đọc cho một phiên ôn (người nghỉ lâu có thể tồn hàng nghìn thẻ). */
+    private static final int MAX_DUE_CARDS = 2000;
 
     private final UserKanjiSrsRepository srsRepository;
     private final KanjiRepository kanjiRepository;
     private final SrsCalculatorService srsCalculatorService;
     private final ReviewLogRepository reviewLogRepository;
     private final SrsProperties srsProperties;
+    private final StudyPlanService studyPlanService;
 
     /**
      * Một lần người học trả lời một từ.
@@ -64,17 +69,32 @@ public class SrsService {
                          String chosenAnswer) {
     }
 
-    public Page<DailyCardResponse> getDailyCards(Long userId, Pageable pageable) {
+    /**
+     * Phiên ôn hôm nay theo {@link StudyPlanService}: thẻ ôn đến hạn xếp theo nguy cơ quên, tối đa bằng số thẻ kịp
+     * ôn trong thời gian người học có; từ mới tối đa bằng số từ mới còn lại của hôm nay, xen giữa các thẻ ôn.
+     * {@code extra} = ôn thêm: bỏ hai giới hạn trên, lấy mọi thẻ đến hạn.
+     */
+    public Page<DailyCardResponse> getDailyCards(Long userId, Pageable pageable, boolean extra) {
         LocalDateTime now = LocalDateTime.now();
-        Page<UserKanjiSrs> duePage = srsRepository
-                .findByUserIdAndNextReviewAtLessThanEqualOrderByNextReviewAtAsc(userId, now, pageable);
+        // Composite index idx_user_next_review (user_id, next_review_at).
+        List<UserKanjiSrs> due = srsRepository.findByUserIdAndNextReviewAtLessThanEqualOrderByNextReviewAtAsc(
+                userId, now, PageRequest.of(0, MAX_DUE_CARDS)).getContent();
+        List<UserKanjiSrs> session;
+        if (extra) {
+            session = DailySessionOrder.order(due, now, Integer.MAX_VALUE, Integer.MAX_VALUE);
+        } else {
+            DailyPlanResponse plan = studyPlanService.today(userId);
+            session = DailySessionOrder.order(due, now, plan.getReviewsToday(), plan.getNewToday());
+        }
+        int from = (int) Math.min(pageable.getOffset(), session.size());
+        List<UserKanjiSrs> pageCards = session.subList(from, Math.min(from + pageable.getPageSize(), session.size()));
 
-        List<Long> kanjiIds = duePage.getContent().stream().map(UserKanjiSrs::getKanjiId).toList();
+        List<Long> kanjiIds = pageCards.stream().map(UserKanjiSrs::getKanjiId).toList();
         // Batch-fetch 1 lần duy nhất thay vì gọi findById trong vòng lặp (tránh N+1 Query).
         Map<Long, Kanji> kanjiById = kanjiRepository.findAllById(kanjiIds).stream()
                 .collect(Collectors.toMap(Kanji::getId, Function.identity()));
 
-        List<DailyCardResponse> cards = duePage.getContent().stream()
+        List<DailyCardResponse> cards = pageCards.stream()
                 .map(srs -> DailyCardResponse.builder()
                         .srsId(srs.getId())
                         .kanji(KanjiResponse.from(kanjiById.get(srs.getKanjiId())))
@@ -86,9 +106,10 @@ public class SrsService {
                         .lapseCount(srs.getLapseCount())
                         .hardWord(isHardWord(srs))
                         .personalNote(srs.getPersonalNote())
+                        .newCard(srs.getLastReviewedAt() == null)
                         .build())
                 .toList();
-        return new PageImpl<>(hardWordsUpFrontOnly(cards), pageable, duePage.getTotalElements());
+        return new PageImpl<>(hardWordsUpFrontOnly(cards), pageable, session.size());
     }
 
     /** Chỉ để vài từ khó đầu tiên ở chỗ cũ, các từ khó sau đó dồn xuống cuối phiên ôn để người học không bị ngợp. */

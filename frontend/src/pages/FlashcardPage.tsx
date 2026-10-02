@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BookOpen, Brain, BrainCircuit, ChevronRight, Clock, Dumbbell, PartyPopper, Sprout } from 'lucide-react'
+import { BookOpen, Brain, BrainCircuit, CalendarCheck, ChevronRight, Clock, Dumbbell, PartyPopper, RotateCcw, Sprout } from 'lucide-react'
 import { srsApi } from '@/api/srs'
-import type { DailyCardResponse, Page, ReviewRating, ReviewRequest } from '@/api/types'
+import type { DailyCardResponse, DailyPlanResponse, Page, ReviewRating, ReviewRequest } from '@/api/types'
 import { extractErrorMessage } from '@/api/client'
 import { cn, wordSizeClass } from '@/lib/utils'
 import { FlipCard } from '@/components/FlipCard'
@@ -20,6 +20,7 @@ import { PageSpinner } from '@/components/ui/spinner'
 
 const DAILY_CARDS_KEY = ['srs', 'daily-cards']
 const STATS_KEY = ['srs', 'stats']
+const DAILY_PLAN_KEY = ['srs', 'daily-plan']
 
 const RATING_OPTIONS: { rating: ReviewRating; label: string; hint: string; className: string }[] = [
   { rating: 1, label: 'Quên', hint: 'Học lại', className: 'border-destructive-dark bg-destructive text-white' },
@@ -35,13 +36,17 @@ export function FlashcardPage() {
   // Tổng số thẻ của phiên ôn hôm nay - chốt lại ở lần fetch thành công đầu tiên,
   // không đổi theo các đợt review tiếp theo (queue sẽ co dần qua optimistic update).
   const [sessionTotal, setSessionTotal] = useState<number | null>(null)
+  // Ôn thêm ngoài kế hoạch hôm nay: lấy mọi thẻ đến hạn, kể cả phần để dành cho những ngày sau.
+  const [extra, setExtra] = useState(false)
+  const cardsKey = useMemo(() => [...DAILY_CARDS_KEY, extra], [extra])
 
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: DAILY_CARDS_KEY,
-    queryFn: () => srsApi.getDailyCards({ size: 50 }),
+    queryKey: cardsKey,
+    queryFn: () => srsApi.getDailyCards({ size: 100, extra }),
   })
 
   const { data: stats } = useQuery({ queryKey: STATS_KEY, queryFn: srsApi.getStats })
+  const { data: plan } = useQuery({ queryKey: DAILY_PLAN_KEY, queryFn: srsApi.getDailyPlan })
 
   const queue = data?.content ?? []
   const current = queue[0]
@@ -67,19 +72,28 @@ export function FlashcardPage() {
   const reviewMutation = useMutation({
     mutationFn: (vars: ReviewRequest) => srsApi.submitReview(vars),
     onMutate: async (vars) => {
-      await queryClient.cancelQueries({ queryKey: DAILY_CARDS_KEY })
-      const previous = queryClient.getQueryData<Page<DailyCardResponse>>(DAILY_CARDS_KEY)
-      queryClient.setQueryData<Page<DailyCardResponse> | undefined>(DAILY_CARDS_KEY, (old) =>
+      await queryClient.cancelQueries({ queryKey: cardsKey })
+      const previous = queryClient.getQueryData<Page<DailyCardResponse>>(cardsKey)
+      queryClient.setQueryData<Page<DailyCardResponse> | undefined>(cardsKey, (old) =>
         old ? { ...old, content: old.content.filter((c) => c.kanji.id !== vars.kanjiId) } : old,
       )
       setFlipped(false)
       return { previous }
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(DAILY_CARDS_KEY, context.previous)
+      if (context?.previous) queryClient.setQueryData(cardsKey, context.previous)
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: STATS_KEY }),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: STATS_KEY })
+      queryClient.invalidateQueries({ queryKey: DAILY_PLAN_KEY })
+    },
   })
+
+  function studyExtra() {
+    setSessionTotal(null)
+    if (extra) queryClient.invalidateQueries({ queryKey: cardsKey })
+    else setExtra(true)
+  }
 
   const rate = useMemo(
     () => (rating: ReviewRating) => {
@@ -108,10 +122,14 @@ export function FlashcardPage() {
   }, [current, flipped, rate, toggleFlip])
 
   const doneCount = sessionTotal !== null ? sessionTotal - queue.length : 0
+  // Thẻ đến hạn và từ mới đang chờ mà phiên hôm nay chưa lấy (để dành cho những ngày sau).
+  const leftForLater = plan ? plan.dueReviews + plan.newWaiting : 0
 
   return (
     <div>
       <PageHeader title="Ôn tập hôm nay" subtitle="Ôn lại đúng lúc sắp quên để nhớ lâu hơn." />
+
+      {plan && !extra && stats && stats.totalCardsStarted > 0 && <TodayPlan plan={plan} />}
 
       {stats && (
         <div className="mb-6 grid grid-cols-3 gap-3">
@@ -153,11 +171,22 @@ export function FlashcardPage() {
           icon={PartyPopper}
           iconClassName="bg-accent-soft text-accent-dark"
           title="Đã ôn hết thẻ hôm nay!"
-          description="Quay lại vào ngày mai để giữ chuỗi ôn tập, hoặc học thêm bài mới ngay bây giờ."
+          description={
+            leftForLater > 0
+              ? `Bạn đã xong phần của hôm nay. Còn ${leftForLater} thẻ để dành cho những ngày sau - ôn thêm nếu bạn còn thời gian.`
+              : 'Quay lại vào ngày mai để giữ chuỗi ôn tập, hoặc học thêm bài mới ngay bây giờ.'
+          }
           action={
-            <Button size="lg" onClick={() => navigate('/study')}>
-              <BookOpen className="h-5 w-5" /> Học bài mới
-            </Button>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              {leftForLater > 0 && (
+                <Button size="lg" onClick={studyExtra}>
+                  <RotateCcw className="h-5 w-5" /> Ôn thêm
+                </Button>
+              )}
+              <Button size="lg" variant={leftForLater > 0 ? 'outline' : 'default'} onClick={() => navigate('/study')}>
+                <BookOpen className="h-5 w-5" /> Học bài mới
+              </Button>
+            </div>
           }
         />
       )}
@@ -183,6 +212,7 @@ export function FlashcardPage() {
                 </span>
                 <div className="mt-6 flex flex-wrap justify-center gap-2">
                   <Badge variant="secondary">{current.kanji.jlptLevel}</Badge>
+                  {current.newCard && <Badge variant="accent">Từ mới</Badge>}
                   {current.hardWord && <Badge variant="destructive">Từ khó · quên {current.lapseCount} lần</Badge>}
                 </div>
                 <p className="absolute bottom-5 text-xs font-bold text-muted-foreground">Nhớ nghĩa rồi thì chạm để lật</p>
@@ -245,6 +275,49 @@ export function FlashcardPage() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/** Phần còn lại của kế hoạch hôm nay, cùng lý do nếu có thẻ hay từ mới được để dành cho những ngày sau. */
+function TodayPlan({ plan }: { plan: DailyPlanResponse }) {
+  const reviewsLater = plan.dueReviews - plan.reviewsToday
+  const newLater = plan.newWaiting - plan.newToday
+  const noNewWords = plan.newWaiting === 0 && plan.newLearnedToday < plan.newPerDay
+  return (
+    <div className="mb-6 rounded-2xl border-2 border-border bg-card px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <CalendarCheck className="h-5 w-5 shrink-0 text-secondary" strokeWidth={2.5} />
+        <p className="flex-1 font-extrabold">
+          Hôm nay còn: {plan.reviewsToday} thẻ ôn · {plan.newToday} từ mới
+        </p>
+        {plan.reviewsToday + plan.newToday > 0 && (
+          <span className="text-sm font-bold text-muted-foreground">khoảng {plan.estimatedMinutes} phút</span>
+        )}
+      </div>
+      <ul className="mt-1 flex flex-col gap-0.5 pl-8 text-sm font-semibold text-muted-foreground">
+        {reviewsLater > 0 && (
+          <li>
+            {reviewsLater} thẻ đến hạn khác sẽ ôn dần, vì mỗi ngày bạn dành {plan.dailyMinutes} phút - thẻ dễ quên nhất được ôn
+            trước.
+          </li>
+        )}
+        {newLater > 0 && (
+          <li>
+            {newLater} từ mới khác để dành cho những ngày sau (tối đa {plan.newPerDay} từ mỗi ngày
+            {plan.newPerDayLimitedByTime ? ', đã giảm vì đang có nhiều thẻ cần ôn' : ''}).
+          </li>
+        )}
+        {noNewWords && (
+          <li>
+            Không còn từ mới nào chờ học -{' '}
+            <Link to="/study" className="font-bold text-secondary hover:underline">
+              thêm một bài học vào Ôn tập
+            </Link>
+            .
+          </li>
+        )}
+      </ul>
     </div>
   )
 }

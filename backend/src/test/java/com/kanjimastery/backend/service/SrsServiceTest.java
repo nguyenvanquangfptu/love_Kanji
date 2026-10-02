@@ -3,6 +3,7 @@ package com.kanjimastery.backend.service;
 import com.kanjimastery.backend.config.SrsProperties;
 import com.kanjimastery.backend.dto.AddSrsCardsResponse;
 import com.kanjimastery.backend.dto.DailyCardResponse;
+import com.kanjimastery.backend.dto.DailyPlanResponse;
 import com.kanjimastery.backend.dto.HardWordsResponse;
 import com.kanjimastery.backend.dto.ReviewRequest;
 import com.kanjimastery.backend.dto.SrsTagStatusResponse;
@@ -23,6 +24,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
@@ -63,6 +65,9 @@ class SrsServiceTest {
 
     @Spy
     private SrsProperties srsProperties = new SrsProperties();
+
+    @Mock
+    private StudyPlanService studyPlanService;
 
     @InjectMocks
     private SrsService srsService;
@@ -234,16 +239,41 @@ class SrsServiceTest {
         srsProperties.setHardWordsUpFront(2);
         List<UserKanjiSrs> due = List.of(dueCard(1L, 6), dueCard(2L, 0), dueCard(3L, 7), dueCard(4L, 9),
                 dueCard(5L, 1));
-        PageRequest page = PageRequest.of(0, 20);
-        when(srsRepository.findByUserIdAndNextReviewAtLessThanEqualOrderByNextReviewAtAsc(eq(USER_ID), any(), eq(page)))
-                .thenReturn(new PageImpl<>(due, page, due.size()));
+        givenDueCards(due);
+        givenPlan(100, 0);
         when(kanjiRepository.findAllById(anyList())).thenReturn(due.stream().map(card -> kanji(card.getKanjiId())).toList());
 
-        List<DailyCardResponse> cards = srsService.getDailyCards(USER_ID, page).getContent();
+        List<DailyCardResponse> cards = srsService.getDailyCards(USER_ID, PageRequest.of(0, 20), false).getContent();
 
-        // Từ khó thứ 3 (id 4) dồn xuống cuối; thứ tự còn lại giữ nguyên.
+        // Cùng mức trễ nên giữ thứ tự; từ khó thứ 3 (id 4) dồn xuống cuối.
         assertThat(cards).extracting(card -> card.getKanji().getId()).containsExactly(1L, 2L, 3L, 5L, 4L);
         assertThat(cards).extracting(DailyCardResponse::isHardWord).containsExactly(true, false, true, false, true);
+    }
+
+    @Test
+    void getDailyCards_shouldFollowTodaysPlan_andMarkNewWords() {
+        UserKanjiSrs newWord = UserKanjiSrs.builder().id(300L).userId(USER_ID).kanjiId(30L).repetitionCount(0)
+                .easinessFactor(new BigDecimal("2.50")).reviewIntervalDays(0).nextReviewAt(DUE).lapseCount(0).build();
+        List<UserKanjiSrs> due = List.of(dueCard(1L, 0), dueCard(2L, 0), dueCard(3L, 0), newWord);
+        givenDueCards(due);
+        givenPlan(2, 1);
+        when(kanjiRepository.findAllById(anyList())).thenReturn(due.stream().map(card -> kanji(card.getKanjiId())).toList());
+
+        Page<DailyCardResponse> session = srsService.getDailyCards(USER_ID, PageRequest.of(0, 20), false);
+
+        assertThat(session.getTotalElements()).isEqualTo(3);
+        assertThat(session.getContent()).extracting(card -> card.getKanji().getId()).containsExactly(1L, 2L, 30L);
+        assertThat(session.getContent()).extracting(DailyCardResponse::isNewCard).containsExactly(false, false, true);
+    }
+
+    @Test
+    void getDailyCards_shouldTakeEveryDueCard_whenStudyingExtra() {
+        List<UserKanjiSrs> due = List.of(dueCard(1L, 0), dueCard(2L, 0), dueCard(3L, 0));
+        givenDueCards(due);
+        when(kanjiRepository.findAllById(anyList())).thenReturn(due.stream().map(card -> kanji(card.getKanjiId())).toList());
+
+        assertThat(srsService.getDailyCards(USER_ID, PageRequest.of(0, 20), true).getContent()).hasSize(3);
+        verify(studyPlanService, never()).today(any());
     }
 
     @Test
@@ -334,8 +364,11 @@ class SrsServiceTest {
                 .build();
     }
 
+    private static final LocalDateTime DUE = LocalDateTime.now().minusHours(3);
+
+    /** Thẻ đã học, đến hạn cùng lúc với các thẻ khác (cùng mức trễ). */
     private static UserKanjiSrs dueCard(long kanjiId, int lapses) {
-        LocalDateTime due = LocalDateTime.now().minusHours(kanjiId);
+        LocalDateTime due = DUE;
         return UserKanjiSrs.builder().id(kanjiId + 100).userId(USER_ID).kanjiId(kanjiId).repetitionCount(1)
                 .easinessFactor(new BigDecimal("2.30")).reviewIntervalDays(1).nextReviewAt(due)
                 .lastReviewedAt(due.minusDays(1)).lapseCount(lapses).build();
@@ -343,6 +376,16 @@ class SrsServiceTest {
 
     private static Kanji kanji(long id) {
         return Kanji.builder().id(id).character("語" + id).hanViet("NGỮ").meaning("nghĩa " + id).build();
+    }
+
+    private void givenDueCards(List<UserKanjiSrs> due) {
+        when(srsRepository.findByUserIdAndNextReviewAtLessThanEqualOrderByNextReviewAtAsc(eq(USER_ID), any(), any()))
+                .thenReturn(new PageImpl<>(due));
+    }
+
+    private void givenPlan(int reviewsToday, int newToday) {
+        when(studyPlanService.today(USER_ID))
+                .thenReturn(DailyPlanResponse.builder().reviewsToday(reviewsToday).newToday(newToday).build());
     }
 
     private void givenSaveReturnsCard() {

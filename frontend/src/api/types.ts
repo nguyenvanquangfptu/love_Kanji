@@ -96,6 +96,27 @@ export interface DailyCardResponse {
   hardWord: boolean
   /** Cách nhớ riêng người học tự ghi; null nếu chưa có. */
   personalNote: string | null
+  /** Từ mới, chưa học lần nào. */
+  newCard: boolean
+}
+
+/** Kế hoạch ôn hôm nay - số thẻ ôn và từ mới vừa với thời gian ôn mỗi ngày. */
+export interface DailyPlanResponse {
+  dailyMinutes: number
+  /** Đo từ nhịp ôn thật của người học (chưa đủ dữ liệu thì lấy mặc định). */
+  secondsPerCard: number
+  reviewCapacity: number
+  /** Thẻ ôn đang đến hạn, không tính từ mới. */
+  dueReviews: number
+  reviewsToday: number
+  newPerDay: number
+  /** Số từ mới mỗi ngày đã bị giảm vì thời gian ôn không đủ cho lượng ôn sắp tới. */
+  newPerDayLimitedByTime: boolean
+  newLearnedToday: number
+  /** Từ mới đã đưa vào Ôn tập mà chưa học. */
+  newWaiting: number
+  newToday: number
+  estimatedMinutes: number
 }
 
 /** 1 Quên, 2 Khó, 3 Nhớ, 4 Dễ. */

@@ -31,6 +31,15 @@ public interface UserKanjiSrsRepository extends JpaRepository<UserKanjiSrs, Long
 
     long countByUserIdAndNextReviewAtLessThanEqual(Long userId, LocalDateTime now);
 
+    /** Thẻ ôn đến hạn (đã học ít nhất một lần - không tính từ mới đang chờ). */
+    long countByUserIdAndLastReviewedAtIsNotNullAndNextReviewAtLessThanEqual(Long userId, LocalDateTime now);
+
+    /** Từ mới đã đưa vào Ôn tập nhưng chưa học lần nào. */
+    long countByUserIdAndLastReviewedAtIsNull(Long userId);
+
+    /** Thẻ đã học sẽ đến hạn trong khoảng thời gian cho trước - để ước lượng lượng ôn những ngày tới. */
+    long countByUserIdAndLastReviewedAtIsNotNullAndNextReviewAtBetween(Long userId, LocalDateTime from, LocalDateTime to);
+
     long countByUserIdAndNextReviewAtAfterAndReviewIntervalDaysGreaterThanEqual(
             Long userId, LocalDateTime now, Integer minIntervalDays);
 

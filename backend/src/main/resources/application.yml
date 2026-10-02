@@ -72,6 +72,10 @@ app:
   srs:
     hard-word-lapses: 6       # quên chừng này lần (sau khi đã học) thì thành "từ khó"
     hard-words-up-front: 5    # mỗi phiên ôn chỉ để chừng này từ khó ở chỗ cũ, còn lại dồn xuống cuối
+    day-zone: Asia/Ho_Chi_Minh # "hôm nay" của người học tính theo múi giờ này, không theo giờ máy chủ
+    day-start-hour: 4         # ngày học mới bắt đầu lúc 4 giờ sáng: học quá nửa đêm vẫn tính vào hôm trước
+    default-daily-minutes: 20 # khi người học chưa đặt mục tiêu
+    default-new-words-per-day: 10
   exam:
     duration-seconds: 1800        # 30 phút làm bài
     default-question-count: 20

@@ -35,6 +35,29 @@ public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
                                                @Param("direction") String direction,
                                                @Param("limit") int limit);
 
+    /**
+     * Nhịp ôn thẻ thật của người học: trung vị khoảng cách giữa hai lần chấm thẻ liền nhau trong {@code limit} lần chấm
+     * gần nhất, bỏ các khoảng quá 2 phút (nghỉ giữa chừng hoặc sang phiên khác). Gồm cả thời gian đọc đáp án và chấm.
+     */
+    @Query(value = """
+            SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY gaps.gap_ms) AS "medianMs", COUNT(*) AS "samples"
+            FROM (SELECT EXTRACT(EPOCH FROM (recent.reviewed_at - LAG(recent.reviewed_at) OVER (ORDER BY recent.reviewed_at)))
+                             * 1000 AS gap_ms
+                  FROM (SELECT reviewed_at FROM review_logs
+                        WHERE user_id = :userId AND source = 'FLASHCARD'
+                        ORDER BY reviewed_at DESC
+                        LIMIT :limit) recent) gaps
+            WHERE gaps.gap_ms > 0 AND gaps.gap_ms <= 120000
+            """, nativeQuery = true)
+    ResponseTimeStats flashcardPace(@Param("userId") Long userId, @Param("limit") int limit);
+
+    /** Số từ mới (lần đầu được tính vào lịch ôn) người học đã học từ {@code since}. */
+    @Query(value = """
+            SELECT COUNT(DISTINCT kanji_id) FROM review_logs
+            WHERE user_id = :userId AND state_before = 'NEW' AND scheduled AND reviewed_at >= :since
+            """, nativeQuery = true)
+    long countNewWordsLearnedSince(@Param("userId") Long userId, @Param("since") LocalDateTime since);
+
     /** Lượt trả lời một từ theo một hướng hỏi ({@code direction} null = thẻ ôn tập). */
     interface WordDirectionStats {
         Long getKanjiId();
