@@ -191,11 +191,13 @@ public class SrsService {
 
     /**
      * Tính lịch ôn mới theo SM-2 (thẻ chưa có thì tạo) và ghi lại lần trả lời trong cùng transaction.
-     * "Quên" một thẻ đã học (không còn mới) được đếm vào số lần quên - đủ số lần thì thành từ khó.
+     * "Quên" một thẻ đang ôn bình thường (đã nhớ lại được kể từ lần quên trước) được đếm vào số lần quên - đủ số lần
+     * thì thành từ khó. Quên tiếp khi đang học lại không tính thêm: trắc nghiệm thích ứng hay hỏi lại từ vừa sai, nên
+     * sai nhiều lần liền trong một buổi vẫn chỉ là một lần quên.
      */
     private UserKanjiSrs schedule(Long userId, Long kanjiId, UserKanjiSrs card, Answer answer, LocalDateTime now) {
         log(userId, kanjiId, card, answer, true, now);
-        boolean lapse = answer.rating() == ReviewRating.AGAIN && !CardState.NEW.equals(CardState.of(card));
+        boolean lapse = answer.rating() == ReviewRating.AGAIN && CardState.REVIEW.equals(CardState.of(card));
 
         UserKanjiSrs srs = card != null ? card : UserKanjiSrs.builder()
                 .userId(userId)

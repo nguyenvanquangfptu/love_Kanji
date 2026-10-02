@@ -202,6 +202,19 @@ class SrsServiceTest {
     }
 
     @Test
+    void recordQuizAnswer_shouldCountOnlyOneLapse_forMistakesInARowWhileRelearning() {
+        UserKanjiSrs card = card(4, "2.60", 20, LocalDateTime.now().plusDays(10));
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.of(card));
+        when(srsRepository.save(any(UserKanjiSrs.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        for (int i = 0; i < 6; i++) {
+            srsService.recordQuizAnswer(USER_ID, KANJI_ID, quizAnswer(false, ReviewRating.AGAIN));
+        }
+
+        assertThat(card.getLapseCount()).isEqualTo(1);
+    }
+
+    @Test
     void submitReview_shouldNotCountALapse_whenANewCardIsForgotten() {
         UserKanjiSrs neverReviewed = UserKanjiSrs.builder().userId(USER_ID).kanjiId(KANJI_ID).repetitionCount(0)
                 .easinessFactor(new BigDecimal("2.50")).reviewIntervalDays(0).nextReviewAt(LocalDateTime.now()).build();
