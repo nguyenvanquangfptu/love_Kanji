@@ -12,6 +12,8 @@ import java.util.List;
 /**
  * Thứ tự phiên ôn hôm nay: thẻ ôn có nguy cơ quên cao nhất trước, từ mới (chưa học lần nào) xen vào sau mỗi
  * {@value #REVIEWS_BETWEEN_NEW_WORDS} thẻ ôn để phiên ôn không dồn hết từ mới vào đầu hay cuối.
+ * Nguy cơ quên đo bằng mức trễ hạn ({@link #mostOverdueFirst(LocalDateTime)}), hoặc bằng xác suất còn nhớ khi
+ * người học xếp lịch bằng FSRS.
  */
 final class DailySessionOrder {
 
@@ -22,10 +24,15 @@ final class DailySessionOrder {
 
     /** {@code due} là mọi thẻ đến hạn; lấy tối đa {@code maxReviews} thẻ ôn và {@code maxNewWords} từ mới. */
     static List<UserKanjiSrs> order(List<UserKanjiSrs> due, LocalDateTime now, int maxReviews, int maxNewWords) {
+        return order(due, mostOverdueFirst(now), maxReviews, maxNewWords);
+    }
+
+    /** Như trên, thẻ ôn xếp theo {@code riskiestFirst} (chỉ so các thẻ đã học ít nhất một lần). */
+    static List<UserKanjiSrs> order(List<UserKanjiSrs> due, Comparator<UserKanjiSrs> riskiestFirst, int maxReviews,
+                                    int maxNewWords) {
         List<UserKanjiSrs> reviews = due.stream()
                 .filter(card -> card.getLastReviewedAt() != null)
-                .sorted(Comparator.comparingDouble((UserKanjiSrs card) -> overdueRatio(card, now)).reversed()
-                        .thenComparing(UserKanjiSrs::getNextReviewAt))
+                .sorted(riskiestFirst.thenComparing(UserKanjiSrs::getNextReviewAt))
                 .limit(Math.max(maxReviews, 0))
                 .toList();
         // Từ mới theo thứ tự được thêm vào; cùng một lần thêm (một bài) thì theo thứ tự id từ.
@@ -44,6 +51,10 @@ final class DailySessionOrder {
         }
         newWords.forEachRemaining(session::add);
         return session;
+    }
+
+    static Comparator<UserKanjiSrs> mostOverdueFirst(LocalDateTime now) {
+        return Comparator.comparingDouble((UserKanjiSrs card) -> overdueRatio(card, now)).reversed();
     }
 
     /**

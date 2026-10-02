@@ -26,6 +26,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -75,8 +76,9 @@ public class SrsService {
     }
 
     /**
-     * Phiên ôn hôm nay theo {@link StudyPlanService}: thẻ ôn đến hạn xếp theo nguy cơ quên, tối đa bằng số thẻ kịp
-     * ôn trong thời gian người học có; từ mới tối đa bằng số từ mới còn lại của hôm nay, xen giữa các thẻ ôn.
+     * Phiên ôn hôm nay theo {@link StudyPlanService}: thẻ ôn đến hạn xếp theo nguy cơ quên (dùng FSRS thì theo xác
+     * suất còn nhớ, thấp nhất trước), tối đa bằng số thẻ kịp ôn trong thời gian người học có; từ mới tối đa bằng số
+     * từ mới còn lại của hôm nay, xen giữa các thẻ ôn.
      * {@code extra} = ôn thêm: bỏ hai giới hạn trên, lấy mọi thẻ đến hạn.
      */
     public Page<DailyCardResponse> getDailyCards(Long userId, Pageable pageable, boolean extra) {
@@ -84,17 +86,20 @@ public class SrsService {
         // Composite index idx_user_next_review (user_id, next_review_at).
         List<UserKanjiSrs> due = srsRepository.findByUserIdAndNextReviewAtLessThanEqualOrderByNextReviewAtAsc(
                 userId, now, PageRequest.of(0, MAX_DUE_CARDS)).getContent();
+        SchedulingSettings settings = learningProfileService.scheduling(userId);
+        Comparator<UserKanjiSrs> riskiestFirst = settings.usesFsrs()
+                ? Comparator.comparingDouble((UserKanjiSrs card) -> recall(card, now))
+                : DailySessionOrder.mostOverdueFirst(now);
         List<UserKanjiSrs> session;
         if (extra) {
-            session = DailySessionOrder.order(due, now, Integer.MAX_VALUE, Integer.MAX_VALUE);
+            session = DailySessionOrder.order(due, riskiestFirst, Integer.MAX_VALUE, Integer.MAX_VALUE);
         } else {
             DailyPlanResponse plan = studyPlanService.today(userId);
-            session = DailySessionOrder.order(due, now, plan.getReviewsToday(), plan.getNewToday());
+            session = DailySessionOrder.order(due, riskiestFirst, plan.getReviewsToday(), plan.getNewToday());
         }
         int from = (int) Math.min(pageable.getOffset(), session.size());
         List<UserKanjiSrs> pageCards = session.subList(from, Math.min(from + pageable.getPageSize(), session.size()));
 
-        SchedulingSettings settings = learningProfileService.scheduling(userId);
         List<Long> kanjiIds = pageCards.stream().map(UserKanjiSrs::getKanjiId).toList();
         // Batch-fetch 1 lần duy nhất thay vì gọi findById trong vòng lặp (tránh N+1 Query).
         Map<Long, Kanji> kanjiById = kanjiRepository.findAllById(kanjiIds).stream()
@@ -317,11 +322,13 @@ public class SrsService {
      * Ghi kèm trạng thái thẻ ngay trước lần trả lời ({@code card} null = chưa có trong lịch ôn) và xác suất nhớ FSRS
      * dự đoán lúc đó.
      */
-    private void log(Long userId, Long kanjiId, UserKanjiSrs card, Answer answer, boolean scheduled, LocalDateTime now) {
+    /** Xác suất FSRS còn nhớ thẻ lúc {@code now}; null nếu chưa học lần nào. */
+    private Double recall(UserKanjiSrs card, LocalDateTime now) {
         Fsrs.Memory memory = memoryBefore(card);
-        Double retrievability = memory == null
-                ? null
-                : fsrs.retrievability(memory.stability(), elapsedDays(card, now));
+        return memory == null ? null : fsrs.retrievability(memory.stability(), elapsedDays(card, now));
+    }
+
+    private void log(Long userId, Long kanjiId, UserKanjiSrs card, Answer answer, boolean scheduled, LocalDateTime now) {
         reviewLogRepository.save(ReviewLog.builder()
                 .userId(userId)
                 .kanjiId(kanjiId)
@@ -334,7 +341,7 @@ public class SrsService {
                 .stateBefore(CardState.of(card))
                 .efBefore(card == null ? null : card.getEasinessFactor())
                 .intervalBefore(card == null ? null : card.getReviewIntervalDays())
-                .retrievability(retrievability)
+                .retrievability(recall(card, now))
                 .scheduled(scheduled)
                 .reviewedAt(now)
                 .build());

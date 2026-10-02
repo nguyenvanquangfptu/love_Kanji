@@ -385,6 +385,29 @@ class SrsServiceTest {
     }
 
     @Test
+    void getDailyCards_shouldPutTheWordsLeastLikelyRemembered_first_withFsrs() {
+        LocalDateTime now = LocalDateTime.now();
+        // SM-2 coi thẻ 1 trễ hơn (trễ nửa khoảng ôn), nhưng FSRS thấy thẻ 2 yếu hơn nhiều: độ ổn định 3 ngày mà đã
+        // 12 ngày chưa ôn (còn nhớ ~78%), còn thẻ 1 ổn định 20 ngày mới qua 3 ngày (~98%).
+        UserKanjiSrs strong = UserKanjiSrs.builder().id(101L).userId(USER_ID).kanjiId(1L).repetitionCount(2)
+                .easinessFactor(new BigDecimal("2.50")).reviewIntervalDays(2).nextReviewAt(now.minusDays(1))
+                .lastReviewedAt(now.minusDays(3)).stability(20.0).difficulty(4.0).lapseCount(0).build();
+        UserKanjiSrs weak = UserKanjiSrs.builder().id(102L).userId(USER_ID).kanjiId(2L).repetitionCount(3)
+                .easinessFactor(new BigDecimal("2.50")).reviewIntervalDays(10).nextReviewAt(now.minusDays(2))
+                .lastReviewedAt(now.minusDays(12)).stability(3.0).difficulty(6.0).lapseCount(0).build();
+        List<UserKanjiSrs> due = List.of(strong, weak);
+        givenDueCards(due);
+        when(kanjiRepository.findAllById(anyList())).thenReturn(due.stream().map(card -> kanji(card.getKanjiId())).toList());
+
+        assertThat(srsService.getDailyCards(USER_ID, PageRequest.of(0, 20), true).getContent())
+                .extracting(card -> card.getKanji().getId()).containsExactly(1L, 2L);
+
+        givenScheduling(SchedulerType.FSRS, 0.9);
+        assertThat(srsService.getDailyCards(USER_ID, PageRequest.of(0, 20), true).getContent())
+                .extracting(card -> card.getKanji().getId()).containsExactly(2L, 1L);
+    }
+
+    @Test
     void getDailyCards_shouldTakeEveryDueCard_whenStudyingExtra() {
         List<UserKanjiSrs> due = List.of(dueCard(1L, 0), dueCard(2L, 0), dueCard(3L, 0));
         givenDueCards(due);
