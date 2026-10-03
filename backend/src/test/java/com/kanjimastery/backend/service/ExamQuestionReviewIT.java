@@ -5,11 +5,13 @@ import com.kanjimastery.backend.dto.AdminExamQuestionRequest;
 import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
 import com.kanjimastery.backend.dto.QuestionBankStatsResponse;
 import com.kanjimastery.backend.exception.BadRequestException;
+import com.kanjimastery.backend.model.ExamPassage;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionFlag;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.GrammarPoint;
 import com.kanjimastery.backend.model.JlptQuestionType;
+import com.kanjimastery.backend.repository.ExamPassageRepository;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.GrammarPointRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -33,6 +35,8 @@ class ExamQuestionReviewIT extends AbstractIntegrationTest {
     private ExamQuestionRepository questionRepository;
     @Autowired
     private GrammarPointRepository grammarPointRepository;
+    @Autowired
+    private ExamPassageRepository passageRepository;
 
     private GrammarPoint particle;
     private ExamQuestion draft;
@@ -92,6 +96,50 @@ class ExamQuestionReviewIT extends AbstractIntegrationTest {
                 "Báo sai: hai đáp án cùng đúng");
         assertThat(retired.getReviewNote()).isEqualTo("Báo sai: hai đáp án cùng đúng");
         assertThat(examPool()).doesNotContain(draft.getId());
+    }
+
+    @Test
+    void approveAll_shouldApproveOnlyCleanDrafts_andSayWhyTheOthersStayed() {
+        ExamQuestion clean = questionRepository.save(grammarQuestion("を", "が").build());
+        ExamQuestion approved = questionRepository.save(grammarQuestion("を", "が")
+                .status(ExamQuestionStatus.APPROVED).build());
+        ExamQuestion broken = questionRepository.save(grammarQuestion("を", "を").build());
+        ExamPassage passage = passageRepository.save(ExamPassage.builder().jlptLevel("N5").content("【1】").build());
+        ExamQuestion blank = questionRepository.save(grammarQuestion("を", "が").questionText("【1】")
+                .questionType(JlptQuestionType.TEXT_GRAMMAR).passageId(passage.getId()).blankNo(1).build());
+        try {
+            ExamQuestionReviewService.BulkApproval result = reviewService.approveAll(List.of(clean.getId(),
+                    draft.getId(), approved.getId(), broken.getId(), blank.getId(), -1L, clean.getId()));
+
+            assertThat(result.approved()).isEqualTo(1);
+            assertThat(result.skipped()).extracting(ExamQuestionReviewService.BulkApproval.Skipped::id)
+                    .containsExactly(draft.getId(), approved.getId(), broken.getId(), blank.getId(), -1L);
+            assertThat(result.skipped()).extracting(ExamQuestionReviewService.BulkApproval.Skipped::reason)
+                    .satisfiesExactly(
+                            reason -> assertThat(reason).contains("cảnh báo"),
+                            reason -> assertThat(reason).contains("không ở trạng thái chờ duyệt"),
+                            reason -> assertThat(reason).contains("có lựa chọn trùng nhau"),
+                            reason -> assertThat(reason).contains("đoạn văn"),
+                            reason -> assertThat(reason).contains("không tìm thấy"));
+            assertThat(questionRepository.findById(clean.getId()).orElseThrow()).satisfies(question -> {
+                assertThat(question.getStatus()).isEqualTo(ExamQuestionStatus.APPROVED);
+                assertThat(question.getReviewedAt()).isNotNull();
+            });
+            // Câu có cảnh báo vẫn chờ người duyệt xem riêng.
+            assertThat(questionRepository.findById(draft.getId()).orElseThrow().getStatus())
+                    .isEqualTo(ExamQuestionStatus.DRAFT);
+            assertThat(questionRepository.findById(broken.getId()).orElseThrow().getStatus())
+                    .isEqualTo(ExamQuestionStatus.DRAFT);
+        } finally {
+            questionRepository.deleteAllById(List.of(clean.getId(), approved.getId(), broken.getId()));
+            passageRepository.deleteById(passage.getId());
+        }
+    }
+
+    private static ExamQuestion.ExamQuestionBuilder grammarQuestion(String optionA, String optionB) {
+        return ExamQuestion.builder().jlptLevel("N5").questionText("[ReviewIT] Chọn trợ từ").sentence("パン（　　）食べます。")
+                .optionA(optionA).optionB(optionB).optionC("に").optionD("で").correctOption("A")
+                .questionType(JlptQuestionType.GRAMMAR_FORM).status(ExamQuestionStatus.DRAFT);
     }
 
     private List<Long> examPool() {

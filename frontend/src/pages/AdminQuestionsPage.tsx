@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronLeft, ChevronRight, Pencil, RotateCcw, Undo2, X } from 'lucide-react'
+import { Check, CheckCheck, ChevronLeft, ChevronRight, Pencil, RotateCcw, Undo2, X } from 'lucide-react'
 import { examAdminApi } from '@/api/examAdmin'
 import { extractErrorMessage } from '@/api/client'
 import {
@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
+import { Modal } from '@/components/ui/modal'
 import { PageSpinner } from '@/components/ui/spinner'
 import { PageHeader } from '@/components/PageHeader'
 import { AdminNav } from '@/components/AdminNav'
@@ -64,6 +65,7 @@ export function AdminQuestionsPage() {
   const [editError, setEditError] = useState<string | null>(null)
   const [pendingNote, setPendingNote] = useState<PendingNote | null>(null)
   const [noteKey, setNoteKey] = useState(0)
+  const [confirmingBulk, setConfirmingBulk] = useState(false)
 
   function update(changes: Record<string, string | undefined>) {
     const next = new URLSearchParams(params)
@@ -94,6 +96,15 @@ export function AdminQuestionsPage() {
       refresh()
     },
   })
+  const bulkMutation = useMutation({
+    mutationFn: (ids: number[]) => examAdminApi.approveAll(ids),
+    onSuccess: () => {
+      setConfirmingBulk(false)
+      // Câu đã duyệt rời khỏi danh sách chờ duyệt: quay về trang đầu.
+      update({})
+      refresh()
+    },
+  })
   const editMutation = useMutation({
     mutationFn: (vars: { id: number; payload: AdminExamQuestionRequest }) => examAdminApi.update(vars.id, vars.payload),
     onSuccess: () => {
@@ -110,6 +121,8 @@ export function AdminQuestionsPage() {
     VOCABULARY_DRAFT_TYPES.includes(type) &&
     (levelStats?.types.some((row) => row.type === type) ?? false)
   const data = questionsQuery.data
+  // Duyệt cả trang: chỉ câu chờ duyệt không có cảnh báo (câu có cảnh báo cần xem riêng).
+  const approvable = data?.content.filter((question) => question.status === 'DRAFT' && !question.flag) ?? []
   const grammarLabel = data?.content.flatMap((q) => q.grammarPoints).find((g) => g.id === grammarPointId)?.pattern
 
   return (
@@ -229,6 +242,15 @@ export function AdminQuestionsPage() {
       </div>
 
       {statusMutation.isError && <Alert className="mb-4">{extractErrorMessage(statusMutation.error)}</Alert>}
+      {bulkMutation.data && (
+        <p className="mb-4 rounded-2xl bg-secondary-soft px-4 py-3 text-sm font-bold text-secondary-dark">
+          Đã duyệt {bulkMutation.data.approved} câu.
+          {bulkMutation.data.skipped.length > 0 &&
+            ` Bỏ qua ${bulkMutation.data.skipped.length} câu: ${bulkMutation.data.skipped
+              .map((skipped) => `#${skipped.id} ${skipped.reason}`)
+              .join('; ')}.`}
+        </p>
+      )}
       {canDraftVocabulary && type && (
         <VocabularyDraftPanel key={`${level}-${type}`} level={level} type={type} onDrafted={refresh} />
       )}
@@ -243,7 +265,14 @@ export function AdminQuestionsPage() {
         <Card className="p-6 text-center font-semibold text-muted-foreground">Không có câu nào khớp bộ lọc.</Card>
       ) : (
         <>
-          <p className="mb-3 text-sm font-bold text-muted-foreground">{data.totalElements} câu</p>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-bold text-muted-foreground">{data.totalElements} câu</p>
+            {approvable.length > 0 && (
+              <Button size="sm" variant="outline" onClick={() => setConfirmingBulk(true)}>
+                <CheckCheck className="h-4 w-4" /> Duyệt {approvable.length} câu không có cảnh báo trên trang
+              </Button>
+            )}
+          </div>
           <div className="flex flex-col gap-4">
             {data.content.map((question) => (
               <QuestionReviewCard
@@ -279,6 +308,28 @@ export function AdminQuestionsPage() {
           )}
         </>
       )}
+
+      <Modal
+        open={confirmingBulk}
+        onClose={() => setConfirmingBulk(false)}
+        title={`Duyệt ${approvable.length} câu?`}
+        description="Chỉ duyệt khi đã đọc từng câu trên trang: đáp án đúng, chỉ một đáp án đúng, từ vựng đúng cấp độ. Câu có cảnh báo không nằm trong lượt này."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setConfirmingBulk(false)}>
+              Huỷ
+            </Button>
+            <Button
+              disabled={bulkMutation.isPending}
+              onClick={() => bulkMutation.mutate(approvable.map((question) => question.id))}
+            >
+              <CheckCheck className="h-4 w-4" /> {bulkMutation.isPending ? 'Đang duyệt...' : `Duyệt ${approvable.length} câu`}
+            </Button>
+          </>
+        }
+      >
+        {bulkMutation.isError && <Alert>{extractErrorMessage(bulkMutation.error)}</Alert>}
+      </Modal>
 
       <QuestionEditDialog
         key={editKey}

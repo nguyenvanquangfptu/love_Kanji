@@ -2,6 +2,7 @@ package com.kanjimastery.backend.controller;
 
 import com.kanjimastery.backend.dto.AdminExamQuestionRequest;
 import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
+import com.kanjimastery.backend.dto.BulkApproveRequest;
 import com.kanjimastery.backend.dto.ExamQuestionStatusRequest;
 import com.kanjimastery.backend.dto.QuestionBankStatsResponse;
 import com.kanjimastery.backend.dto.QuestionDraftRequest;
@@ -58,6 +59,15 @@ public class AdminExamQuestionController {
     public ResponseEntity<AdminExamQuestionResponse> changeStatus(@PathVariable Long id,
                                                                   @Valid @RequestBody ExamQuestionStatusRequest request) {
         return ResponseEntity.ok(reviewService.changeStatus(id, request.getStatus(), request.getNote()));
+    }
+
+    @Operation(summary = "Duyệt nhiều câu một lượt",
+            description = "Tối đa 100 câu. Chỉ duyệt câu đang chờ duyệt, không có cảnh báo, không thuộc đoạn văn và đúng "
+                    + "cấu trúc; câu khác giữ nguyên và được trả về kèm lý do.")
+    @PostMapping("/approve")
+    public ResponseEntity<ExamQuestionReviewService.BulkApproval> approveAll(
+            @Valid @RequestBody BulkApproveRequest request) {
+        return ResponseEntity.ok(reviewService.approveAll(request.getIds()));
     }
 
     @Operation(summary = "Ngân hàng câu theo cấp độ và dạng câu", description = "Số câu theo trạng thái, đủ cho bao nhiêu đề.")

@@ -568,6 +568,12 @@ export interface QuestionBankStats {
   }[]
 }
 
+/** Kết quả duyệt một lượt nhiều câu: số câu đã duyệt, và các câu bỏ qua kèm lý do. */
+export interface BulkApprovalResult {
+  approved: number
+  skipped: { id: number; reason: string }[]
+}
+
 /** Kết quả một lần nhờ AI viết nháp: số câu vào hàng chờ duyệt (trong đó có cảnh báo), bị loại, không đọc được. */
 export interface QuestionDraftResult {
   drafted: number

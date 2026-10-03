@@ -26,8 +26,10 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,7 +38,7 @@ import java.util.stream.Collectors;
 
 /**
  * Trang duyệt câu thi đề JLPT: lọc câu theo cấp độ / dạng / trạng thái / cảnh báo / điểm ngữ pháp, sửa nội dung,
- * duyệt (vào đề), loại (kèm lý do), rút khỏi đề; thống kê mỗi dạng đã đủ câu cho bao nhiêu đề.
+ * duyệt (vào đề, từng câu hoặc cả trang), loại (kèm lý do), rút khỏi đề; thống kê mỗi dạng đã đủ câu cho bao nhiêu đề.
  */
 @Service
 @RequiredArgsConstructor
@@ -52,6 +54,16 @@ public class ExamQuestionReviewService {
 
     /** Bộ lọc của trang duyệt; trường null = không lọc. Chỉ có câu thuộc một dạng đề JLPT. */
     public record Filter(String level, String type, String status, boolean flaggedOnly, Long grammarPointId) {
+    }
+
+    /**
+     * @param approved số câu đã duyệt
+     * @param skipped  các câu không duyệt, kèm lý do
+     */
+    public record BulkApproval(int approved, List<Skipped> skipped) {
+
+        public record Skipped(Long id, String reason) {
+        }
     }
 
     @Transactional(readOnly = true)
@@ -140,10 +152,7 @@ public class ExamQuestionReviewService {
             throw new BadRequestException("Loại câu hỏi thì cần ghi lý do");
         }
         if (ExamQuestionStatus.APPROVED.equals(status)) {
-            List<String> problems = ExamQuestionValidator.problems(question.getQuestionType(), question.getQuestionText(),
-                    question.getSentence(), question.getHighlight(), List.of(question.getOptionA(),
-                            question.getOptionB(), question.getOptionC(), question.getOptionD()),
-                    question.getCorrectOption());
+            List<String> problems = problems(question);
             if (!problems.isEmpty()) {
                 throw new BadRequestException("Chưa duyệt được, câu hỏi cần sửa: " + String.join("; ", problems));
             }
@@ -155,6 +164,52 @@ public class ExamQuestionReviewService {
         }
         question.setReviewedAt(LocalDateTime.now());
         return toResponse(question);
+    }
+
+    /**
+     * Duyệt một lượt các câu người duyệt đã đọc trên trang. Chỉ duyệt câu đang chờ duyệt, không có cảnh báo (câu có
+     * cảnh báo cần xem và duyệt riêng), không thuộc đoạn văn và đúng cấu trúc; câu khác giữ nguyên, kèm lý do.
+     */
+    @Transactional
+    public BulkApproval approveAll(Collection<Long> ids) {
+        Map<Long, ExamQuestion> found = questionRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(ExamQuestion::getId, Function.identity()));
+        List<BulkApproval.Skipped> skipped = new ArrayList<>();
+        int approved = 0;
+        LocalDateTime now = LocalDateTime.now();
+        for (Long id : new LinkedHashSet<>(ids)) {
+            ExamQuestion question = found.get(id);
+            String reason = question == null ? "không tìm thấy" : whyNotApprovable(question);
+            if (reason != null) {
+                skipped.add(new BulkApproval.Skipped(id, reason));
+                continue;
+            }
+            question.setStatus(ExamQuestionStatus.APPROVED);
+            question.setReviewedAt(now);
+            approved++;
+        }
+        return new BulkApproval(approved, skipped);
+    }
+
+    /** Lý do không duyệt cùng lượt được; null nếu duyệt được. */
+    private static String whyNotApprovable(ExamQuestion question) {
+        if (question.getPassageId() != null) {
+            return "thuộc một đoạn văn - duyệt cả đoạn văn";
+        }
+        if (!ExamQuestionStatus.DRAFT.equals(question.getStatus())) {
+            return "không ở trạng thái chờ duyệt";
+        }
+        if (question.getFlag() != null) {
+            return "có cảnh báo - cần xem và duyệt riêng";
+        }
+        List<String> problems = problems(question);
+        return problems.isEmpty() ? null : "câu hỏi cần sửa: " + String.join("; ", problems);
+    }
+
+    private static List<String> problems(ExamQuestion question) {
+        return ExamQuestionValidator.problems(question.getQuestionType(), question.getQuestionText(),
+                question.getSentence(), question.getHighlight(), List.of(question.getOptionA(), question.getOptionB(),
+                        question.getOptionC(), question.getOptionD()), question.getCorrectOption());
     }
 
     /** Theo các cấp độ có cấu trúc đề: mỗi dạng câu có bao nhiêu câu ở mỗi trạng thái, đủ cho bao nhiêu đề. */

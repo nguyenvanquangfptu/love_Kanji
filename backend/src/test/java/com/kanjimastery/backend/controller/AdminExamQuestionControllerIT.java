@@ -55,6 +55,21 @@ class AdminExamQuestionControllerIT extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/v1/admin/exam-questions/{id}/status", draft.getId())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"APPROVED\"}"))
                 .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/admin/exam-questions/approve").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"ids\": [" + draft.getId() + "]}")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void admins_shouldApproveAPageOfDraftsAtOnce() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/exam-questions/approve").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ids\": []}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/v1/admin/exam-questions/approve").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ids\": [" + draft.getId() + ", -1]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approved").value(1))
+                .andExpect(jsonPath("$.skipped[0].id").value(-1));
     }
 
     @Test

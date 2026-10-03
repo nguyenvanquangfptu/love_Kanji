@@ -3,6 +3,7 @@ import type {
   AdminExamPassage,
   AdminExamQuestion,
   AdminExamQuestionRequest,
+  BulkApprovalResult,
   ExamQuestionStatus,
   JlptQuestionType,
   Page,
@@ -32,6 +33,10 @@ export const examAdminApi = {
   /** Duyệt / loại (cần lý do) / rút khỏi đề / đưa về chờ duyệt. */
   changeStatus: (id: number, status: ExamQuestionStatus, note?: string) =>
     apiClient.post<AdminExamQuestion>(`/admin/exam-questions/${id}/status`, { status, note }).then((r) => r.data),
+
+  /** Duyệt một lượt các câu đã đọc trên trang; chỉ câu chờ duyệt, không cảnh báo, đúng cấu trúc mới được duyệt. */
+  approveAll: (ids: number[]) =>
+    apiClient.post<BulkApprovalResult>('/admin/exam-questions/approve', { ids }).then((r) => r.data),
 
   stats: () => apiClient.get<QuestionBankStats[]>('/admin/exam-questions/stats').then((r) => r.data),
 
