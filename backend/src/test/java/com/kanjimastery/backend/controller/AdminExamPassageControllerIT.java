@@ -14,16 +14,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** API đoạn văn 文章の文法 qua HTTP: chỉ quản trị viên; xem kèm câu hỏi, sửa nội dung, duyệt cả đoạn. */
+/** API đoạn văn 文章の文法 qua HTTP: chỉ quản trị viên; xem kèm câu hỏi, sửa nội dung, duyệt cả đoạn, nhờ AI viết. */
 @AutoConfigureMockMvc
+@TestPropertySource(properties = "app.ai.gemini-api-key=")
 class AdminExamPassageControllerIT extends AbstractIntegrationTest {
 
     @Autowired
@@ -54,6 +58,17 @@ class AdminExamPassageControllerIT extends AbstractIntegrationTest {
     @WithMockUser(roles = "USER")
     void learners_shouldNotReachPassages() throws Exception {
         mockMvc.perform(get("/api/v1/admin/exam-passages").param("level", "N4")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/admin/exam-passages/drafts").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"level\": \"N4\"}")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void drafting_shouldExplainThatGeminiIsNotConfigured() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/exam-passages/drafts").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"level\": \"N4\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(containsString("GEMINI_API_KEY")));
     }
 
     @Test

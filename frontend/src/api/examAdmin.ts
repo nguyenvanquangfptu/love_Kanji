@@ -6,6 +6,7 @@ import type {
   ExamQuestionStatus,
   JlptQuestionType,
   Page,
+  PassageDraftResult,
   QuestionBankStats,
   QuestionDraftResult,
 } from './types'
@@ -52,6 +53,12 @@ export const examAdminApi = {
 
   updatePassage: (id: number, payload: { title: string; content: string }) =>
     apiClient.put<AdminExamPassage>(`/admin/exam-passages/${id}`, payload).then((r) => r.data),
+
+  /** Nhờ AI viết nháp một đoạn văn 文章の文法 (tốn 2 request Gemini); đoạn văn chờ người duyệt cả đoạn. */
+  draftPassage: (level: string) =>
+    apiClient
+      .post<PassageDraftResult>('/admin/exam-passages/drafts', { level }, { timeout: 120_000 })
+      .then((r) => r.data),
 
   /** Duyệt / loại / rút cả đoạn văn cùng mọi câu hỏi của nó. */
   changePassageStatus: (id: number, status: ExamQuestionStatus, note?: string) =>

@@ -3,7 +3,9 @@ package com.kanjimastery.backend.controller;
 import com.kanjimastery.backend.dto.AdminExamPassageResponse;
 import com.kanjimastery.backend.dto.ExamPassageRequest;
 import com.kanjimastery.backend.dto.ExamQuestionStatusRequest;
+import com.kanjimastery.backend.dto.PassageDraftRequest;
 import com.kanjimastery.backend.service.ExamPassageReviewService;
+import com.kanjimastery.backend.service.PassageDraftService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -21,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 public class AdminExamPassageController {
 
     private final ExamPassageReviewService passageReviewService;
+    private final PassageDraftService passageDraftService;
 
     @Operation(summary = "Đoạn văn của một cấp độ", description = "Mới nhất trước, kèm câu hỏi theo thứ tự chỗ trống.")
     @GetMapping
@@ -44,5 +47,14 @@ public class AdminExamPassageController {
     public ResponseEntity<AdminExamPassageResponse> changeStatus(@PathVariable Long id,
                                                                  @Valid @RequestBody ExamQuestionStatusRequest request) {
         return ResponseEntity.ok(passageReviewService.changeStatus(id, request.getStatus(), request.getNote()));
+    }
+
+    @Operation(summary = "Nhờ AI viết nháp một đoạn văn",
+            description = "Đoạn văn mới có số chỗ trống theo cấu trúc đề của cấp độ. Kiểm tra tự động (chỗ trống khớp "
+                    + "câu hỏi, từ vượt cấp, AI giải lại) rồi vào hàng chờ duyệt; sai cấu trúc thì bị loại cả đoạn. "
+                    + "Tốn 2 request Gemini. Chưa cấu hình GEMINI_API_KEY hoặc Gemini không trả lời thì trả 400.")
+    @PostMapping("/drafts")
+    public ResponseEntity<PassageDraftService.PassageDraftResult> draft(@Valid @RequestBody PassageDraftRequest request) {
+        return ResponseEntity.ok(passageDraftService.draft(request.getLevel()));
     }
 }

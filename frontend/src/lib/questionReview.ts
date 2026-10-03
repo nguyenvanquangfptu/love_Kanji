@@ -1,4 +1,4 @@
-import type { ExamQuestionFlag, ExamQuestionStatus, QuestionDraftResult } from '@/api/types'
+import type { ExamQuestionFlag, ExamQuestionStatus, PassageDraftResult, QuestionDraftResult } from '@/api/types'
 
 /** Nhãn trạng thái duyệt của câu thi / đoạn văn. */
 export const STATUS_BADGE: Record<
@@ -36,3 +36,12 @@ export function draftSummary(result: QuestionDraftResult): string {
     .join(' · ')
 }
 
+/** Tóm tắt một lần nhờ AI viết nháp đoạn văn 文章の文法. */
+export function passageDraftSummary(result: PassageDraftResult): string {
+  if (result.status === 'REJECTED') {
+    return `Đoạn #${result.passageId} sai cấu trúc nên bị loại - xem lý do ở mục "Đã loại".`
+  }
+  return `Đoạn #${result.passageId} (${result.questions} chỗ trống) vào hàng chờ duyệt${
+    result.flag ? ` - ⚠ ${FLAG_LABEL[result.flag]}` : ''
+  }.`
+}

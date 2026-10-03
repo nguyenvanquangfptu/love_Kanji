@@ -576,6 +576,15 @@ export interface QuestionDraftResult {
   unreadable: number
 }
 
+/** Kết quả nhờ AI viết một đoạn văn 文章の文法: chờ duyệt, hoặc bị loại vì sai cấu trúc (lý do ở ghi chú của đoạn). */
+export interface PassageDraftResult {
+  passageId: number
+  status: 'DRAFT' | 'REJECTED'
+  flag: ExamQuestionFlag | null
+  /** Số câu hỏi (chỗ trống) đọc được. */
+  questions: number
+}
+
 /** Một đoạn văn 文章の文法 trên trang duyệt, kèm các câu hỏi theo thứ tự chỗ trống. */
 export interface AdminExamPassage {
   id: number

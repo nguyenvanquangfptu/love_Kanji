@@ -234,7 +234,7 @@ export function AdminQuestionsPage() {
       )}
 
       {type === 'TEXT_GRAMMAR' ? (
-        <PassageReviewList level={level} status={status || undefined} />
+        <PassageReviewList key={level} level={level} status={status || undefined} />
       ) : questionsQuery.isLoading ? (
         <PageSpinner label="Đang tải câu hỏi..." />
       ) : questionsQuery.isError || !data ? (

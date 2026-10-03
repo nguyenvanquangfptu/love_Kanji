@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronLeft, ChevronRight, Pencil, RotateCcw, Undo2, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Pencil, RotateCcw, Sparkles, Undo2, X } from 'lucide-react'
 import { examAdminApi } from '@/api/examAdmin'
 import { extractErrorMessage } from '@/api/client'
 import type { AdminExamPassage, AdminExamQuestion, AdminExamQuestionRequest, ExamQuestionStatus } from '@/api/types'
-import { FLAG_LABEL, SOURCE_LABEL, STATUS_BADGE } from '@/lib/questionReview'
+import { FLAG_LABEL, SOURCE_LABEL, STATUS_BADGE, passageDraftSummary } from '@/lib/questionReview'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
@@ -22,7 +22,10 @@ import { ReviewNoteDialog } from '@/components/ReviewNoteDialog'
 const OPTIONS = ['A', 'B', 'C', 'D'] as const
 const PAGE_SIZE = 10
 
-/** Đoạn văn 文章の文法 của một cấp độ: duyệt, loại, rút cả đoạn; sửa đoạn văn hoặc từng câu hỏi của đoạn. */
+/**
+ * Đoạn văn 文章の文法 của một cấp độ: duyệt, loại, rút cả đoạn; sửa đoạn văn hoặc từng câu hỏi của đoạn; nhờ AI viết
+ * nháp đoạn mới. Trang cha đổi key khi đổi cấp độ.
+ */
 export function PassageReviewList({ level, status }: { level: string; status?: ExamQuestionStatus }) {
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
@@ -60,6 +63,10 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
     },
     onError: (err) => setEditError(extractErrorMessage(err)),
   })
+  const draftMutation = useMutation({
+    mutationFn: () => examAdminApi.draftPassage(level),
+    onSuccess: refresh,
+  })
   const questionMutation = useMutation({
     mutationFn: (vars: { id: number; payload: AdminExamQuestionRequest }) => examAdminApi.update(vars.id, vars.payload),
     onSuccess: () => {
@@ -81,6 +88,26 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
 
   return (
     <div className="flex flex-col gap-4">
+      <Card className="flex flex-col gap-3 p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="font-black">Nhờ AI viết nháp đoạn văn</p>
+            <p className="text-sm font-semibold text-muted-foreground">
+              Một đoạn văn mới cho đề {level}, đủ số chỗ trống như đề thật. Tốn 2 lượt Gemini: viết nháp và giải lại
+              để kiểm tra.
+            </p>
+          </div>
+          <Button disabled={draftMutation.isPending} onClick={() => draftMutation.mutate()}>
+            <Sparkles className="h-4 w-4" /> {draftMutation.isPending ? 'AI đang viết...' : 'Sinh đoạn văn'}
+          </Button>
+        </div>
+        {draftMutation.isError && <Alert>{extractErrorMessage(draftMutation.error)}</Alert>}
+        {draftMutation.data && (
+          <p className="rounded-2xl bg-secondary-soft px-4 py-3 text-sm font-bold text-secondary-dark">
+            {passageDraftSummary(draftMutation.data)}
+          </p>
+        )}
+      </Card>
       {statusMutation.isError && <Alert>{extractErrorMessage(statusMutation.error)}</Alert>}
       {data.content.length === 0 ? (
         <Card className="p-6 text-center font-semibold text-muted-foreground">Không có đoạn văn nào khớp bộ lọc.</Card>
