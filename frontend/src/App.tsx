@@ -19,6 +19,7 @@ import { StudyBrowsePage } from '@/pages/StudyBrowsePage'
 import { StudyVocabListPage } from '@/pages/StudyVocabListPage'
 import { StudyFlashcardPage } from '@/pages/StudyFlashcardPage'
 import { StudyQuizPage } from '@/pages/StudyQuizPage'
+import { GrammarPracticePage } from '@/pages/GrammarPracticePage'
 
 export default function App() {
   return (
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="study/flashcards" element={<StudyFlashcardPage />} />
           <Route path="study/quiz" element={<StudyQuizPage />} />
           <Route path="exam/:attemptId" element={<ExamWorkspacePage />} />
+          <Route path="exam/grammar-practice" element={<GrammarPracticePage />} />
         </Route>
       </Route>
 

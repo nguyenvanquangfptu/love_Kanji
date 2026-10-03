@@ -167,6 +167,8 @@ export function ExamSittingPage() {
         ))}
       </div>
 
+      {sitting.status !== 'IN_PROGRESS' && <WeakGrammarCard level={sitting.jlptLevel} sittingId={sitting.sittingId} />}
+
       <div className="flex flex-col gap-3 sm:flex-row">
         <Button size="lg" className="flex-1" variant={next ? 'outline' : 'default'} onClick={() => navigate('/exam')}>
           <RotateCcw className="h-5 w-5" /> Làm đề khác
@@ -176,6 +178,44 @@ export function ExamSittingPage() {
         </Button>
       </div>
     </div>
+  )
+}
+
+/** Các điểm ngữ pháp hay làm sai trong các đề gần đây của cấp độ, và nút luyện lại các điểm đó. */
+function WeakGrammarCard({ level, sittingId }: { level: string; sittingId: number }) {
+  const navigate = useNavigate()
+  const { data: points } = useQuery({
+    queryKey: ['weak-grammar', level],
+    queryFn: () => examApi.weakGrammar(level),
+  })
+  if (!points || points.length === 0) return null
+
+  const ids = points.map((point) => point.id).join(',')
+  return (
+    <Card className="p-4 sm:p-5">
+      <h2 className="text-lg font-black">Điểm ngữ pháp cần ôn</h2>
+      <p className="text-sm font-semibold text-muted-foreground">
+        Làm sai nhiều nhất trong các đề {level} 60 ngày qua (không tính câu bỏ trống).
+      </p>
+      <ul className="mt-3 flex flex-col gap-2">
+        {points.map((point) => (
+          <li key={point.id} className="flex items-center gap-3 rounded-xl border-2 border-border px-3 py-2">
+            <span className="shrink-0 font-jp font-black">{point.pattern}</span>
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-muted-foreground">{point.meaningVi}</span>
+            <span className="shrink-0 text-sm font-black tabular-nums text-destructive-dark">
+              sai {point.wrong}/{point.answered}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <Button
+        className="mt-4"
+        variant="secondary"
+        onClick={() => navigate(`/exam/grammar-practice?level=${level}&points=${ids}&sitting=${sittingId}`)}
+      >
+        <Target className="h-5 w-5" /> Luyện lại các điểm này
+      </Button>
+    </Card>
   )
 }
 

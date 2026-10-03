@@ -123,6 +123,18 @@ public interface ExamQuestionRepository
             """, nativeQuery = true)
     List<Long> findWordIdsWithQuestion(@Param("level") String level, @Param("type") String type);
 
+    /** Câu đã duyệt, đứng riêng (không thuộc đoạn văn) của một cấp độ gắn với các điểm ngữ pháp - để luyện lại. */
+    @Query(value = """
+            SELECT q.* FROM exam_questions q
+            WHERE q.jlpt_level = :level AND q.status = 'APPROVED' AND q.passage_id IS NULL
+              AND q.id IN (SELECT link.question_id FROM exam_question_grammar link
+                           WHERE link.grammar_point_id IN (:grammarPointIds))
+            ORDER BY RANDOM() LIMIT :count
+            """, nativeQuery = true)
+    List<ExamQuestion> findRandomForGrammarPoints(@Param("level") String level,
+                                                  @Param("grammarPointIds") Collection<Long> grammarPointIds,
+                                                  @Param("count") int count);
+
     /** Câu trong đề của các câu hỏi gắn với một điểm ngữ pháp - để AI viết câu mới không trùng ý. */
     @Query("""
             SELECT q.sentence FROM ExamQuestion q JOIN q.grammarPointIds point

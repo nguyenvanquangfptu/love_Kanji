@@ -400,6 +400,32 @@ export interface QuestionReviewItem {
   grammarPoints: { id: number; pattern: string; meaningVi: string }[]
 }
 
+/** Một điểm ngữ pháp người học hay làm sai trong các đề JLPT gần đây. */
+export interface WeakGrammarPoint {
+  id: number
+  pattern: string
+  meaningVi: string
+  /** Số câu làm sai / số câu đã trả lời (không tính câu bỏ trống). */
+  wrong: number
+  answered: number
+}
+
+/** Một câu luyện lại điểm ngữ pháp, kèm đáp án để chấm ngay. */
+export interface PracticeQuestion {
+  id: number
+  questionType: JlptQuestionType
+  questionText: string
+  sentence: string | null
+  highlight: string | null
+  optionA: string
+  optionB: string
+  optionC: string
+  optionD: string
+  correctOption: 'A' | 'B' | 'C' | 'D'
+  explanation: string | null
+  grammarPoints: { id: number; pattern: string; meaningVi: string }[]
+}
+
 export interface ExamReviewResponse {
   attemptId: number
   jlptLevel: string

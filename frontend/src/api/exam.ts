@@ -5,10 +5,12 @@ import type {
   ExamSessionResponse,
   ExamSittingResponse,
   JlptLevelResponse,
+  PracticeQuestion,
   SaveAnswerRequest,
   StartExamRequest,
   StartExamResponse,
   StartJlptExamRequest,
+  WeakGrammarPoint,
 } from './types'
 
 export const examApi = {
@@ -40,6 +42,18 @@ export const examApi = {
 
   getSitting: (sittingId: number) =>
     apiClient.get<ExamSittingResponse>(`/exams/jlpt/sittings/${sittingId}`).then((r) => r.data),
+
+  /** Các điểm ngữ pháp người học hay làm sai trong các đề JLPT gần đây của một cấp độ. */
+  weakGrammar: (level: string) =>
+    apiClient.get<WeakGrammarPoint[]>('/exams/jlpt/weak-grammar', { params: { level } }).then((r) => r.data),
+
+  /** Câu luyện lại (đã duyệt, kèm đáp án) cho các điểm ngữ pháp; luyện không tính giờ, không lưu kết quả. */
+  grammarPractice: (level: string, grammarPointIds: number[]) =>
+    apiClient
+      .get<PracticeQuestion[]>('/exams/jlpt/grammar-practice', {
+        params: { level, grammarPointIds: grammarPointIds.join(',') },
+      })
+      .then((r) => r.data),
 
   /** Chỉ ADMIN: sinh câu thi cho các từ trong bài của một cấp độ (chỉ câu chưa có). */
   generateQuestions: (level: string) =>

@@ -2,8 +2,11 @@ package com.kanjimastery.backend.controller;
 
 import com.kanjimastery.backend.dto.ExamSittingResponse;
 import com.kanjimastery.backend.dto.JlptLevelResponse;
+import com.kanjimastery.backend.dto.PracticeQuestionResponse;
 import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.dto.StartJlptExamRequest;
+import com.kanjimastery.backend.dto.WeakGrammarResponse;
+import com.kanjimastery.backend.service.GrammarPracticeService;
 import com.kanjimastery.backend.service.JlptExamService;
 import com.kanjimastery.backend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,6 +26,7 @@ import java.util.List;
 public class JlptExamController {
 
     private final JlptExamService jlptExamService;
+    private final GrammarPracticeService grammarPracticeService;
     private final UserService userService;
 
     @Operation(summary = "Cấu trúc đề theo cấp độ",
@@ -53,6 +57,26 @@ public class JlptExamController {
     @GetMapping("/sittings/{sittingId}")
     public ResponseEntity<ExamSittingResponse> get(Authentication authentication, @PathVariable Long sittingId) {
         return ResponseEntity.ok(jlptExamService.getSitting(currentUserId(authentication), sittingId));
+    }
+
+    @Operation(summary = "Điểm ngữ pháp hay làm sai",
+            description = "Trong các đề JLPT của cấp độ " + GrammarPracticeService.MISTAKE_DAYS + " ngày qua: các điểm "
+                    + "ngữ pháp có câu làm sai (không tính câu bỏ trống), sai nhiều nhất trước, tối đa "
+                    + GrammarPracticeService.MAX_WEAK_POINTS + " điểm.")
+    @GetMapping("/weak-grammar")
+    public ResponseEntity<List<WeakGrammarResponse>> weakGrammar(Authentication authentication,
+                                                                 @RequestParam String level) {
+        return ResponseEntity.ok(grammarPracticeService.weakPoints(currentUserId(authentication), level));
+    }
+
+    @Operation(summary = "Câu luyện lại theo điểm ngữ pháp",
+            description = "Tối đa " + GrammarPracticeService.MAX_PRACTICE_QUESTIONS + " câu đã duyệt của cấp độ (không "
+                    + "thuộc đoạn văn) gắn với các điểm đã chọn, thứ tự ngẫu nhiên, kèm đáp án và giải thích. Luyện "
+                    + "không tính giờ, không lưu kết quả.")
+    @GetMapping("/grammar-practice")
+    public ResponseEntity<List<PracticeQuestionResponse>> grammarPractice(@RequestParam String level,
+                                                                          @RequestParam List<Long> grammarPointIds) {
+        return ResponseEntity.ok(grammarPracticeService.practice(level, grammarPointIds));
     }
 
     private Long currentUserId(Authentication authentication) {
