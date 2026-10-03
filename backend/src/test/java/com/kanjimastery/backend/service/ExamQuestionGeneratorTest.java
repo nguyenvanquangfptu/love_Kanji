@@ -21,6 +21,7 @@ import static com.kanjimastery.backend.model.JlptQuestionType.CONTEXT;
 import static com.kanjimastery.backend.model.JlptQuestionType.KANJI_READING;
 import static com.kanjimastery.backend.model.JlptQuestionType.ORTHOGRAPHY;
 import static com.kanjimastery.backend.model.QuizDirection.MEANING;
+import static com.kanjimastery.backend.model.QuizDirection.READING_TO_KANJI;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -143,6 +144,51 @@ class ExamQuestionGeneratorTest {
                     .contains("仕事")
                     .doesNotContain("作業")
                     .isSubsetOf("仕事", "会社", "銀行", "映画", "学校");
+        });
+    }
+
+    @Test
+    void generate_shouldAskN5KatakanaWordsInKatakana_fromTheirSentenceWrittenInHiragana() {
+        Kanji guitar = word(31L, "ギター", null, "兄は部屋でギターを弾いています。", "Đàn ghi-ta");
+        // ペン nằm trong ボールペン: không gạch chân riêng được. カメラ không có câu ví dụ.
+        Kanji pen = word(32L, "ペン", null, "ボールペンで書きます。", "Bút");
+        Kanji camera = word(33L, "カメラ", null, null, "Máy ảnh");
+        Kanji bus = word(34L, "バス", null, "バスに乗ります。", "Xe buýt");
+        when(kanjiRepository.findAllByTagNamePrefix("N5-%")).thenReturn(List.of(guitar, pen, camera, bus));
+        // バス đã có câu 表記.
+        when(questionRepository.generatedQuestionWords("N5")).thenReturn(List.of(generated(34L, ORTHOGRAPHY)));
+
+        generator.generate("N5");
+
+        List<ExamQuestion> writing = savedQuestions().stream()
+                .filter(question -> ORTHOGRAPHY.equals(question.getQuestionType()))
+                .toList();
+        assertThat(writing).singleElement().satisfies(question -> {
+            assertThat(question.getKanjiIds()).containsExactly(31L);
+            assertThat(question.getQuestionText()).isEqualTo(ExamQuestionGenerator.KATAKANA_ORTHOGRAPHY_TEXT);
+            assertThat(question.getSentence()).isEqualTo("兄は部屋でぎたーを弾いています。");
+            assertThat(question.getHighlight()).isEqualTo("ぎたー");
+            assertThat(correctAnswer(question)).isEqualTo("ギター");
+            List<String> options = List.of(question.getOptionA(), question.getOptionB(), question.getOptionC(),
+                    question.getOptionD());
+            assertThat(options).doesNotHaveDuplicates().filteredOn(option -> !option.equals("ギター"))
+                    .hasSize(3).isSubsetOf(KatakanaSpelling.allMisspellings("ギター"));
+            assertThat(question.getSkill()).isEqualTo(READING_TO_KANJI);
+            assertThat(question.getSource()).isEqualTo(ExamQuestionSource.GENERATED);
+        });
+    }
+
+    @Test
+    void generate_shouldAskKatakanaWritingOnlyInN5() {
+        Kanji guitar = word(31L, "ギター", null, "兄は部屋でギターを弾いています。", "Đàn ghi-ta");
+        when(kanjiRepository.findAllByTagNamePrefix("N4-%")).thenReturn(List.of(guitar, newspaper, school, teacher));
+        when(questionRepository.generatedQuestionWords("N4")).thenReturn(List.of());
+
+        generator.generate("N4");
+
+        assertThat(savedQuestions()).noneSatisfy(question -> {
+            assertThat(question.getKanjiIds()).containsExactly(31L);
+            assertThat(question.getQuestionType()).isEqualTo(ORTHOGRAPHY);
         });
     }
 

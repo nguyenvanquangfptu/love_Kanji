@@ -19,9 +19,9 @@ export const QUESTION_TYPE_META: Record<
   },
   ORTHOGRAPHY: {
     jp: '表記',
-    vi: 'Viết chữ Hán',
+    vi: 'Cách viết',
     instruction: '＿＿の ことばは どう かきますか。',
-    instructionVi: 'Từ được gạch chân viết bằng chữ Hán như thế nào?',
+    instructionVi: 'Từ được gạch chân viết bằng chữ Hán (N5: cả katakana) như thế nào?',
   },
   CONTEXT: {
     jp: '文脈規定',

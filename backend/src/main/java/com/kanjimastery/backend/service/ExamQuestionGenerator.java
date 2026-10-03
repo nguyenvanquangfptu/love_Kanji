@@ -40,9 +40,9 @@ import static com.kanjimastery.backend.model.QuizDirection.READING_TO_KANJI;
  * Sinh câu thi từ kho từ vựng, cùng cách dựng câu hỏi với trắc nghiệm ({@link QuestionBuilder}). Mỗi từ trong các bài
  * của một cấp độ (tag "N4-01", "N4-02"...) có câu ví dụ chứa từ (đứng riêng, không nằm trong từ khác) thì được các câu
  * theo kiểu đề JLPT: đọc chữ Hán gạch chân (問題1 漢字読み) và viết bằng chữ Hán (問題2 表記) khi từ có chữ Hán và cách
- * đọc, chọn từ hợp ngữ cảnh (問題3 文脈規定) với danh từ, động từ khi đủ 3 từ khác cùng từ loại làm đáp án nhiễu. Từ nào
- * có nghĩa cũng được
- * một câu hỏi nghĩa (đáp án tiếng Việt, chỉ dùng cho thi nhanh). Đáp án nhiễu lấy từ các từ khác cùng cấp độ. Mỗi câu
+ * đọc, viết bằng katakana (問題2 表記 của N5) với từ katakana, chọn từ hợp ngữ cảnh (問題3 文脈規定) với danh từ, động từ
+ * khi đủ 3 từ khác cùng từ loại làm đáp án nhiễu. Từ nào có nghĩa cũng được một câu hỏi nghĩa (đáp án tiếng Việt, chỉ
+ * dùng cho thi nhanh). Đáp án nhiễu lấy từ các từ khác cùng cấp độ. Mỗi câu
  * gắn với từ của nó; chạy lại chỉ sinh câu cho cặp (từ, dạng câu) chưa có.
  */
 @Service
@@ -62,6 +62,9 @@ public class ExamQuestionGenerator {
      * 白い, 汚い đều được), máy không phân biệt được.
      */
     private static final Set<PartOfSpeech> CONTEXT_CLASSES = EnumSet.of(PartOfSpeech.NOUN, PartOfSpeech.VERB);
+    /** Đề có câu 表記 viết bằng katakana: chỉ N5. */
+    private static final Set<String> KATAKANA_ORTHOGRAPHY_LEVELS = Set.of("N5");
+    static final String KATAKANA_ORTHOGRAPHY_TEXT = "Chọn cách viết bằng katakana của từ được gạch chân.";
 
     private final KanjiRepository kanjiRepository;
     private final ExamQuestionRepository questionRepository;
@@ -80,6 +83,8 @@ public class ExamQuestionGenerator {
                 .collect(Collectors.toSet());
         List<PlannedQuestion> plans = new ArrayList<>();
         List<Kanji> contextWords = new ArrayList<>();
+        List<Kanji> katakanaWords = new ArrayList<>();
+        boolean asksKatakana = KATAKANA_ORTHOGRAPHY_LEVELS.contains(normalized);
         for (Kanji word : pool) {
             for (String skill : skillsFor(word)) {
                 if (!existing.contains(kind(skill) + ":" + word.getId())) {
@@ -88,6 +93,10 @@ public class ExamQuestionGenerator {
             }
             if (inUsableSentence(word) && !existing.contains(JlptQuestionType.CONTEXT + ":" + word.getId())) {
                 contextWords.add(word);
+            }
+            if (asksKatakana && inKatakanaSentence(word)
+                    && !existing.contains(JlptQuestionType.ORTHOGRAPHY + ":" + word.getId())) {
+                katakanaWords.add(word);
             }
         }
 
@@ -103,6 +112,7 @@ public class ExamQuestionGenerator {
             created += questionRepository.saveAll(questions).size();
         }
         created += questionRepository.saveAll(contextQuestions(normalized, contextWords, pool)).size();
+        created += questionRepository.saveAll(katakanaQuestions(normalized, katakanaWords)).size();
         if (created > 0) {
             log.info("Đã sinh {} câu thi {} từ {} từ vựng.", created, normalized, pool.size());
         }
@@ -139,6 +149,12 @@ public class ExamQuestionGenerator {
     private static boolean inUsableSentence(Kanji word) {
         return StringUtils.hasText(word.getExampleSentence())
                 && QuestionBuilder.standsAlone(word.getExampleSentence(), word.getCharacter());
+    }
+
+    /** Từ katakana có câu ví dụ chứa nó, đứng riêng. */
+    private static boolean inKatakanaSentence(Kanji word) {
+        return KatakanaSpelling.isKatakanaWord(word.getCharacter()) && StringUtils.hasText(word.getExampleSentence())
+                && KatakanaSpelling.standsAlone(word.getExampleSentence(), word.getCharacter());
     }
 
     /** Bỏ câu không đủ 4 đáp án (cấp độ quá ít từ) hoặc có đáp án quá dài cho cột. */
@@ -208,6 +224,31 @@ public class ExamQuestionGenerator {
                     .sentence(sentence)
                     .skill(MEANING)
                     .questionType(JlptQuestionType.CONTEXT)
+                    .build());
+        }
+        return questions;
+    }
+
+    /**
+     * 表記 katakana: từ katakana trong câu ví dụ được viết bằng hiragana (giữ ー) và gạch chân, chọn cách viết katakana
+     * đúng; đáp án nhiễu là 3 cách viết sai dễ nhầm ({@link KatakanaSpelling}). Từ không đủ 3 cách viết sai thì bỏ qua.
+     */
+    private static List<ExamQuestion> katakanaQuestions(String level, List<Kanji> words) {
+        List<ExamQuestion> questions = new ArrayList<>();
+        for (Kanji word : words) {
+            String katakana = word.getCharacter();
+            List<String> choices = new ArrayList<>(KatakanaSpelling.misspellings(katakana, QuestionBuilder.CHOICES - 1));
+            if (choices.size() < QuestionBuilder.CHOICES - 1) {
+                continue;
+            }
+            choices.add(katakana);
+            Collections.shuffle(choices);
+            String hiragana = KatakanaSpelling.toHiragana(katakana);
+            questions.add(question(level, word, KATAKANA_ORTHOGRAPHY_TEXT, choices, choices.indexOf(katakana))
+                    .sentence(word.getExampleSentence().replace(katakana, hiragana))
+                    .highlight(hiragana)
+                    .skill(READING_TO_KANJI)
+                    .questionType(JlptQuestionType.ORTHOGRAPHY)
                     .build());
         }
         return questions;
