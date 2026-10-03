@@ -1,0 +1,233 @@
+package com.kanjimastery.backend.service;
+
+import com.kanjimastery.backend.config.JlptBlueprintProperties;
+import com.kanjimastery.backend.dto.AdminExamQuestionRequest;
+import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
+import com.kanjimastery.backend.dto.QuestionBankStatsResponse;
+import com.kanjimastery.backend.exception.BadRequestException;
+import com.kanjimastery.backend.exception.ResourceNotFoundException;
+import com.kanjimastery.backend.model.ExamQuestion;
+import com.kanjimastery.backend.model.ExamQuestionStatus;
+import com.kanjimastery.backend.model.GrammarPoint;
+import com.kanjimastery.backend.model.Kanji;
+import com.kanjimastery.backend.repository.ExamQuestionRepository;
+import com.kanjimastery.backend.repository.GrammarPointRepository;
+import com.kanjimastery.backend.repository.KanjiRepository;
+import jakarta.persistence.criteria.Predicate;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+/**
+ * Trang duyệt câu thi đề JLPT: lọc câu theo cấp độ / dạng / trạng thái / cảnh báo / điểm ngữ pháp, sửa nội dung,
+ * duyệt (vào đề), loại (kèm lý do), rút khỏi đề; thống kê mỗi dạng đã đủ câu cho bao nhiêu đề.
+ */
+@Service
+@RequiredArgsConstructor
+public class ExamQuestionReviewService {
+
+    private static final Set<String> STATUSES = Set.of(ExamQuestionStatus.DRAFT, ExamQuestionStatus.APPROVED,
+            ExamQuestionStatus.REJECTED, ExamQuestionStatus.RETIRED);
+
+    private final ExamQuestionRepository questionRepository;
+    private final KanjiRepository kanjiRepository;
+    private final GrammarPointRepository grammarPointRepository;
+    private final JlptBlueprintProperties blueprints;
+
+    /** Bộ lọc của trang duyệt; trường null = không lọc. Chỉ có câu thuộc một dạng đề JLPT. */
+    public record Filter(String level, String type, String status, boolean flaggedOnly, Long grammarPointId) {
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AdminExamQuestionResponse> search(Filter filter, int page, int size) {
+        Page<ExamQuestion> found = questionRepository.findAll(specification(filter),
+                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id")));
+        Map<Long, ExamQuestion> withLinks = found.isEmpty()
+                ? Map.of()
+                : questionRepository.findAllWithLinksByIdIn(found.map(ExamQuestion::getId).getContent()).stream()
+                        .collect(Collectors.toMap(ExamQuestion::getId, Function.identity()));
+        List<ExamQuestion> questions = found.getContent().stream().map(question -> withLinks.get(question.getId()))
+                .toList();
+        Map<Long, Kanji> words = kanjiRepository.findAllById(questions.stream()
+                        .flatMap(question -> question.getKanjiIds().stream()).collect(Collectors.toSet())).stream()
+                .collect(Collectors.toMap(Kanji::getId, Function.identity()));
+        Map<Long, GrammarPoint> points = grammarPointRepository.findAllById(questions.stream()
+                        .flatMap(question -> question.getGrammarPointIds().stream()).collect(Collectors.toSet())).stream()
+                .collect(Collectors.toMap(GrammarPoint::getId, Function.identity()));
+        return found.map(question -> toResponse(withLinks.get(question.getId()), words, points));
+    }
+
+    private static Specification<ExamQuestion> specification(Filter filter) {
+        return (root, query, builder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(builder.isNotNull(root.get("questionType")));
+            if (StringUtils.hasText(filter.level())) {
+                predicates.add(builder.equal(root.get("jlptLevel"), filter.level().toUpperCase()));
+            }
+            if (StringUtils.hasText(filter.type())) {
+                predicates.add(builder.equal(root.get("questionType"), filter.type()));
+            }
+            if (StringUtils.hasText(filter.status())) {
+                predicates.add(builder.equal(root.get("status"), filter.status()));
+            }
+            if (filter.flaggedOnly()) {
+                predicates.add(builder.isNotNull(root.get("flag")));
+            }
+            if (filter.grammarPointId() != null) {
+                predicates.add(builder.isMember(filter.grammarPointId(), root.<Set<Long>>get("grammarPointIds")));
+            }
+            return builder.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    /** Sửa nội dung; câu phải đúng cấu trúc của dạng câu. Không đổi trạng thái duyệt. */
+    @Transactional
+    public AdminExamQuestionResponse update(Long id, AdminExamQuestionRequest request) {
+        ExamQuestion question = questionWithLinks(id);
+        List<String> problems = ExamQuestionValidator.problems(question.getQuestionType(), request.getQuestionText(),
+                request.getSentence(), request.getHighlight(),
+                List.of(request.getOptionA(), request.getOptionB(), request.getOptionC(), request.getOptionD()),
+                request.getCorrectOption());
+        if (!problems.isEmpty()) {
+            throw new BadRequestException("Câu hỏi chưa hợp lệ: " + String.join("; ", problems));
+        }
+        question.setQuestionText(request.getQuestionText().strip());
+        question.setSentence(StringUtils.hasText(request.getSentence()) ? request.getSentence().strip() : null);
+        question.setHighlight(StringUtils.hasText(request.getHighlight()) ? request.getHighlight().strip() : null);
+        question.setOptionA(request.getOptionA().strip());
+        question.setOptionB(request.getOptionB().strip());
+        question.setOptionC(request.getOptionC().strip());
+        question.setOptionD(request.getOptionD().strip());
+        question.setCorrectOption(request.getCorrectOption());
+        question.setExplanation(StringUtils.hasText(request.getExplanation()) ? request.getExplanation().strip() : null);
+        if (request.getGrammarPointIds() != null) {
+            Set<Long> ids = new HashSet<>(request.getGrammarPointIds());
+            if (grammarPointRepository.findAllById(ids).size() != ids.size()) {
+                throw new BadRequestException("Có điểm ngữ pháp không tồn tại");
+            }
+            question.getGrammarPointIds().clear();
+            question.getGrammarPointIds().addAll(ids);
+        }
+        return toResponse(question);
+    }
+
+    /**
+     * Duyệt (câu vào đề được), loại (bắt buộc ghi lý do), rút khỏi đề, hoặc đưa về chờ duyệt. Câu sai cấu trúc không
+     * duyệt được; duyệt rồi thì cảnh báo của bước kiểm tra tự động coi như đã được người duyệt xem.
+     */
+    @Transactional
+    public AdminExamQuestionResponse changeStatus(Long id, String status, String note) {
+        if (!STATUSES.contains(status)) {
+            throw new BadRequestException("Trạng thái không hợp lệ: " + status);
+        }
+        ExamQuestion question = questionWithLinks(id);
+        if (ExamQuestionStatus.REJECTED.equals(status) && !StringUtils.hasText(note)) {
+            throw new BadRequestException("Loại câu hỏi thì cần ghi lý do");
+        }
+        if (ExamQuestionStatus.APPROVED.equals(status)) {
+            List<String> problems = ExamQuestionValidator.problems(question.getQuestionType(), question.getQuestionText(),
+                    question.getSentence(), question.getHighlight(), List.of(question.getOptionA(),
+                            question.getOptionB(), question.getOptionC(), question.getOptionD()),
+                    question.getCorrectOption());
+            if (!problems.isEmpty()) {
+                throw new BadRequestException("Chưa duyệt được, câu hỏi cần sửa: " + String.join("; ", problems));
+            }
+            question.setFlag(null);
+        }
+        question.setStatus(status);
+        if (StringUtils.hasText(note)) {
+            question.setReviewNote(note.strip());
+        }
+        question.setReviewedAt(LocalDateTime.now());
+        return toResponse(question);
+    }
+
+    /** Theo các cấp độ có cấu trúc đề: mỗi dạng câu có bao nhiêu câu ở mỗi trạng thái, đủ cho bao nhiêu đề. */
+    @Transactional(readOnly = true)
+    public List<QuestionBankStatsResponse> stats() {
+        Map<String, Map<String, long[]>> counts = new HashMap<>();
+        for (ExamQuestionRepository.BankCount count : questionRepository.countByLevelTypeAndStatus()) {
+            long[] byStatus = counts.computeIfAbsent(count.getLevel(), level -> new HashMap<>())
+                    .computeIfAbsent(count.getType(), type -> new long[4]);
+            int slot = switch (count.getStatus()) {
+                case ExamQuestionStatus.APPROVED -> 0;
+                case ExamQuestionStatus.DRAFT -> 1;
+                case ExamQuestionStatus.REJECTED -> 2;
+                default -> 3;
+            };
+            byStatus[slot] += count.getCount();
+        }
+        List<QuestionBankStatsResponse> result = new ArrayList<>();
+        blueprints.getLevels().forEach((level, blueprint) -> {
+            List<QuestionBankStatsResponse.TypeStats> types = new ArrayList<>();
+            for (JlptBlueprintProperties.Section section : blueprint.getSections()) {
+                section.getQuestions().forEach((type, perExam) -> {
+                    long[] byStatus = counts.getOrDefault(level, Map.of()).getOrDefault(type, new long[4]);
+                    types.add(new QuestionBankStatsResponse.TypeStats(section.getName(), type, perExam, byStatus[0],
+                            byStatus[1], byStatus[2], byStatus[3], byStatus[0] / perExam));
+                });
+            }
+            result.add(new QuestionBankStatsResponse(level, types));
+        });
+        return result;
+    }
+
+    private ExamQuestion questionWithLinks(Long id) {
+        return questionRepository.findAllWithLinksByIdIn(List.of(id)).stream().findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy câu hỏi: " + id));
+    }
+
+    private AdminExamQuestionResponse toResponse(ExamQuestion question) {
+        Map<Long, Kanji> words = kanjiRepository.findAllById(question.getKanjiIds()).stream()
+                .collect(Collectors.toMap(Kanji::getId, Function.identity()));
+        Map<Long, GrammarPoint> points = grammarPointRepository.findAllById(question.getGrammarPointIds()).stream()
+                .collect(Collectors.toMap(GrammarPoint::getId, Function.identity()));
+        return toResponse(question, words, points);
+    }
+
+    private static AdminExamQuestionResponse toResponse(ExamQuestion question, Map<Long, Kanji> words,
+                                                        Map<Long, GrammarPoint> points) {
+        return AdminExamQuestionResponse.builder()
+                .id(question.getId())
+                .jlptLevel(question.getJlptLevel())
+                .questionType(question.getQuestionType())
+                .skill(question.getSkill())
+                .status(question.getStatus())
+                .flag(question.getFlag())
+                .reviewNote(question.getReviewNote())
+                .reviewedAt(question.getReviewedAt())
+                .source(question.getSource())
+                .questionText(question.getQuestionText())
+                .sentence(question.getSentence())
+                .highlight(question.getHighlight())
+                .optionA(question.getOptionA())
+                .optionB(question.getOptionB())
+                .optionC(question.getOptionC())
+                .optionD(question.getOptionD())
+                .correctOption(question.getCorrectOption())
+                .explanation(question.getExplanation())
+                .words(question.getKanjiIds().stream().map(words::get).filter(word -> word != null)
+                        .map(word -> new AdminExamQuestionResponse.Word(word.getId(), word.getCharacter(),
+                                word.getReading()))
+                        .toList())
+                .grammarPoints(question.getGrammarPointIds().stream().map(points::get).filter(point -> point != null)
+                        .map(point -> new AdminExamQuestionResponse.Grammar(point.getId(), point.getPattern()))
+                        .toList())
+                .build();
+    }
+}

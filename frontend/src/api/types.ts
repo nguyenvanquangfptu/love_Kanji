@@ -491,3 +491,61 @@ export interface GrammarImportResult {
   unchanged: number
   errors: string[]
 }
+
+/** Trạng thái duyệt của câu thi: chỉ câu APPROVED được lấy vào đề. */
+export type ExamQuestionStatus = 'DRAFT' | 'APPROVED' | 'REJECTED' | 'RETIRED'
+
+/** Cảnh báo của bước kiểm tra tự động cho người duyệt. */
+export type ExamQuestionFlag = 'AMBIGUOUS' | 'WRONG_ANSWER' | 'ABOVE_LEVEL'
+
+/** Một câu thi trên trang duyệt (có đáp án đúng). */
+export interface AdminExamQuestion {
+  id: number
+  jlptLevel: string
+  questionType: JlptQuestionType
+  skill: QuizDirection | null
+  status: ExamQuestionStatus
+  flag: ExamQuestionFlag | null
+  reviewNote: string | null
+  reviewedAt: string | null
+  source: 'MANUAL' | 'GENERATED'
+  questionText: string
+  sentence: string | null
+  highlight: string | null
+  optionA: string
+  optionB: string
+  optionC: string
+  optionD: string
+  correctOption: 'A' | 'B' | 'C' | 'D'
+  explanation: string | null
+  words: { id: number; character: string; reading: string | null }[]
+  grammarPoints: { id: number; pattern: string }[]
+}
+
+export interface AdminExamQuestionRequest {
+  questionText: string
+  sentence: string
+  highlight: string
+  optionA: string
+  optionB: string
+  optionC: string
+  optionD: string
+  correctOption: 'A' | 'B' | 'C' | 'D'
+  explanation: string
+}
+
+/** Ngân hàng câu đề JLPT của một cấp độ theo từng dạng câu. */
+export interface QuestionBankStats {
+  jlptLevel: string
+  types: {
+    section: ExamSectionName
+    type: JlptQuestionType
+    perExam: number
+    approved: number
+    draft: number
+    rejected: number
+    retired: number
+    /** Số đề đủ câu đã duyệt. */
+    exams: number
+  }[]
+}

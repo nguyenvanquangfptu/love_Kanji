@@ -1,6 +1,7 @@
 package com.kanjimastery.backend.repository;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -8,7 +9,8 @@ import java.util.Collection;
 import java.util.List;
 import com.kanjimastery.backend.model.ExamQuestion;
 
-public interface ExamQuestionRepository extends JpaRepository<ExamQuestion, Long> {
+public interface ExamQuestionRepository
+        extends JpaRepository<ExamQuestion, Long>, JpaSpecificationExecutor<ExamQuestion> {
 
     @Query(value = """
             SELECT * FROM exam_questions WHERE jlpt_level = :level AND status = 'APPROVED' ORDER BY RANDOM() LIMIT :count
@@ -75,4 +77,30 @@ public interface ExamQuestionRepository extends JpaRepository<ExamQuestion, Long
     /** Các câu hỏi kèm luôn từ vựng mỗi câu kiểm tra, trong một truy vấn. */
     @Query("SELECT DISTINCT q FROM ExamQuestion q LEFT JOIN FETCH q.kanjiIds WHERE q.id IN :ids")
     List<ExamQuestion> findAllWithWordsByIdIn(@Param("ids") Collection<Long> ids);
+
+    /** Các câu hỏi kèm từ vựng và điểm ngữ pháp mỗi câu kiểm tra, trong một truy vấn. */
+    @Query("""
+            SELECT DISTINCT q FROM ExamQuestion q LEFT JOIN FETCH q.kanjiIds LEFT JOIN FETCH q.grammarPointIds
+            WHERE q.id IN :ids
+            """)
+    List<ExamQuestion> findAllWithLinksByIdIn(@Param("ids") Collection<Long> ids);
+
+    /** Số câu đề JLPT theo cấp độ, dạng câu và trạng thái duyệt. */
+    interface BankCount {
+        String getLevel();
+
+        String getType();
+
+        String getStatus();
+
+        Long getCount();
+    }
+
+    @Query(value = """
+            SELECT jlpt_level AS "level", question_type AS "type", status AS "status", COUNT(*) AS "count"
+            FROM exam_questions
+            WHERE question_type IS NOT NULL
+            GROUP BY jlpt_level, question_type, status
+            """, nativeQuery = true)
+    List<BankCount> countByLevelTypeAndStatus();
 }

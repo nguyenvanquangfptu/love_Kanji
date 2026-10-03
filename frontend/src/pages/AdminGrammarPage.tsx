@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Download, FileUp, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { grammarApi } from '@/api/grammar'
@@ -189,6 +190,14 @@ export function AdminGrammarPage() {
                         {point.approvedQuestions} đã duyệt
                       </Badge>
                       {point.draftQuestions > 0 && <Badge variant="orange">{point.draftQuestions} chờ duyệt</Badge>}
+                      {point.approvedQuestions + point.draftQuestions > 0 && (
+                        <Link
+                          to={`/admin/questions?level=${point.jlptLevel}&grammarPointId=${point.id}&status=`}
+                          className="text-sm font-extrabold text-secondary hover:underline"
+                        >
+                          Xem câu
+                        </Link>
+                      )}
                       <Button variant="ghost" size="icon" aria-label={`Sửa ${point.pattern}`} onClick={() => openForm(point)}>
                         <Pencil className="h-4 w-4" />
                       </Button>

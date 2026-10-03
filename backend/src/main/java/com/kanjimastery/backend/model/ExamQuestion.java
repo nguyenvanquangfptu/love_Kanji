@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -67,6 +68,17 @@ public class ExamQuestion {
     @Column(nullable = false, length = 10)
     @Builder.Default
     private String status = ExamQuestionStatus.APPROVED;
+
+    /** Cảnh báo cho người duyệt ({@link ExamQuestionFlag}); null = không có. */
+    @Column(length = 20)
+    private String flag;
+
+    /** Lý do loại, hoặc chi tiết cảnh báo của bước kiểm tra tự động. */
+    @Column(name = "review_note", columnDefinition = "TEXT")
+    private String reviewNote;
+
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
 
     /** {@link ExamQuestionSource} */
     @Column(nullable = false, length = 10)

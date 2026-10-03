@@ -14,6 +14,7 @@ import { ExamResultPage } from '@/pages/ExamResultPage'
 import { ExamSittingPage } from '@/pages/ExamSittingPage'
 import { AdminKanjiPage } from '@/pages/AdminKanjiPage'
 import { AdminGrammarPage } from '@/pages/AdminGrammarPage'
+import { AdminQuestionsPage } from '@/pages/AdminQuestionsPage'
 import { StudyBrowsePage } from '@/pages/StudyBrowsePage'
 import { StudyVocabListPage } from '@/pages/StudyVocabListPage'
 import { StudyFlashcardPage } from '@/pages/StudyFlashcardPage'
@@ -41,6 +42,7 @@ export default function App() {
             <Route path="admin" element={<Navigate to="/admin/kanji" replace />} />
             <Route path="admin/kanji" element={<AdminKanjiPage />} />
             <Route path="admin/grammar" element={<AdminGrammarPage />} />
+            <Route path="admin/questions" element={<AdminQuestionsPage />} />
           </Route>
         </Route>
 

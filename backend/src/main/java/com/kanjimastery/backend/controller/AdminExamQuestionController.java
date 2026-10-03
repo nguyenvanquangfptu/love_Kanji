@@ -1,0 +1,64 @@
+package com.kanjimastery.backend.controller;
+
+import com.kanjimastery.backend.dto.AdminExamQuestionRequest;
+import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
+import com.kanjimastery.backend.dto.ExamQuestionStatusRequest;
+import com.kanjimastery.backend.dto.QuestionBankStatsResponse;
+import com.kanjimastery.backend.service.ExamQuestionReviewService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/v1/admin/exam-questions")
+@RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
+@Tag(name = "Admin - Exam questions", description = "Duyệt câu thi đề JLPT (chỉ ADMIN)")
+public class AdminExamQuestionController {
+
+    private final ExamQuestionReviewService reviewService;
+
+    @Operation(summary = "Lọc câu thi đề JLPT", description = "Mới nhất trước. Chỉ câu thuộc một dạng đề JLPT.")
+    @GetMapping
+    public ResponseEntity<Page<AdminExamQuestionResponse>> search(
+            @RequestParam(required = false) String level,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "false") boolean flagged,
+            @RequestParam(required = false) Long grammarPointId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        ExamQuestionReviewService.Filter filter =
+                new ExamQuestionReviewService.Filter(level, type, status, flagged, grammarPointId);
+        return ResponseEntity.ok(reviewService.search(filter, page, Math.min(Math.max(size, 1), 100)));
+    }
+
+    @Operation(summary = "Sửa nội dung câu thi", description = "Câu phải đúng cấu trúc của dạng câu; không đổi trạng thái.")
+    @PutMapping("/{id}")
+    public ResponseEntity<AdminExamQuestionResponse> update(@PathVariable Long id,
+                                                            @Valid @RequestBody AdminExamQuestionRequest request) {
+        return ResponseEntity.ok(reviewService.update(id, request));
+    }
+
+    @Operation(summary = "Duyệt / loại / rút câu thi",
+            description = "APPROVED: vào đề được (câu sai cấu trúc thì không duyệt được); REJECTED: cần ghi lý do; "
+                    + "RETIRED: rút khỏi đề; DRAFT: đưa về chờ duyệt.")
+    @PostMapping("/{id}/status")
+    public ResponseEntity<AdminExamQuestionResponse> changeStatus(@PathVariable Long id,
+                                                                  @Valid @RequestBody ExamQuestionStatusRequest request) {
+        return ResponseEntity.ok(reviewService.changeStatus(id, request.getStatus(), request.getNote()));
+    }
+
+    @Operation(summary = "Ngân hàng câu theo cấp độ và dạng câu", description = "Số câu theo trạng thái, đủ cho bao nhiêu đề.")
+    @GetMapping("/stats")
+    public ResponseEntity<List<QuestionBankStatsResponse>> stats() {
+        return ResponseEntity.ok(reviewService.stats());
+    }
+}
