@@ -103,4 +103,11 @@ public interface ExamQuestionRepository
             GROUP BY jlpt_level, question_type, status
             """, nativeQuery = true)
     List<BankCount> countByLevelTypeAndStatus();
+
+    /** Câu trong đề của các câu hỏi gắn với một điểm ngữ pháp - để AI viết câu mới không trùng ý. */
+    @Query("""
+            SELECT q.sentence FROM ExamQuestion q JOIN q.grammarPointIds point
+            WHERE point = :grammarPointId AND q.sentence IS NOT NULL
+            """)
+    List<String> findSentencesByGrammarPoint(@Param("grammarPointId") Long grammarPointId);
 }

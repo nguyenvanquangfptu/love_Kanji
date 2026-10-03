@@ -508,7 +508,7 @@ export interface AdminExamQuestion {
   flag: ExamQuestionFlag | null
   reviewNote: string | null
   reviewedAt: string | null
-  source: 'MANUAL' | 'GENERATED'
+  source: 'MANUAL' | 'GENERATED' | 'AI'
   questionText: string
   sentence: string | null
   highlight: string | null
@@ -548,4 +548,12 @@ export interface QuestionBankStats {
     /** Số đề đủ câu đã duyệt. */
     exams: number
   }[]
+}
+
+/** Kết quả một lần nhờ AI viết nháp: số câu vào hàng chờ duyệt (trong đó có cảnh báo), bị loại, không đọc được. */
+export interface QuestionDraftResult {
+  drafted: number
+  flagged: number
+  rejected: number
+  unreadable: number
 }

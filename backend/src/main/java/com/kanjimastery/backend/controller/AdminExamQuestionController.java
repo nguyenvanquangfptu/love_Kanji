@@ -4,7 +4,9 @@ import com.kanjimastery.backend.dto.AdminExamQuestionRequest;
 import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
 import com.kanjimastery.backend.dto.ExamQuestionStatusRequest;
 import com.kanjimastery.backend.dto.QuestionBankStatsResponse;
+import com.kanjimastery.backend.dto.QuestionDraftRequest;
 import com.kanjimastery.backend.service.ExamQuestionReviewService;
+import com.kanjimastery.backend.service.QuestionDraftService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -24,6 +26,7 @@ import java.util.List;
 public class AdminExamQuestionController {
 
     private final ExamQuestionReviewService reviewService;
+    private final QuestionDraftService draftService;
 
     @Operation(summary = "Lọc câu thi đề JLPT", description = "Mới nhất trước. Chỉ câu thuộc một dạng đề JLPT.")
     @GetMapping
@@ -60,5 +63,14 @@ public class AdminExamQuestionController {
     @GetMapping("/stats")
     public ResponseEntity<List<QuestionBankStatsResponse>> stats() {
         return ResponseEntity.ok(reviewService.stats());
+    }
+
+    @Operation(summary = "Nhờ AI viết nháp câu ngữ pháp",
+            description = "Cho một điểm ngữ pháp, dạng GRAMMAR_FORM hoặc SENTENCE_ORDER, tối đa 8 câu. Câu được kiểm tra "
+                    + "tự động (cấu trúc, từ vượt cấp, AI giải lại) rồi vào hàng chờ duyệt; sai cấu trúc thì bị loại. "
+                    + "Tốn 2 request Gemini. Chưa cấu hình GEMINI_API_KEY hoặc Gemini không trả lời thì trả 400.")
+    @PostMapping("/drafts")
+    public ResponseEntity<QuestionDraftService.DraftResult> draft(@Valid @RequestBody QuestionDraftRequest request) {
+        return ResponseEntity.ok(draftService.draft(request.getGrammarPointId(), request.getType(), request.getCount()));
     }
 }

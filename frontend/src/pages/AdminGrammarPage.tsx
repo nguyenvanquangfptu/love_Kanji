@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, FileUp, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { Download, FileUp, Pencil, Plus, Search, Sparkles, Trash2 } from 'lucide-react'
 import { grammarApi } from '@/api/grammar'
 import { extractErrorMessage } from '@/api/client'
 import { JLPT_LEVELS, type GrammarPoint, type GrammarPointRequest, type JlptLevel } from '@/api/types'
@@ -18,6 +18,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { AdminNav } from '@/components/AdminNav'
 import { GrammarFormDialog } from '@/components/GrammarFormDialog'
 import { GrammarImportDialog } from '@/components/GrammarImportDialog'
+import { QuestionDraftDialog } from '@/components/QuestionDraftDialog'
 
 const GRAMMAR_KEY = ['admin', 'grammar']
 
@@ -31,6 +32,7 @@ export function AdminGrammarPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<GrammarPoint | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [drafting, setDrafting] = useState<GrammarPoint | null>(null)
   // Đổi mỗi lần mở hộp thoại để form/nội dung CSV bắt đầu lại từ đầu.
   const [dialogKey, setDialogKey] = useState(0)
 
@@ -198,6 +200,18 @@ export function AdminGrammarPage() {
                           Xem câu
                         </Link>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Sinh nháp câu hỏi cho ${point.pattern}`}
+                        title="Sinh nháp câu hỏi bằng AI"
+                        onClick={() => {
+                          setDialogKey((key) => key + 1)
+                          setDrafting(point)
+                        }}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                      </Button>
                       <Button variant="ghost" size="icon" aria-label={`Sửa ${point.pattern}`} onClick={() => openForm(point)}>
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -222,6 +236,12 @@ export function AdminGrammarPage() {
         errorMessage={formError}
         onSubmit={(payload) => saveMutation.mutate(payload)}
         onCancel={() => setFormOpen(false)}
+      />
+      <QuestionDraftDialog
+        key={`draft-${dialogKey}`}
+        point={drafting}
+        onClose={() => setDrafting(null)}
+        onDrafted={refresh}
       />
       <GrammarImportDialog key={`import-${dialogKey}`} open={importOpen} onClose={() => setImportOpen(false)} onImported={refresh} />
       <ConfirmDialog

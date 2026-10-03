@@ -12,15 +12,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** API duyệt câu thi qua HTTP: chỉ quản trị viên; lọc, đổi trạng thái, thống kê. */
+/** API duyệt câu thi qua HTTP: chỉ quản trị viên; lọc, đổi trạng thái, thống kê, sinh nháp. */
 @AutoConfigureMockMvc
+// Không bao giờ gọi Gemini thật trong test, kể cả khi máy có sẵn GEMINI_API_KEY.
+@TestPropertySource(properties = "app.ai.gemini-api-key=")
 class AdminExamQuestionControllerIT extends AbstractIntegrationTest {
 
     @Autowired
@@ -73,5 +78,14 @@ class AdminExamQuestionControllerIT extends AbstractIntegrationTest {
         mockMvc.perform(get("/api/v1/admin/exam-questions/stats"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[?(@.jlptLevel == 'N4')].types[?(@.type == 'GRAMMAR_FORM')].perExam").value(13));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void drafting_shouldExplainThatGeminiIsNotConfigured() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/exam-questions/drafts").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"grammarPointId\": 1, \"type\": \"GRAMMAR_FORM\", \"count\": 5}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(containsString("GEMINI_API_KEY")));
     }
 }

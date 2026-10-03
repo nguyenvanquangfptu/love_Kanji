@@ -6,6 +6,7 @@ import type {
   JlptQuestionType,
   Page,
   QuestionBankStats,
+  QuestionDraftResult,
 } from './types'
 
 export interface ExamQuestionFilter {
@@ -31,4 +32,10 @@ export const examAdminApi = {
     apiClient.post<AdminExamQuestion>(`/admin/exam-questions/${id}/status`, { status, note }).then((r) => r.data),
 
   stats: () => apiClient.get<QuestionBankStats[]>('/admin/exam-questions/stats').then((r) => r.data),
+
+  /** Nhờ AI viết nháp câu ngữ pháp cho một điểm ngữ pháp (tốn 2 request Gemini); câu nháp chờ người duyệt. */
+  draft: (grammarPointId: number, type: JlptQuestionType, count: number) =>
+    apiClient
+      .post<QuestionDraftResult>('/admin/exam-questions/drafts', { grammarPointId, type, count }, { timeout: 120_000 })
+      .then((r) => r.data),
 }

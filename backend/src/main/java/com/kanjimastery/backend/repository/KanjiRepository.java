@@ -72,4 +72,17 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
 
     @Query("SELECT k.mnemonic FROM Kanji k WHERE k.id = :id")
     Optional<String> findMnemonicById(@Param("id") Long id);
+
+    /** Cách viết, cách đọc và cấp độ của một từ. */
+    interface WordLevel {
+        String getCharacter();
+
+        String getReading();
+
+        String getJlptLevel();
+    }
+
+    /** Mọi từ trong kho - để kiểm tra một câu có dùng từ vượt cấp độ không. */
+    @Query("SELECT k.character AS character, k.reading AS reading, k.jlptLevel AS jlptLevel FROM Kanji k")
+    List<WordLevel> findAllWordLevels();
 }
