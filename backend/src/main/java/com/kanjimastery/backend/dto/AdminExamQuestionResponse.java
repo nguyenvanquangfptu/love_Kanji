@@ -34,6 +34,9 @@ public class AdminExamQuestionResponse {
     private String optionD;
     private String correctOption;
     private String explanation;
+    /** Câu điền vào chỗ trống 【blankNo】 của đoạn văn passageId (文章の文法); null với câu đứng riêng. */
+    private Long passageId;
+    private Integer blankNo;
     /** Từ vựng câu hỏi kiểm tra. */
     private List<Word> words;
     /** Điểm ngữ pháp câu hỏi kiểm tra. */

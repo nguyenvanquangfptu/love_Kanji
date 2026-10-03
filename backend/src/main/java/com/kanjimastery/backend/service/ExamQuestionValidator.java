@@ -6,17 +6,25 @@ import org.springframework.util.StringUtils;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.IntStream;
 
 /**
  * Kiểm tra cấu trúc một câu thi theo dạng câu JLPT: đủ 4 lựa chọn khác nhau, đáp án A-D, câu có đúng chỗ được hỏi
- * (phần gạch chân, ô （　　）, các ô của câu sắp xếp). Dùng khi sửa, duyệt câu và khi nhận câu nháp từ AI.
+ * (phần gạch chân, ô （　　）, các ô của câu sắp xếp, các chỗ trống 【n】 của đoạn văn). Dùng khi sửa, duyệt câu và
+ * khi nhận câu nháp từ AI.
  */
 final class ExamQuestionValidator {
 
     static final String ORDER_SLOT = "＿＿＿";
     static final String ORDER_STAR = "＿★＿";
     private static final int MAX_OPTION_LENGTH = 255;
+    /** Chỗ trống 【n】 trong đoạn văn 文章の文法. */
+    static final Pattern PASSAGE_BLANK = Pattern.compile("【(\\d+)】");
 
     private ExamQuestionValidator() {
     }
@@ -53,7 +61,7 @@ final class ExamQuestionValidator {
                     problems.add("câu phải chứa phần được gạch chân");
                 }
             }
-            case JlptQuestionType.CONTEXT, JlptQuestionType.GRAMMAR_FORM, JlptQuestionType.TEXT_GRAMMAR -> {
+            case JlptQuestionType.CONTEXT, JlptQuestionType.GRAMMAR_FORM -> {
                 if (count(text, ExamQuestionGenerator.BLANK) != 1) {
                     problems.add("câu phải có đúng một ô " + ExamQuestionGenerator.BLANK);
                 }
@@ -64,9 +72,42 @@ final class ExamQuestionValidator {
                 }
             }
             default -> {
-                // 用法: bốn lựa chọn là bốn câu, không cần câu dẫn.
+                // 用法: bốn lựa chọn là bốn câu, không cần câu dẫn; 文章の文法: chỗ trống nằm trong đoạn văn
+                // (xem passageProblems).
             }
         }
+        return problems;
+    }
+
+    /**
+     * Lỗi của một đoạn văn 文章の文法 có các câu hỏi điền vào chỗ trống {@code blankNos}: chỗ trống phải là 1..n theo
+     * thứ tự, mỗi 【k】 xuất hiện đúng một lần trong đoạn và không thừa chỗ trống nào.
+     */
+    static List<String> passageProblems(String content, List<Integer> blankNos) {
+        List<String> problems = new ArrayList<>();
+        if (!StringUtils.hasText(content)) {
+            problems.add("thiếu nội dung đoạn văn");
+            return problems;
+        }
+        if (blankNos.isEmpty()) {
+            problems.add("đoạn văn chưa có câu hỏi");
+        }
+        List<Integer> expected = IntStream.rangeClosed(1, blankNos.size()).boxed().toList();
+        if (!blankNos.stream().sorted().toList().equals(expected)) {
+            problems.add("chỗ trống của các câu hỏi phải là 1.." + blankNos.size());
+        }
+        Map<Integer, Integer> markers = new TreeMap<>();
+        Matcher matcher = PASSAGE_BLANK.matcher(content);
+        while (matcher.find()) {
+            markers.merge(Integer.parseInt(matcher.group(1)), 1, Integer::sum);
+        }
+        for (int blank : expected) {
+            if (markers.getOrDefault(blank, 0) != 1) {
+                problems.add("【" + blank + "】 phải có đúng một lần trong đoạn văn");
+            }
+        }
+        markers.keySet().stream().filter(blank -> !expected.contains(blank))
+                .forEach(blank -> problems.add("thừa chỗ trống 【" + blank + "】"));
         return problems;
     }
 

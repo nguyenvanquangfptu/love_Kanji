@@ -16,6 +16,7 @@ import { Leaderboard } from '@/components/Leaderboard'
 import { StatTile } from '@/components/StatTile'
 import { Meter } from '@/components/Meter'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
+import { PassageText } from '@/components/PassageText'
 
 const SKILL_LABELS: Record<QuizDirection, string> = {
   KANJI_TO_READING: 'Đọc chữ Hán',
@@ -106,6 +107,13 @@ export function ExamResultPage() {
                 sittingId && q.questionType && q.questionType !== data.questions[idx - 1]?.questionType
                   ? data.mondai.find((m) => m.type === q.questionType)
                   : undefined
+              // Đoạn văn 文章の文法 hiện một lần, trước câu đầu tiên của nó.
+              const passage =
+                q.passageId && q.passageId !== data.questions[idx - 1]?.passageId
+                  ? data.passages.find((p) => p.id === q.passageId)
+                  : undefined
+              const numberOf = (blankNo: number) =>
+                data.questions.findIndex((other) => other.passageId === q.passageId && other.blankNo === blankNo) + 1
               return (
                 <div key={q.questionId} className="flex flex-col gap-2">
                   {mondai && (
@@ -117,6 +125,12 @@ export function ExamResultPage() {
                       </span>
                     </h3>
                   )}
+                  {passage && (
+                    <Card className="px-4 py-3 sm:px-5">
+                      {passage.title && <h4 className="mb-1 text-center font-jp font-black">{passage.title}</h4>}
+                      <PassageText content={passage.content} labelOf={numberOf} />
+                    </Card>
+                  )}
                   <Card className={cn('p-4 sm:p-5', q.correct ? 'border-primary/40' : 'border-destructive/40')}>
                     <div className="flex items-start gap-2">
                       {q.correct ? (
@@ -126,7 +140,8 @@ export function ExamResultPage() {
                       )}
                       <div>
                         <p className="font-jp text-lg font-bold">
-                          <span className="font-sans text-muted-foreground">Câu {idx + 1}.</span> {q.questionText}
+                          <span className="font-sans text-muted-foreground">Câu {idx + 1}.</span>{' '}
+                          {q.passageId ? '' : q.questionText}
                         </p>
                         {q.sentence && (
                           <p className="mt-2 font-jp text-lg leading-loose">

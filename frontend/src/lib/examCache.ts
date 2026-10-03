@@ -1,4 +1,10 @@
-import type { ExamMondai, ExamQuestionPublicResponse, ExamSectionName, StartExamResponse } from '@/api/types'
+import type {
+  ExamMondai,
+  ExamPassage,
+  ExamQuestionPublicResponse,
+  ExamSectionName,
+  StartExamResponse,
+} from '@/api/types'
 
 /**
  * Backend chỉ trả lại đáp án đã tick khi khôi phục phiên thi (GET .../session),
@@ -16,6 +22,8 @@ interface CachedExam {
   sittingId?: number | null
   section?: ExamSectionName | null
   mondai?: ExamMondai[] | null
+  /** Đoạn văn của các câu 文章の文法. */
+  passages?: ExamPassage[] | null
 }
 
 function key(attemptId: number) {
@@ -38,6 +46,7 @@ export function cacheStartedExam(data: StartExamResponse) {
     sittingId: data.sittingId,
     section: data.section,
     mondai: data.mondai,
+    passages: data.passages,
   })
 }
 

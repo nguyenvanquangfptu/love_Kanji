@@ -6,10 +6,11 @@ import { examApi } from '@/api/exam'
 import { extractErrorMessage } from '@/api/client'
 import { getCachedExamQuestions } from '@/lib/examCache'
 import { mondaiAt, mondaiRanges, QUESTION_TYPE_META, SECTION_META, type MondaiRange } from '@/lib/jlpt'
-import type { ExamQuestionPublicResponse, ExamSectionName } from '@/api/types'
+import type { ExamPassage, ExamQuestionPublicResponse, ExamSectionName } from '@/api/types'
 import { Countdown } from '@/components/Countdown'
 import { QuestionPalette } from '@/components/QuestionPalette'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
+import { PassageText } from '@/components/PassageText'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
@@ -28,6 +29,8 @@ export function ExamWorkspacePage() {
   const [questions, setQuestions] = useState<ExamQuestionPublicResponse[] | null>(null)
   // Phần đề JLPT: các 問題 (câu xếp liền nhau theo thứ tự) và tên phần; rỗng/null với thi nhanh.
   const [mondai, setMondai] = useState<MondaiRange[]>([])
+  // Đoạn văn của các câu 文章の文法.
+  const [passages, setPassages] = useState<ExamPassage[]>([])
   const [section, setSection] = useState<ExamSectionName | null>(null)
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -57,6 +60,7 @@ export function ExamWorkspacePage() {
         if (cached) {
           setQuestions(cached.questions)
           setMondai(mondaiRanges(cached.mondai))
+          setPassages(cached.passages ?? [])
         }
         setSection(session.section)
         setAnswers(Object.fromEntries(Object.entries(session.answers).map(([k, v]) => [Number(k), v])))
@@ -269,6 +273,10 @@ export function ExamWorkspacePage() {
 
   const current = questions[currentIndex]
   const currentMondai = mondaiAt(mondai, currentIndex)
+  const passage = current.passageId ? passages.find((p) => p.id === current.passageId) : undefined
+  // Vị trí trong bài của câu điền vào chỗ trống n của đoạn văn đang làm.
+  const indexOfBlank = (blankNo: number) =>
+    questions.findIndex((q) => q.passageId === current.passageId && q.blankNo === blankNo)
 
   return (
     <>
@@ -285,13 +293,27 @@ export function ExamWorkspacePage() {
             </p>
           )}
           {currentMondai && <MondaiHeader mondai={currentMondai} />}
+          {passage && (
+            <section className="max-h-[45vh] overflow-y-auto rounded-2xl border-2 border-border bg-card px-4 py-3">
+              {passage.title && <h2 className="mb-1 text-center font-jp font-black">{passage.title}</h2>}
+              <PassageText
+                content={passage.content}
+                labelOf={(blankNo) => indexOfBlank(blankNo) + 1}
+                currentBlank={current.blankNo}
+                onSelect={(blankNo) => {
+                  const index = indexOfBlank(blankNo)
+                  if (index >= 0) setCurrentIndex(index)
+                }}
+              />
+            </section>
+          )}
 
           <div key={current.id} className="animate-pop-in">
             <p className="text-sm font-extrabold uppercase tracking-wider text-secondary">
               Câu {currentIndex + 1} / {total}
             </p>
             {/* Đề JLPT: câu dẫn đã có ở đầu 問題, câu có câu ví dụ thì không nhắc lại. */}
-            {!(currentMondai && current.sentence) && (
+            {!(currentMondai && current.sentence) && !current.passageId && (
               <h1 className="mt-2 font-jp text-xl font-bold leading-relaxed sm:text-2xl">{current.questionText}</h1>
             )}
             {current.sentence && (

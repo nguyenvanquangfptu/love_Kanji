@@ -38,4 +38,19 @@ class ExamQuestionValidatorTest {
         assertThat(ExamQuestionValidator.problems(JlptQuestionType.USAGE, "Câu", null, null,
                 List.of("a", "b", "c"), "A")).containsExactly("cần đủ 4 lựa chọn");
     }
+
+    @Test
+    void passageProblems_shouldMatchTheBlanksOfTheTextWithTheQuestions() {
+        String text = "今日は雨でした。【1】、学校へ行きました。友達と【2】話しました。";
+
+        assertThat(ExamQuestionValidator.passageProblems(text, List.of(1, 2))).isEmpty();
+        assertThat(ExamQuestionValidator.passageProblems(text, List.of(1, 3)))
+                .containsExactly("chỗ trống của các câu hỏi phải là 1..2");
+        assertThat(ExamQuestionValidator.passageProblems("【1】と【1】、それから【3】。", List.of(1)))
+                .containsExactly("【1】 phải có đúng một lần trong đoạn văn", "thừa chỗ trống 【3】");
+        assertThat(ExamQuestionValidator.passageProblems(" ", List.of(1))).containsExactly("thiếu nội dung đoạn văn");
+        // Câu của đoạn văn không cần ô （　　） trong câu riêng: chỗ trống nằm trong đoạn.
+        assertThat(ExamQuestionValidator.problems(JlptQuestionType.TEXT_GRAMMAR, "【1】", null, null, OPTIONS, "A"))
+                .isEmpty();
+    }
 }

@@ -110,4 +110,11 @@ public interface ExamQuestionRepository
             WHERE point = :grammarPointId AND q.sentence IS NOT NULL
             """)
     List<String> findSentencesByGrammarPoint(@Param("grammarPointId") Long grammarPointId);
+
+    /** Câu hỏi của các đoạn văn, kèm từ vựng và điểm ngữ pháp mỗi câu kiểm tra. */
+    @Query("""
+            SELECT DISTINCT q FROM ExamQuestion q LEFT JOIN FETCH q.kanjiIds LEFT JOIN FETCH q.grammarPointIds
+            WHERE q.passageId IN :passageIds
+            """)
+    List<ExamQuestion> findAllWithLinksByPassageIdIn(@Param("passageIds") Collection<Long> passageIds);
 }

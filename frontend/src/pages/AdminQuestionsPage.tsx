@@ -8,25 +8,25 @@ import {
   JLPT_LEVELS,
   type AdminExamQuestion,
   type AdminExamQuestionRequest,
-  type ExamQuestionFlag,
   type ExamQuestionStatus,
   type JlptLevel,
   type JlptQuestionType,
 } from '@/api/types'
 import { LEVEL_META } from '@/lib/levels'
 import { QUESTION_TYPE_META, SECTION_META } from '@/lib/jlpt'
+import { FLAG_LABEL, SOURCE_LABEL, STATUS_BADGE } from '@/lib/questionReview'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
-import { Modal } from '@/components/ui/modal'
-import { Textarea } from '@/components/ui/textarea'
 import { PageSpinner } from '@/components/ui/spinner'
 import { PageHeader } from '@/components/PageHeader'
 import { AdminNav } from '@/components/AdminNav'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
 import { QuestionEditDialog } from '@/components/QuestionEditDialog'
+import { ReviewNoteDialog } from '@/components/ReviewNoteDialog'
+import { PassageReviewList } from '@/components/PassageReviewList'
 
 const STATUS_TABS: { value: ExamQuestionStatus | ''; label: string }[] = [
   { value: 'DRAFT', label: 'Chờ duyệt' },
@@ -35,21 +35,6 @@ const STATUS_TABS: { value: ExamQuestionStatus | ''; label: string }[] = [
   { value: 'RETIRED', label: 'Đã rút' },
   { value: '', label: 'Tất cả' },
 ]
-
-const STATUS_BADGE: Record<ExamQuestionStatus, { label: string; variant: 'orange' | 'success' | 'destructive' | 'outline' }> = {
-  DRAFT: { label: 'Chờ duyệt', variant: 'orange' },
-  APPROVED: { label: 'Đã duyệt', variant: 'success' },
-  REJECTED: { label: 'Đã loại', variant: 'destructive' },
-  RETIRED: { label: 'Đã rút', variant: 'outline' },
-}
-
-const FLAG_LABEL: Record<ExamQuestionFlag, string> = {
-  AMBIGUOUS: 'Nghi có 2 đáp án',
-  WRONG_ANSWER: 'Máy chọn đáp án khác',
-  ABOVE_LEVEL: 'Từ vượt cấp độ',
-}
-
-const SOURCE_LABEL: Record<string, string> = { MANUAL: 'Soạn tay', GENERATED: 'Sinh từ kho từ', AI: 'AI viết nháp' }
 
 const OPTIONS = ['A', 'B', 'C', 'D'] as const
 const PAGE_SIZE = 20
@@ -75,7 +60,7 @@ export function AdminQuestionsPage() {
   const [editKey, setEditKey] = useState(0)
   const [editError, setEditError] = useState<string | null>(null)
   const [pendingNote, setPendingNote] = useState<PendingNote | null>(null)
-  const [note, setNote] = useState('')
+  const [noteKey, setNoteKey] = useState(0)
 
   function update(changes: Record<string, string | undefined>) {
     const next = new URLSearchParams(params)
@@ -92,6 +77,8 @@ export function AdminQuestionsPage() {
     queryKey: ['admin', 'exam-questions', filter],
     queryFn: () => examAdminApi.search(filter),
     placeholderData: keepPreviousData,
+    // 文章の文法 duyệt theo cả đoạn văn, ở danh sách đoạn văn.
+    enabled: type !== 'TEXT_GRAMMAR',
   })
   const statsQuery = useQuery({ queryKey: ['admin', 'exam-questions', 'stats'], queryFn: examAdminApi.stats })
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin', 'exam-questions'] })
@@ -235,7 +222,9 @@ export function AdminQuestionsPage() {
 
       {statusMutation.isError && <Alert className="mb-4">{extractErrorMessage(statusMutation.error)}</Alert>}
 
-      {questionsQuery.isLoading ? (
+      {type === 'TEXT_GRAMMAR' ? (
+        <PassageReviewList level={level} status={status || undefined} />
+      ) : questionsQuery.isLoading ? (
         <PageSpinner label="Đang tải câu hỏi..." />
       ) : questionsQuery.isError || !data ? (
         <Alert>{extractErrorMessage(questionsQuery.error)}</Alert>
@@ -253,7 +242,7 @@ export function AdminQuestionsPage() {
                 onApprove={() => statusMutation.mutate({ id: question.id, status: 'APPROVED' })}
                 onBackToDraft={() => statusMutation.mutate({ id: question.id, status: 'DRAFT' })}
                 onNote={(nextStatus) => {
-                  setNote('')
+                  setNoteKey((key) => key + 1)
                   setPendingNote({ question, status: nextStatus })
                 }}
                 onEdit={() => {
@@ -289,39 +278,16 @@ export function AdminQuestionsPage() {
         onCancel={() => setEditing(null)}
       />
 
-      <Modal
-        open={pendingNote !== null}
-        onClose={() => setPendingNote(null)}
-        title={pendingNote?.status === 'REJECTED' ? 'Loại câu hỏi' : 'Rút câu khỏi đề'}
-        description={
-          pendingNote?.status === 'REJECTED' ? 'Ghi lý do để lần sau sinh câu tránh lỗi này.' : 'Lý do (không bắt buộc).'
+      <ReviewNoteDialog
+        key={noteKey}
+        action={pendingNote?.status ?? null}
+        subject="câu hỏi"
+        busy={statusMutation.isPending}
+        onConfirm={(note) =>
+          pendingNote && statusMutation.mutate({ id: pendingNote.question.id, status: pendingNote.status, note })
         }
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setPendingNote(null)}>
-              Huỷ
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={statusMutation.isPending || (pendingNote?.status === 'REJECTED' && !note.trim())}
-              onClick={() =>
-                pendingNote &&
-                statusMutation.mutate({ id: pendingNote.question.id, status: pendingNote.status, note: note.trim() })
-              }
-            >
-              {pendingNote?.status === 'REJECTED' ? 'Loại câu' : 'Rút khỏi đề'}
-            </Button>
-          </>
-        }
-      >
-        <Textarea
-          rows={3}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Ví dụ: đáp án B cũng đúng"
-          aria-label="Lý do"
-        />
-      </Modal>
+        onCancel={() => setPendingNote(null)}
+      />
     </div>
   )
 }

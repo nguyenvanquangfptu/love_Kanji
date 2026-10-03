@@ -1,5 +1,6 @@
 import { apiClient } from './client'
 import type {
+  AdminExamPassage,
   AdminExamQuestion,
   AdminExamQuestionRequest,
   ExamQuestionStatus,
@@ -38,4 +39,15 @@ export const examAdminApi = {
     apiClient
       .post<QuestionDraftResult>('/admin/exam-questions/drafts', { grammarPointId, type, count }, { timeout: 120_000 })
       .then((r) => r.data),
+
+  /** Đoạn văn 文章の文法 của một cấp độ, kèm câu hỏi. */
+  passages: (filter: { level: string; status?: ExamQuestionStatus; page?: number; size?: number }) =>
+    apiClient.get<Page<AdminExamPassage>>('/admin/exam-passages', { params: filter }).then((r) => r.data),
+
+  updatePassage: (id: number, payload: { title: string; content: string }) =>
+    apiClient.put<AdminExamPassage>(`/admin/exam-passages/${id}`, payload).then((r) => r.data),
+
+  /** Duyệt / loại / rút cả đoạn văn cùng mọi câu hỏi của nó. */
+  changePassageStatus: (id: number, status: ExamQuestionStatus, note?: string) =>
+    apiClient.post<AdminExamPassage>(`/admin/exam-passages/${id}/status`, { status, note }).then((r) => r.data),
 }

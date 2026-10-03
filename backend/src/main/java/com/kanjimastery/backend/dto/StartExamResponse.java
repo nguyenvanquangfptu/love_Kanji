@@ -22,4 +22,6 @@ public class StartExamResponse {
     private String section;
     /** Các 問題 của phần đề JLPT - câu hỏi xếp liền nhau theo thứ tự này; null với thi nhanh. */
     private List<ExamMondaiResponse> mondai;
+    /** Đoạn văn của các câu 文章の文法 trong bài; rỗng nếu không có. */
+    private List<ExamPassageResponse> passages;
 }

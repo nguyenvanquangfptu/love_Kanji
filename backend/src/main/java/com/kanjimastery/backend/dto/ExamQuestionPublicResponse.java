@@ -21,6 +21,9 @@ public class ExamQuestionPublicResponse {
     private String highlight;
     /** Dạng câu JLPT ({@link com.kanjimastery.backend.model.JlptQuestionType}); null với câu chỉ dùng cho thi nhanh. */
     private String questionType;
+    /** Câu điền vào chỗ trống 【blankNo】 của đoạn văn passageId (文章の文法); null với câu đứng riêng. */
+    private Long passageId;
+    private Integer blankNo;
 
     public static ExamQuestionPublicResponse from(ExamQuestion q) {
         return ExamQuestionPublicResponse.builder()
@@ -33,6 +36,8 @@ public class ExamQuestionPublicResponse {
                 .sentence(q.getSentence())
                 .highlight(q.getHighlight())
                 .questionType(q.getQuestionType())
+                .passageId(q.getPassageId())
+                .blankNo(q.getBlankNo())
                 .build();
     }
 }

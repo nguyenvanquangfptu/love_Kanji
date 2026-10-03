@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -16,12 +17,14 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import com.kanjimastery.backend.config.ExamProperties;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.ExamMondaiResponse;
+import com.kanjimastery.backend.dto.ExamPassageResponse;
 import com.kanjimastery.backend.dto.ExamQuestionPublicResponse;
 import com.kanjimastery.backend.dto.ExamResultResponse;
 import com.kanjimastery.backend.dto.ExamReviewResponse;
@@ -31,11 +34,13 @@ import com.kanjimastery.backend.dto.SaveAnswerRequest;
 import com.kanjimastery.backend.dto.StartExamRequest;
 import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
+import com.kanjimastery.backend.model.ExamPassage;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.UserExamAnswer;
 import com.kanjimastery.backend.model.UserExamAttempt;
+import com.kanjimastery.backend.repository.ExamPassageRepository;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.ExamSessionStore;
 import com.kanjimastery.backend.repository.KanjiRepository;
@@ -58,6 +63,7 @@ public class ExamService {
     private final ExamProperties examProperties;
     private final KanjiRepository kanjiRepository;
     private final JlptBlueprintProperties blueprints;
+    private final ExamPassageRepository passageRepository;
 
     @Transactional
     public StartExamResponse start(Long userId, StartExamRequest request) {
@@ -94,6 +100,7 @@ public class ExamService {
                 .sittingId(saved.getSittingId())
                 .section(saved.getSection())
                 .mondai(mondai)
+                .passages(passagesOf(questions))
                 .build();
     }
 
@@ -196,6 +203,8 @@ public class ExamService {
                             .explanation(question.getExplanation())
                             .skill(question.getSkill())
                             .questionType(question.getQuestionType())
+                            .passageId(question.getPassageId())
+                            .blankNo(question.getBlankNo())
                             .build();
                 })
                 .toList();
@@ -214,7 +223,23 @@ public class ExamService {
                 .sittingId(attempt.getSittingId())
                 .section(attempt.getSection())
                 .mondai(mondaiScores(attempt, items))
+                .passages(passagesOf(answers.stream().map(answer -> questionsById.get(answer.getQuestionId()))
+                        .filter(Objects::nonNull).toList()))
                 .build();
+    }
+
+    /** Đoạn văn (文章の文法) của các câu hỏi, theo thứ tự xuất hiện đầu tiên. */
+    private List<ExamPassageResponse> passagesOf(Collection<ExamQuestion> questions) {
+        Set<Long> ids = questions.stream().map(ExamQuestion::getPassageId).filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, ExamPassage> passages = passageRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(ExamPassage::getId, Function.identity()));
+        return ids.stream().map(passages::get).filter(Objects::nonNull)
+                .map(passage -> new ExamPassageResponse(passage.getId(), passage.getTitle(), passage.getContent()))
+                .toList();
     }
 
     /** Điểm theo từng 問題 của phần đề JLPT, theo thứ tự trong đề; thi nhanh thì rỗng. */

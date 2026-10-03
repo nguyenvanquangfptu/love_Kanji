@@ -257,6 +257,16 @@ export interface ExamQuestionPublicResponse {
   highlight: string | null
   /** Dạng câu JLPT; null với câu chỉ dùng cho thi nhanh. */
   questionType: JlptQuestionType | null
+  /** Câu điền vào chỗ trống 【blankNo】 của đoạn văn passageId (文章の文法); null với câu đứng riêng. */
+  passageId: number | null
+  blankNo: number | null
+}
+
+/** Đoạn văn của 問題3 文章の文法: chỗ trống đánh dấu 【1】【2】... theo blankNo của câu hỏi. */
+export interface ExamPassage {
+  id: number
+  title: string | null
+  content: string
 }
 
 /** Các phần của đề JLPT (chỉ phần Kiến thức ngôn ngữ). */
@@ -293,6 +303,8 @@ export interface StartExamResponse {
   sittingId: number | null
   section: ExamSectionName | null
   mondai: ExamMondai[] | null
+  /** Đoạn văn của các câu 文章の文法 trong bài. */
+  passages: ExamPassage[] | null
 }
 
 export interface StartJlptExamRequest {
@@ -380,6 +392,8 @@ export interface QuestionReviewItem {
   /** Kỹ năng câu hỏi kiểm tra; null nếu chưa phân loại. */
   skill: QuizDirection | null
   questionType: JlptQuestionType | null
+  passageId: number | null
+  blankNo: number | null
 }
 
 export interface ExamReviewResponse {
@@ -401,6 +415,8 @@ export interface ExamReviewResponse {
   section: ExamSectionName | null
   /** Điểm theo từng 問題 của phần đề JLPT, theo thứ tự trong đề; rỗng với thi nhanh. */
   mondai: { number: number; type: JlptQuestionType; correct: number; total: number }[]
+  /** Đoạn văn của các câu 文章の文法 trong bài. */
+  passages: ExamPassage[]
 }
 
 export interface LeaderboardEntryResponse {
@@ -518,6 +534,8 @@ export interface AdminExamQuestion {
   optionD: string
   correctOption: 'A' | 'B' | 'C' | 'D'
   explanation: string | null
+  passageId: number | null
+  blankNo: number | null
   words: { id: number; character: string; reading: string | null }[]
   grammarPoints: { id: number; pattern: string }[]
 }
@@ -556,4 +574,18 @@ export interface QuestionDraftResult {
   flagged: number
   rejected: number
   unreadable: number
+}
+
+/** Một đoạn văn 文章の文法 trên trang duyệt, kèm các câu hỏi theo thứ tự chỗ trống. */
+export interface AdminExamPassage {
+  id: number
+  jlptLevel: string
+  title: string | null
+  content: string
+  status: ExamQuestionStatus
+  source: 'MANUAL' | 'GENERATED' | 'AI'
+  flag: ExamQuestionFlag | null
+  reviewNote: string | null
+  reviewedAt: string | null
+  questions: AdminExamQuestion[]
 }

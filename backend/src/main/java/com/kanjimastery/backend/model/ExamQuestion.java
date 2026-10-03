@@ -80,6 +80,14 @@ public class ExamQuestion {
     @Column(name = "reviewed_at")
     private LocalDateTime reviewedAt;
 
+    /** Đoạn văn chứa câu hỏi (問題3 文章の文法); null với câu đứng riêng. */
+    @Column(name = "passage_id")
+    private Long passageId;
+
+    /** Chỗ trống 【n】 trong đoạn văn mà câu hỏi này điền vào. */
+    @Column(name = "blank_no")
+    private Integer blankNo;
+
     /** {@link ExamQuestionSource} */
     @Column(nullable = false, length = 10)
     @Builder.Default

@@ -28,6 +28,8 @@ public class ExamReviewResponse {
     private String section;
     /** Điểm theo từng 問題 của phần đề JLPT, theo thứ tự trong đề; rỗng với thi nhanh. */
     private List<MondaiScore> mondai;
+    /** Đoạn văn của các câu 文章の文法 trong bài; rỗng nếu không có. */
+    private List<ExamPassageResponse> passages;
 
     @Getter
     @Builder

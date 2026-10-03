@@ -16,6 +16,7 @@ import com.kanjimastery.backend.repository.KanjiRepository;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -63,19 +64,15 @@ public class ExamQuestionReviewService {
                         .collect(Collectors.toMap(ExamQuestion::getId, Function.identity()));
         List<ExamQuestion> questions = found.getContent().stream().map(question -> withLinks.get(question.getId()))
                 .toList();
-        Map<Long, Kanji> words = kanjiRepository.findAllById(questions.stream()
-                        .flatMap(question -> question.getKanjiIds().stream()).collect(Collectors.toSet())).stream()
-                .collect(Collectors.toMap(Kanji::getId, Function.identity()));
-        Map<Long, GrammarPoint> points = grammarPointRepository.findAllById(questions.stream()
-                        .flatMap(question -> question.getGrammarPointIds().stream()).collect(Collectors.toSet())).stream()
-                .collect(Collectors.toMap(GrammarPoint::getId, Function.identity()));
-        return found.map(question -> toResponse(withLinks.get(question.getId()), words, points));
+        return new PageImpl<>(toResponses(questions), found.getPageable(), found.getTotalElements());
     }
 
     private static Specification<ExamQuestion> specification(Filter filter) {
         return (root, query, builder) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(builder.isNotNull(root.get("questionType")));
+            // Câu của đoạn văn 文章の文法 được duyệt theo cả đoạn, ở danh sách đoạn văn.
+            predicates.add(builder.isNull(root.get("passageId")));
             if (StringUtils.hasText(filter.level())) {
                 predicates.add(builder.equal(root.get("jlptLevel"), filter.level().toUpperCase()));
             }
@@ -136,6 +133,9 @@ public class ExamQuestionReviewService {
             throw new BadRequestException("Trạng thái không hợp lệ: " + status);
         }
         ExamQuestion question = questionWithLinks(id);
+        if (question.getPassageId() != null) {
+            throw new BadRequestException("Câu này thuộc một đoạn văn - duyệt hoặc loại cả đoạn văn");
+        }
         if (ExamQuestionStatus.REJECTED.equals(status) && !StringUtils.hasText(note)) {
             throw new BadRequestException("Loại câu hỏi thì cần ghi lý do");
         }
@@ -193,11 +193,18 @@ public class ExamQuestionReviewService {
     }
 
     private AdminExamQuestionResponse toResponse(ExamQuestion question) {
-        Map<Long, Kanji> words = kanjiRepository.findAllById(question.getKanjiIds()).stream()
+        return toResponses(List.of(question)).get(0);
+    }
+
+    /** Câu hỏi (đã nạp từ vựng, điểm ngữ pháp) dạng hiện trên trang duyệt, giữ thứ tự. */
+    List<AdminExamQuestionResponse> toResponses(List<ExamQuestion> questions) {
+        Map<Long, Kanji> words = kanjiRepository.findAllById(questions.stream()
+                        .flatMap(question -> question.getKanjiIds().stream()).collect(Collectors.toSet())).stream()
                 .collect(Collectors.toMap(Kanji::getId, Function.identity()));
-        Map<Long, GrammarPoint> points = grammarPointRepository.findAllById(question.getGrammarPointIds()).stream()
+        Map<Long, GrammarPoint> points = grammarPointRepository.findAllById(questions.stream()
+                        .flatMap(question -> question.getGrammarPointIds().stream()).collect(Collectors.toSet())).stream()
                 .collect(Collectors.toMap(GrammarPoint::getId, Function.identity()));
-        return toResponse(question, words, points);
+        return questions.stream().map(question -> toResponse(question, words, points)).toList();
     }
 
     private static AdminExamQuestionResponse toResponse(ExamQuestion question, Map<Long, Kanji> words,
@@ -221,6 +228,8 @@ public class ExamQuestionReviewService {
                 .optionD(question.getOptionD())
                 .correctOption(question.getCorrectOption())
                 .explanation(question.getExplanation())
+                .passageId(question.getPassageId())
+                .blankNo(question.getBlankNo())
                 .words(question.getKanjiIds().stream().map(words::get).filter(word -> word != null)
                         .map(word -> new AdminExamQuestionResponse.Word(word.getId(), word.getCharacter(),
                                 word.getReading()))
