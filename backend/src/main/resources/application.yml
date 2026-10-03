@@ -89,6 +89,7 @@ app:
     sitting-max-hours: 3          # buổi làm đề JLPT chưa làm hết các phần sau chừng này giờ thì coi như bỏ dở
     sitting-cleanup-interval-ms: 600000
     question-generation-cron: "0 15 5 * * *" # mỗi sáng sinh câu thi cho từ mới thêm vào bài học (giờ app.srs.day-zone)
+    item-analysis-cron: "0 0 5 * * MON" # sáng thứ Hai phân tích câu từ kết quả thi, gắn cờ câu đáng ngờ (giờ day-zone)
   ai:
     # Để trống thì tính năng sinh câu ví dụ tự tắt (quiz vẫn chạy được, chỉ không có câu ngữ cảnh).
     # Nhiều key/model phân tách bằng dấu phẩy. Hạn mức miễn phí tính theo project + model,

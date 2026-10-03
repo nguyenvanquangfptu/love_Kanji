@@ -557,7 +557,7 @@ export interface GrammarImportResult {
 export type ExamQuestionStatus = 'DRAFT' | 'APPROVED' | 'REJECTED' | 'RETIRED'
 
 /** Cảnh báo của bước kiểm tra tự động cho người duyệt. */
-export type ExamQuestionFlag = 'AMBIGUOUS' | 'WRONG_ANSWER' | 'ABOVE_LEVEL' | 'REPORTED'
+export type ExamQuestionFlag = 'AMBIGUOUS' | 'WRONG_ANSWER' | 'ABOVE_LEVEL' | 'REPORTED' | 'STATS'
 
 /** Lý do người học báo lỗi một câu hỏi. */
 export type QuestionReportReason = 'WRONG_ANSWER' | 'AMBIGUOUS' | 'UNCLEAR' | 'OTHER'
@@ -588,6 +588,8 @@ export interface AdminExamQuestion {
   grammarPoints: { id: number; pattern: string }[]
   /** Báo lỗi của người học đang chờ xem, cũ nhất trước. */
   reports: { reason: QuestionReportReason; note: string | null; createdAt: string }[]
+  /** Thống kê từ kết quả thi thật (lần phân tích gần nhất); null nếu chưa đủ lượt làm. */
+  stats: { responses: number; correctRate: number; discrimination: number | null; computedAt: string } | null
 }
 
 export interface AdminExamQuestionRequest {

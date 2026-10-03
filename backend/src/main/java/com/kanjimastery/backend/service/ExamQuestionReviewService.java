@@ -14,6 +14,7 @@ import com.kanjimastery.backend.model.GrammarPoint;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.QuestionReportStatus;
 import com.kanjimastery.backend.repository.ExamQuestionReportRepository;
+import com.kanjimastery.backend.repository.ExamQuestionStatsRepository;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.GrammarPointRepository;
 import com.kanjimastery.backend.repository.KanjiRepository;
@@ -58,6 +59,7 @@ public class ExamQuestionReviewService {
     private final GrammarPointRepository grammarPointRepository;
     private final JlptBlueprintProperties blueprints;
     private final ExamQuestionReportRepository reportRepository;
+    private final ExamQuestionStatsRepository statsRepository;
 
     /**
      * Bộ lọc của trang duyệt; trường null = không lọc. Chỉ có câu thuộc một dạng đề JLPT.
@@ -298,19 +300,27 @@ public class ExamQuestionReviewService {
         Map<Long, List<AdminExamQuestionResponse.Report>> reports = questions.isEmpty()
                 ? Map.of()
                 : reportRepository.findByQuestionIdInAndStatusOrderByCreatedAtAsc(
-                                questions.stream().map(ExamQuestion::getId).toList(), QuestionReportStatus.OPEN).stream()
+                                questions.stream().map(ExamQuestion::getId).toList(), QuestionReportStatus.OPEN)
+                        .stream()
                         .collect(Collectors.groupingBy(ExamQuestionReport::getQuestionId,
                                 Collectors.mapping(report -> new AdminExamQuestionResponse.Report(report.getReason(),
                                         report.getNote(), report.getCreatedAt()), Collectors.toList())));
+        Map<Long, AdminExamQuestionResponse.Stats> stats = questions.isEmpty()
+                ? Map.of()
+                : statsRepository.findAllById(questions.stream().map(ExamQuestion::getId).toList()).stream()
+                        .collect(Collectors.toMap(row -> row.getQuestionId(),
+                                row -> new AdminExamQuestionResponse.Stats(row.getResponses(), row.getCorrectRate(),
+                                        row.getDiscrimination(), row.getComputedAt())));
         return questions.stream()
                 .map(question -> toResponse(question, words, points,
-                        reports.getOrDefault(question.getId(), List.of())))
+                        reports.getOrDefault(question.getId(), List.of()), stats.get(question.getId())))
                 .toList();
     }
 
     private static AdminExamQuestionResponse toResponse(ExamQuestion question, Map<Long, Kanji> words,
                                                         Map<Long, GrammarPoint> points,
-                                                        List<AdminExamQuestionResponse.Report> reports) {
+                                                        List<AdminExamQuestionResponse.Report> reports,
+                                                        AdminExamQuestionResponse.Stats stats) {
         return AdminExamQuestionResponse.builder()
                 .id(question.getId())
                 .jlptLevel(question.getJlptLevel())
@@ -340,6 +350,7 @@ public class ExamQuestionReviewService {
                         .map(point -> new AdminExamQuestionResponse.Grammar(point.getId(), point.getPattern()))
                         .toList())
                 .reports(reports)
+                .stats(stats)
                 .build();
     }
 }

@@ -75,7 +75,8 @@ public class QuestionReportService {
             return;
         }
         ExamPassage passage = passageRepository.findById(question.getPassageId())
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy đoạn văn: " + question.getPassageId()));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Không tìm thấy đoạn văn: " + question.getPassageId()));
         passage.setStatus(ExamQuestionStatus.DRAFT);
         passage.setFlag(ExamQuestionFlag.REPORTED);
         passage.setReviewNote(passage.getReviewNote() == null ? note : passage.getReviewNote() + " " + note);

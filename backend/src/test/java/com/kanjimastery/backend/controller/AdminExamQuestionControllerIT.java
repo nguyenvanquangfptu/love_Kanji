@@ -57,6 +57,21 @@ class AdminExamQuestionControllerIT extends AbstractIntegrationTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(post("/api/v1/admin/exam-questions/approve").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"ids\": [" + draft.getId() + "]}")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/admin/exam-questions/analysis")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/admin/exam-questions/{id}/reports/dismiss", draft.getId()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void admins_shouldRunTheQuestionAnalysis_andDismissReports() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/exam-questions/analysis"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.analyzed").isNumber())
+                .andExpect(jsonPath("$.flagged").value(0));
+        mockMvc.perform(post("/api/v1/admin/exam-questions/{id}/reports/dismiss", draft.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reports").isEmpty());
     }
 
     @Test

@@ -10,6 +10,8 @@ public final class ExamQuestionFlag {
     public static final String ABOVE_LEVEL = "ABOVE_LEVEL";
     /** Nhiều người học báo lỗi - câu đã tự rút khỏi đề. */
     public static final String REPORTED = "REPORTED";
+    /** Phân tích kết quả thi thấy câu đáng ngờ (người làm tốt lại hay sai) - câu vẫn trong đề. */
+    public static final String STATS = "STATS";
 
     private ExamQuestionFlag() {
     }

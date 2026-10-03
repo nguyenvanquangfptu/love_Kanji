@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, CheckCheck, ChevronLeft, ChevronRight, Pencil, RotateCcw, Undo2, X } from 'lucide-react'
+import { BarChart3, Check, CheckCheck, ChevronLeft, ChevronRight, Pencil, RotateCcw, ShieldCheck, Undo2, X } from 'lucide-react'
 import { examAdminApi } from '@/api/examAdmin'
 import { extractErrorMessage } from '@/api/client'
 import {
@@ -29,6 +29,7 @@ import { QuestionEditDialog } from '@/components/QuestionEditDialog'
 import { ReviewNoteDialog } from '@/components/ReviewNoteDialog'
 import { PassageReviewList } from '@/components/PassageReviewList'
 import { QuestionReports } from '@/components/QuestionReports'
+import { QuestionStats } from '@/components/QuestionStats'
 import { VocabularyDraftPanel } from '@/components/VocabularyDraftPanel'
 
 const STATUS_TABS: { value: ExamQuestionStatus | ''; label: string }[] = [
@@ -98,6 +99,10 @@ export function AdminQuestionsPage() {
       refresh()
     },
   })
+  const analysisMutation = useMutation({
+    mutationFn: examAdminApi.analyze,
+    onSuccess: refresh,
+  })
   const dismissMutation = useMutation({
     mutationFn: (id: number) => examAdminApi.dismissReports(id),
     onSuccess: refresh,
@@ -156,7 +161,24 @@ export function AdminQuestionsPage() {
 
       {levelStats && (
         <Card className="mb-4 overflow-x-auto p-4">
-          <h2 className="mb-2 font-black">Ngân hàng câu {level}</h2>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-black">Ngân hàng câu {level}</h2>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={analysisMutation.isPending}
+              onClick={() => analysisMutation.mutate()}
+              title="Tính thống kê từng câu từ kết quả thi, gắn cờ câu người làm tốt lại hay sai (tự chạy mỗi thứ Hai)"
+            >
+              <BarChart3 className="h-4 w-4" /> {analysisMutation.isPending ? 'Đang phân tích...' : 'Phân tích câu hỏi'}
+            </Button>
+          </div>
+          {analysisMutation.data && (
+            <p className="mb-2 text-sm font-bold text-secondary-dark">
+              Đã có thống kê cho {analysisMutation.data.analyzed} câu; gắn cờ {analysisMutation.data.flagged} câu đáng ngờ.
+            </p>
+          )}
+          {analysisMutation.isError && <Alert className="mb-2">{extractErrorMessage(analysisMutation.error)}</Alert>}
           <table className="w-full min-w-[560px] text-left text-sm">
             <thead className="text-xs font-extrabold uppercase text-muted-foreground">
               <tr>
@@ -432,6 +454,7 @@ function QuestionReviewCard({
 
       {question.explanation && <p className="mt-3 text-sm font-semibold text-secondary-dark">{question.explanation}</p>}
       <QuestionReports reports={question.reports} busy={dismissing} onDismiss={onDismissReports} />
+      <QuestionStats stats={question.stats} />
       {question.reviewNote && (
         <p
           className={cn(
@@ -467,6 +490,11 @@ function QuestionReviewCard({
               <X className="h-4 w-4" /> Loại
             </Button>
           </>
+        )}
+        {question.status === 'APPROVED' && question.flag && (
+          <Button size="sm" disabled={busy} onClick={onApprove}>
+            <ShieldCheck className="h-4 w-4" /> Đã xem, giữ trong đề
+          </Button>
         )}
         {question.status === 'APPROVED' && (
           <Button size="sm" variant="outline" disabled={busy} onClick={() => onNote('RETIRED')}>

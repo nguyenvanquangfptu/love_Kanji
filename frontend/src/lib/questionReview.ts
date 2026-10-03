@@ -23,6 +23,7 @@ export const FLAG_LABEL: Record<ExamQuestionFlag, string> = {
   WRONG_ANSWER: 'Máy chọn đáp án khác',
   ABOVE_LEVEL: 'Từ vượt cấp độ',
   REPORTED: 'Người học báo lỗi',
+  STATS: 'Thống kê đáng ngờ',
 }
 
 /** Lý do người học báo lỗi câu hỏi. */

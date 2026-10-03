@@ -48,6 +48,13 @@ public class AdminExamQuestionResponse {
     /** Báo lỗi của người học đang chờ xem, cũ nhất trước. */
     private List<Report> reports;
 
+    /** Thống kê từ kết quả thi thật (lần phân tích gần nhất); null nếu chưa đủ lượt làm. */
+    private Stats stats;
+
+    /** {@code discrimination}: tỉ lệ đúng nhóm làm tốt trừ nhóm làm kém; null nếu không chia được nhóm. */
+    public record Stats(int responses, double correctRate, Double discrimination, LocalDateTime computedAt) {
+    }
+
     /** {@code reason}: {@link com.kanjimastery.backend.model.QuestionReportReason}. */
     public record Report(String reason, String note, LocalDateTime createdAt) {
     }

@@ -8,6 +8,7 @@ import com.kanjimastery.backend.dto.QuestionBankStatsResponse;
 import com.kanjimastery.backend.dto.QuestionDraftRequest;
 import com.kanjimastery.backend.dto.VocabularyDraftRequest;
 import com.kanjimastery.backend.service.ExamQuestionReviewService;
+import com.kanjimastery.backend.service.ItemAnalysisService;
 import com.kanjimastery.backend.service.QuestionDraftService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,6 +30,7 @@ public class AdminExamQuestionController {
 
     private final ExamQuestionReviewService reviewService;
     private final QuestionDraftService draftService;
+    private final ItemAnalysisService itemAnalysisService;
 
     @Operation(summary = "Lọc câu thi đề JLPT", description = "Mới nhất trước. Chỉ câu thuộc một dạng đề JLPT.")
     @GetMapping
@@ -77,6 +79,15 @@ public class AdminExamQuestionController {
     @PostMapping("/{id}/reports/dismiss")
     public ResponseEntity<AdminExamQuestionResponse> dismissReports(@PathVariable Long id) {
         return ResponseEntity.ok(reviewService.dismissReports(id));
+    }
+
+    @Operation(summary = "Phân tích câu hỏi ngay",
+            description = "Như job hằng tuần: tính thống kê từng câu từ kết quả thi (từ lần duyệt gần nhất), gắn cờ "
+                    + "câu đã duyệt có từ " + ItemAnalysisService.MIN_FLAG_RESPONSES + " lượt làm mà người làm tốt lại "
+                    + "hay sai.")
+    @PostMapping("/analysis")
+    public ResponseEntity<ItemAnalysisService.Summary> analyze() {
+        return ResponseEntity.ok(itemAnalysisService.analyze());
     }
 
     @Operation(summary = "Ngân hàng câu theo cấp độ và dạng câu", description = "Số câu theo trạng thái, đủ cho bao nhiêu đề.")

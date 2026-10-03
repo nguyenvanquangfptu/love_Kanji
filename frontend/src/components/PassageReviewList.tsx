@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { PageSpinner } from '@/components/ui/spinner'
 import { PassageText } from '@/components/PassageText'
 import { QuestionReports } from '@/components/QuestionReports'
+import { QuestionStats } from '@/components/QuestionStats'
 import { QuestionEditDialog } from '@/components/QuestionEditDialog'
 import { ReviewNoteDialog } from '@/components/ReviewNoteDialog'
 
@@ -187,6 +188,7 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
                         busy={dismissMutation.isPending}
                         onDismiss={() => dismissMutation.mutate(question.id)}
                       />
+                      <QuestionStats stats={question.stats} />
                     </li>
                   ))}
                 </ol>

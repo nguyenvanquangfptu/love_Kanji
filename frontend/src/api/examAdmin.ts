@@ -44,6 +44,12 @@ export const examAdminApi = {
   dismissReports: (id: number) =>
     apiClient.post<AdminExamQuestion>(`/admin/exam-questions/${id}/reports/dismiss`).then((r) => r.data),
 
+  /** Phân tích câu hỏi ngay (như job hằng tuần): thống kê từng câu, gắn cờ câu đáng ngờ. */
+  analyze: () =>
+    apiClient
+      .post<{ analyzed: number; flagged: number }>('/admin/exam-questions/analysis', null, { timeout: 120_000 })
+      .then((r) => r.data),
+
   stats: () => apiClient.get<QuestionBankStats[]>('/admin/exam-questions/stats').then((r) => r.data),
 
   /** Nhờ AI viết nháp câu ngữ pháp cho một điểm ngữ pháp (tốn 2 request Gemini); câu nháp chờ người duyệt. */
