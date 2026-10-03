@@ -36,6 +36,7 @@ import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamPassage;
 import com.kanjimastery.backend.model.ExamQuestion;
+import com.kanjimastery.backend.model.GrammarPoint;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.UserExamAnswer;
@@ -43,6 +44,7 @@ import com.kanjimastery.backend.model.UserExamAttempt;
 import com.kanjimastery.backend.repository.ExamPassageRepository;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.ExamSessionStore;
+import com.kanjimastery.backend.repository.GrammarPointRepository;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.repository.UserExamAnswerRepository;
 import com.kanjimastery.backend.repository.UserExamAttemptRepository;
@@ -64,6 +66,7 @@ public class ExamService {
     private final KanjiRepository kanjiRepository;
     private final JlptBlueprintProperties blueprints;
     private final ExamPassageRepository passageRepository;
+    private final GrammarPointRepository grammarPointRepository;
 
     @Transactional
     public StartExamResponse start(Long userId, StartExamRequest request) {
@@ -182,8 +185,9 @@ public class ExamService {
 
         List<UserExamAnswer> answers = answerRepository.findByAttemptIdOrderByIdAsc(attemptId);
         List<Long> questionIds = answers.stream().map(UserExamAnswer::getQuestionId).toList();
-        Map<Long, ExamQuestion> questionsById = questionRepository.findAllWithWordsByIdIn(questionIds).stream()
+        Map<Long, ExamQuestion> questionsById = questionRepository.findAllWithLinksByIdIn(questionIds).stream()
                 .collect(Collectors.toMap(ExamQuestion::getId, Function.identity()));
+        Map<Long, GrammarPoint> grammarById = grammarPoints(questionsById.values());
 
         List<QuestionReviewItem> items = answers.stream()
                 .map(answer -> {
@@ -205,6 +209,11 @@ public class ExamService {
                             .questionType(question.getQuestionType())
                             .passageId(question.getPassageId())
                             .blankNo(question.getBlankNo())
+                            .grammarPoints(question.getGrammarPointIds().stream().sorted().map(grammarById::get)
+                                    .filter(Objects::nonNull)
+                                    .map(point -> new QuestionReviewItem.Grammar(point.getId(), point.getPattern(),
+                                            point.getMeaningVi()))
+                                    .toList())
                             .build();
                 })
                 .toList();
@@ -226,6 +235,17 @@ public class ExamService {
                 .passages(passagesOf(answers.stream().map(answer -> questionsById.get(answer.getQuestionId()))
                         .filter(Objects::nonNull).toList()))
                 .build();
+    }
+
+    /** Các điểm ngữ pháp mà các câu hỏi kiểm tra, theo id. */
+    private Map<Long, GrammarPoint> grammarPoints(Collection<ExamQuestion> questions) {
+        Set<Long> ids = questions.stream().flatMap(question -> question.getGrammarPointIds().stream())
+                .collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return grammarPointRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(GrammarPoint::getId, Function.identity()));
     }
 
     /** Đoạn văn (文章の文法) của các câu hỏi, theo thứ tự xuất hiện đầu tiên. */

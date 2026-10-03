@@ -4,11 +4,13 @@ import com.kanjimastery.backend.config.ExamProperties;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.ExamQuestionPublicResponse;
 import com.kanjimastery.backend.dto.ExamReviewResponse;
+import com.kanjimastery.backend.dto.QuestionReviewItem;
 import com.kanjimastery.backend.dto.StartExamRequest;
 import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamSection;
+import com.kanjimastery.backend.model.GrammarPoint;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.QuizDirection;
@@ -16,6 +18,7 @@ import com.kanjimastery.backend.model.UserExamAnswer;
 import com.kanjimastery.backend.model.UserExamAttempt;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.ExamSessionStore;
+import com.kanjimastery.backend.repository.GrammarPointRepository;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.repository.UserExamAnswerRepository;
 import com.kanjimastery.backend.repository.UserExamAttemptRepository;
@@ -62,6 +65,8 @@ class ExamServiceTest {
     private ExamProperties examProperties = new ExamProperties();
     @Mock
     private KanjiRepository kanjiRepository;
+    @Mock
+    private GrammarPointRepository grammarPointRepository;
     @Spy
     private JlptBlueprintProperties blueprints = new JlptBlueprintProperties();
 
@@ -76,7 +81,7 @@ class ExamServiceTest {
         when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(
                 answer(1L, "B", true), answer(2L, "A", false), answer(3L, null, false), answer(4L, "C", true),
                 answer(5L, "D", true)));
-        when(questionRepository.findAllWithWordsByIdIn(anyList())).thenReturn(List.of(
+        when(questionRepository.findAllWithLinksByIdIn(anyList())).thenReturn(List.of(
                 question(1L, QuizDirection.MEANING), question(2L, QuizDirection.KANJI_TO_READING),
                 question(3L, QuizDirection.KANJI_TO_READING), question(4L, QuizDirection.KANJI_TO_READING),
                 question(5L, null)));
@@ -98,7 +103,7 @@ class ExamServiceTest {
                 .startedAt(LocalDateTime.now().minusMinutes(31)).diagnosedAt(LocalDateTime.now()).build()));
         when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(
                 answer(1L, "B", false), answer(2L, null, false), answer(3L, "A", true), answer(4L, "C", false)));
-        when(questionRepository.findAllWithWordsByIdIn(anyList())).thenReturn(List.of(
+        when(questionRepository.findAllWithLinksByIdIn(anyList())).thenReturn(List.of(
                 question(1L, QuizDirection.MEANING, 15L), question(2L, QuizDirection.MEANING, 25L),
                 question(3L, QuizDirection.MEANING, 14L), question(4L, QuizDirection.KANJI_TO_READING, 15L)));
         when(kanjiRepository.findAllById(Set.of(15L))).thenReturn(List.of(
@@ -163,7 +168,7 @@ class ExamServiceTest {
                 .startedAt(LocalDateTime.now().minusMinutes(10)).build()));
         when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(
                 answer(1L, "A", true), answer(2L, "B", false), answer(3L, "A", true)));
-        when(questionRepository.findAllWithWordsByIdIn(anyList())).thenReturn(List.of(
+        when(questionRepository.findAllWithLinksByIdIn(anyList())).thenReturn(List.of(
                 typed(question(1L, QuizDirection.KANJI_TO_READING), JlptQuestionType.KANJI_READING),
                 typed(question(2L, QuizDirection.KANJI_TO_READING), JlptQuestionType.KANJI_READING),
                 typed(question(3L, QuizDirection.MEANING), JlptQuestionType.CONTEXT)));
@@ -186,13 +191,36 @@ class ExamServiceTest {
                 .userId(USER_ID).jlptLevel("N5").status(ExamAttemptStatus.COMPLETED).totalScore(1)
                 .startedAt(LocalDateTime.now().minusMinutes(20)).build()));
         when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(answer(1L, "A", true)));
-        when(questionRepository.findAllWithWordsByIdIn(anyList())).thenReturn(List.of(
+        when(questionRepository.findAllWithLinksByIdIn(anyList())).thenReturn(List.of(
                 typed(question(1L, QuizDirection.KANJI_TO_READING), JlptQuestionType.KANJI_READING)));
 
         ExamReviewResponse review = examService.getReview(USER_ID, ATTEMPT_ID);
 
         assertThat(review.getMondai()).isEmpty();
         assertThat(review.getSittingId()).isNull();
+    }
+
+    @Test
+    void getReview_shouldNameTheGrammarPointsEachQuestionTests() {
+        when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
+                .userId(USER_ID).jlptLevel("N4").status(ExamAttemptStatus.COMPLETED).totalScore(0)
+                .sittingId(5L).section(ExamSection.GRAMMAR).startedAt(LocalDateTime.now().minusMinutes(10)).build()));
+        when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(
+                answer(1L, "B", false), answer(2L, "A", true)));
+        ExamQuestion grammarQuestion = typed(question(1L, null), JlptQuestionType.GRAMMAR_FORM);
+        grammarQuestion.setGrammarPointIds(Set.of(72L, 3L));
+        when(questionRepository.findAllWithLinksByIdIn(anyList())).thenReturn(List.of(grammarQuestion,
+                typed(question(2L, QuizDirection.KANJI_TO_READING), JlptQuestionType.KANJI_READING)));
+        when(grammarPointRepository.findAllById(Set.of(72L, 3L))).thenReturn(List.of(
+                GrammarPoint.builder().id(72L).pattern("Vてから").meaningVi("Sau khi V1 rồi V2").build(),
+                GrammarPoint.builder().id(3L).pattern("〜ですか").meaningVi("Câu hỏi có/không").build()));
+
+        ExamReviewResponse review = examService.getReview(USER_ID, ATTEMPT_ID);
+
+        assertThat(review.getQuestions().get(0).getGrammarPoints())
+                .extracting(QuestionReviewItem.Grammar::id, QuestionReviewItem.Grammar::pattern)
+                .containsExactly(tuple(3L, "〜ですか"), tuple(72L, "Vてから"));
+        assertThat(review.getQuestions().get(1).getGrammarPoints()).isEmpty();
     }
 
     private static ExamQuestion typed(ExamQuestion question, String questionType) {

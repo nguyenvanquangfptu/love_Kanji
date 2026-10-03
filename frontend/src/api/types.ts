@@ -349,6 +349,8 @@ export interface ExamSittingResponse {
   }[]
   /** Phần làm tiếp theo; null khi đang làm dở một phần, đã làm hết hoặc buổi thi đã kết thúc. */
   nextSection: ExamSectionName | null
+  /** Điểm ước tính thang 0-60 trên các phần đã chốt điểm; null khi chưa phần nào xong. */
+  estimatedScore: number | null
 }
 
 export interface SaveAnswerRequest {
@@ -394,6 +396,8 @@ export interface QuestionReviewItem {
   questionType: JlptQuestionType | null
   passageId: number | null
   blankNo: number | null
+  /** Các điểm ngữ pháp câu này kiểm tra; rỗng với câu từ vựng. */
+  grammarPoints: { id: number; pattern: string; meaningVi: string }[]
 }
 
 export interface ExamReviewResponse {

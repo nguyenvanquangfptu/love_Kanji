@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { BookOpen, Check, Clock, Coffee, Eye, Play, RotateCcw, Target } from 'lucide-react'
+import { Award, BookOpen, Check, Clock, Coffee, Eye, Play, RotateCcw, Target } from 'lucide-react'
 import { examApi } from '@/api/exam'
 import { extractErrorMessage } from '@/api/client'
 import type { ExamSittingResponse } from '@/api/types'
@@ -120,10 +120,19 @@ export function ExamSittingPage() {
       )}
 
       {sitting.status !== 'IN_PROGRESS' && total > 0 && (
-        <div className="grid grid-cols-3 gap-3">
-          <StatTile label="Câu đúng" value={`${score}/${total}`} tone="primary" icon={Check} />
-          <StatTile label="Tỉ lệ đúng" value={`${Math.round((score / total) * 100)}%`} tone="secondary" icon={Target} />
-          <StatTile label="Thời gian" value={formatMinutes(timeSpent)} tone="orange" icon={Clock} />
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile label="Câu đúng" value={`${score}/${total}`} tone="primary" icon={Check} />
+            <StatTile label="Tỉ lệ đúng" value={`${Math.round((score / total) * 100)}%`} tone="secondary" icon={Target} />
+            {sitting.estimatedScore !== null && (
+              <StatTile label="Điểm ước tính" value={`${sitting.estimatedScore}/60`} tone="purple" icon={Award} />
+            )}
+            <StatTile label="Thời gian" value={formatMinutes(timeSpent)} tone="orange" icon={Clock} />
+          </div>
+          <p className="text-xs font-semibold text-muted-foreground">
+            Điểm ước tính = tỉ lệ đúng × 60, chỉ để tham khảo: JLPT thật quy đổi điểm theo thống kê và có điểm sàn cho
+            từng phần{sitting.sections.some((s) => s.totalQuestions === null) ? '; ở đây chỉ tính các phần đã làm' : ''}.
+          </p>
         </div>
       )}
 

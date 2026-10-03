@@ -42,6 +42,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class JlptExamService {
 
+    /** Thang điểm ước tính của buổi thi. */
+    static final int ESTIMATED_SCALE = 60;
+
     private final JlptBlueprintProperties blueprints;
     private final JlptExamAssembler assembler;
     private final ExamQuestionRepository questionRepository;
@@ -207,6 +210,14 @@ public class JlptExamService {
                 .toList();
         boolean canContinue = ExamSittingStatus.IN_PROGRESS.equals(sitting.getStatus())
                 && attempts.stream().noneMatch(JlptExamService::inProgress);
+        int correct = 0;
+        int total = 0;
+        for (ExamSittingResponse.Section section : sections) {
+            if (section.getTotalQuestions() != null) {
+                correct += section.getTotalScore() == null ? 0 : section.getTotalScore();
+                total += section.getTotalQuestions();
+            }
+        }
         return ExamSittingResponse.builder()
                 .sittingId(sitting.getId())
                 .jlptLevel(sitting.getJlptLevel())
@@ -215,6 +226,7 @@ public class JlptExamService {
                 .finishedAt(sitting.getFinishedAt())
                 .sections(sections)
                 .nextSection(canContinue ? nextSection(sitting, attempts) : null)
+                .estimatedScore(total > 0 ? estimatedScore(correct, total) : null)
                 .build();
     }
 
@@ -251,6 +263,11 @@ public class JlptExamService {
                 ? ExamSittingStatus.COMPLETED
                 : ExamSittingStatus.ABANDONED;
         sittingRepository.finishIfInProgress(sittingId, status, LocalDateTime.now());
+    }
+
+    /** Điểm ước tính thang 0-60 (thang của môn Kiến thức ngôn ngữ N3): tỉ lệ đúng × 60, làm tròn. */
+    static int estimatedScore(int correct, int total) {
+        return (int) Math.round(correct * (double) ESTIMATED_SCALE / total);
     }
 
     /**

@@ -172,6 +172,16 @@ export function ExamResultPage() {
                       })}
                     </div>
                     {!q.selectedOption && <p className="mt-2 text-sm font-bold text-orange-dark">Bạn đã bỏ trống câu này.</p>}
+                    {q.grammarPoints.length > 0 && (
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs font-extrabold uppercase text-muted-foreground">Ngữ pháp</span>
+                        {q.grammarPoints.map((point) => (
+                          <Badge key={point.id} variant="purple" className="font-jp" title={point.meaningVi}>
+                            {point.pattern}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                     {q.explanation && (
                       <p className="mt-3 flex items-start gap-2 rounded-xl bg-secondary-soft px-3 py-2 text-sm font-semibold text-secondary-dark">
                         <Lightbulb className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2.5} />

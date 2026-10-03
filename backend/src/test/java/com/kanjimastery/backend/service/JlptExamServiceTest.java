@@ -236,6 +236,26 @@ class JlptExamServiceTest {
     }
 
     @Test
+    void getSitting_shouldEstimateAScoreOutOf60_fromTheSectionsAlreadyScored() {
+        when(sittingRepository.findById(SITTING_ID)).thenReturn(Optional.of(sitting(ExamSittingStatus.IN_PROGRESS)));
+        UserExamAttempt vocabularyDone = attempt(30L, ExamSection.VOCABULARY, ExamAttemptStatus.COMPLETED);
+        vocabularyDone.setTotalScore(20);
+        UserExamAttempt grammarDone = attempt(31L, ExamSection.GRAMMAR, ExamAttemptStatus.TIMEOUT);
+        grammarDone.setTotalScore(10);
+        when(attemptRepository.findBySittingIdOrderByIdAsc(SITTING_ID))
+                .thenReturn(List.of(vocabularyDone), List.of(vocabularyDone, grammarDone));
+        when(answerRepository.countByAttemptId(30L)).thenReturn(28L);
+        when(answerRepository.countByAttemptId(31L)).thenReturn(21L);
+
+        // Mới xong phần Từ vựng: 20/28 x 60 = 42,9 -> 43.
+        assertThat(jlptExamService.getSitting(USER_ID, SITTING_ID).getEstimatedScore()).isEqualTo(43);
+        // Xong cả hai phần: 30/49 x 60 = 36,7 -> 37.
+        assertThat(jlptExamService.getSitting(USER_ID, SITTING_ID).getEstimatedScore()).isEqualTo(37);
+        assertThat(JlptExamService.estimatedScore(0, 21)).isZero();
+        assertThat(JlptExamService.estimatedScore(21, 21)).isEqualTo(60);
+    }
+
+    @Test
     void onSectionFinished_shouldCompleteTheSittingOnlyAfterItsLastSection() {
         when(sittingRepository.findById(SITTING_ID)).thenReturn(Optional.of(sitting(ExamSittingStatus.IN_PROGRESS)));
         when(attemptRepository.findBySittingIdOrderByIdAsc(SITTING_ID)).thenReturn(

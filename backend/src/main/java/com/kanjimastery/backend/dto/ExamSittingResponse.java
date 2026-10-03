@@ -22,6 +22,11 @@ public class ExamSittingResponse {
     private List<Section> sections;
     /** Phần làm tiếp theo; null khi đang làm dở một phần, đã làm hết, hoặc buổi thi đã kết thúc. */
     private String nextSection;
+    /**
+     * Điểm ước tính thang 0-60 trên các phần đã chốt điểm (tỉ lệ đúng × 60); null khi chưa phần nào xong. Chỉ để tham
+     * khảo: JLPT thật quy đổi điểm theo thống kê và có điểm sàn từng phần.
+     */
+    private Integer estimatedScore;
 
     @Getter
     @Builder

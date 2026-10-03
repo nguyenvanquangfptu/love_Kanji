@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.util.List;
+
 @Getter
 @Builder
 @AllArgsConstructor
@@ -28,4 +30,9 @@ public class QuestionReviewItem {
     /** Câu điền vào chỗ trống 【blankNo】 của đoạn văn passageId (文章の文法); null với câu đứng riêng. */
     private Long passageId;
     private Integer blankNo;
+    /** Các điểm ngữ pháp câu này kiểm tra; rỗng với câu từ vựng. */
+    private List<Grammar> grammarPoints;
+
+    public record Grammar(Long id, String pattern, String meaningVi) {
+    }
 }
