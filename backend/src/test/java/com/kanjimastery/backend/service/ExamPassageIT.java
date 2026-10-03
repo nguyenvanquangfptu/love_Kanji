@@ -132,6 +132,16 @@ class ExamPassageIT extends AbstractIntegrationTest {
         ExamReviewResponse review = examService.getReview(userId, exam.getAttemptId());
         assertThat(review.getPassages()).extracting(ExamPassageResponse::title).containsExactly("わたしの朝ご飯");
         assertThat(review.getQuestions()).extracting(QuestionReviewItem::getBlankNo).containsExactly(1, 2);
+
+        // Lần làm đề sau: đoạn văn chưa gặp đứng trước đoạn đã làm.
+        ExamPassage unseen = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).content("【1】")
+                .status(ExamQuestionStatus.APPROVED).build());
+        try {
+            assertThat(passageRepository.findApprovedForLearner(userId, LEVEL, 10)).extracting(ExamPassage::getId)
+                    .containsExactly(unseen.getId(), passage.getId());
+        } finally {
+            passageRepository.deleteById(unseen.getId());
+        }
     }
 
     private ExamQuestion blank(int blankNo, String correct, String... others) {

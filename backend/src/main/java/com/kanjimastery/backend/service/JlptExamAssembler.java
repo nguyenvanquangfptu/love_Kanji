@@ -37,23 +37,27 @@ public class JlptExamAssembler {
     }
 
     /**
-     * Mỗi 問題 lấy ngẫu nhiên tối đa đủ số câu đã duyệt đúng dạng, đúng cấp độ - dạng chưa đủ câu thì có bao nhiêu
-     * lấy bấy nhiêu. Mỗi từ chỉ được hỏi một câu trong cả buổi thi: {@code askedWords} là các từ đã hỏi ở phần trước,
+     * Mỗi 問題 lấy tối đa đủ số câu đã duyệt đúng dạng, đúng cấp độ - dạng chưa đủ câu thì có bao nhiêu lấy bấy
+     * nhiêu. Câu người học chưa gặp được lấy trước (ngẫu nhiên), hết thì tới câu gặp lâu nhất - làm nhiều đề ít gặp
+     * lại câu cũ. Mỗi từ chỉ được hỏi một câu trong cả buổi thi: {@code askedWords} là các từ đã hỏi ở phần trước,
      * được thêm dần các từ của phần này. 文章の文法 lấy trọn đoạn văn (mọi câu hỏi của đoạn, theo thứ tự chỗ trống).
      * Kết quả theo thứ tự 問題1, 問題2..., kể cả 問題 không có câu nào.
      */
-    public List<Mondai> assemble(String level, JlptBlueprintProperties.Section section, Set<Long> askedWords) {
+    public List<Mondai> assemble(Long userId, String level, JlptBlueprintProperties.Section section,
+                                 Set<Long> askedWords) {
         List<Mondai> mondai = new ArrayList<>();
         int number = 0;
         for (Map.Entry<String, Integer> entry : section.getQuestions().entrySet()) {
             number++;
             int planned = entry.getValue();
             if (JlptQuestionType.TEXT_GRAMMAR.equals(entry.getKey())) {
-                mondai.add(new Mondai(number, entry.getKey(), planned, passageQuestions(level, planned, askedWords)));
+                mondai.add(new Mondai(number, entry.getKey(), planned,
+                        passageQuestions(userId, level, planned, askedWords)));
                 continue;
             }
             List<Long> candidateIds = questionRepository
-                    .findRandomByLevelAndType(level, entry.getKey(), planned * 2 + SPARE_CANDIDATES).stream()
+                    .findForLearnerByLevelAndType(userId, level, entry.getKey(), planned * 2 + SPARE_CANDIDATES)
+                    .stream()
                     .map(ExamQuestion::getId)
                     .toList();
             Map<Long, ExamQuestion> withWords = candidateIds.isEmpty()
@@ -77,9 +81,11 @@ public class JlptExamAssembler {
         return mondai;
     }
 
-    /** Các đoạn văn đã duyệt, lấy trọn từng đoạn sao cho tổng số câu không quá {@code planned}. */
-    private List<ExamQuestion> passageQuestions(String level, int planned, Set<Long> askedWords) {
-        List<ExamPassage> passages = passageRepository.findRandomApproved(level, CANDIDATE_PASSAGES);
+    /**
+     * Các đoạn văn đã duyệt (đoạn chưa gặp trước), lấy trọn từng đoạn sao cho tổng số câu không quá {@code planned}.
+     */
+    private List<ExamQuestion> passageQuestions(Long userId, String level, int planned, Set<Long> askedWords) {
+        List<ExamPassage> passages = passageRepository.findApprovedForLearner(userId, level, CANDIDATE_PASSAGES);
         if (passages.isEmpty()) {
             return List.of();
         }

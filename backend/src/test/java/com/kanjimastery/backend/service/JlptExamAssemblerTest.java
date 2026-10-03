@@ -29,6 +29,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class JlptExamAssemblerTest {
 
+    private static final Long USER_ID = 7L;
+
     @Mock
     private ExamQuestionRepository questionRepository;
     @Mock
@@ -50,13 +52,13 @@ class JlptExamAssemblerTest {
         Set<Long> askedWords = new HashSet<>(Set.of(11L));
         List<ExamQuestion> reading = List.of(question(1L, 10L), question(2L, 11L), question(3L, 12L), question(4L, 13L));
         List<ExamQuestion> context = List.of(question(5L, 12L), question(6L, 14L), question(7L, 15L), question(8L, 16L));
-        when(questionRepository.findRandomByLevelAndType("N4", KANJI_READING, 24)).thenReturn(reading);
+        when(questionRepository.findForLearnerByLevelAndType(USER_ID, "N4", KANJI_READING, 24)).thenReturn(reading);
         when(questionRepository.findAllWithWordsByIdIn(List.of(1L, 2L, 3L, 4L))).thenReturn(reading);
-        when(questionRepository.findRandomByLevelAndType("N4", ORTHOGRAPHY, 22)).thenReturn(List.of());
-        when(questionRepository.findRandomByLevelAndType("N4", CONTEXT, 24)).thenReturn(context);
+        when(questionRepository.findForLearnerByLevelAndType(USER_ID, "N4", ORTHOGRAPHY, 22)).thenReturn(List.of());
+        when(questionRepository.findForLearnerByLevelAndType(USER_ID, "N4", CONTEXT, 24)).thenReturn(context);
         when(questionRepository.findAllWithWordsByIdIn(List.of(5L, 6L, 7L, 8L))).thenReturn(context);
 
-        List<JlptExamAssembler.Mondai> mondai = assembler.assemble("N4", section, askedWords);
+        List<JlptExamAssembler.Mondai> mondai = assembler.assemble(USER_ID, "N4", section, askedWords);
 
         // 問題1 bỏ câu 2 (từ 11 đã hỏi); 問題2 chưa có câu; 問題3 bỏ câu 5 (từ 12 vừa hỏi ở 問題1) và đủ 2 câu thì thôi.
         assertThat(mondai).extracting(JlptExamAssembler.Mondai::number, JlptExamAssembler.Mondai::type,
@@ -77,12 +79,12 @@ class JlptExamAssemblerTest {
         section.getQuestions().put(TEXT_GRAMMAR, 4);
         ExamPassage tooLong = ExamPassage.builder().id(1L).jlptLevel("N4").content("...").build();
         ExamPassage fits = ExamPassage.builder().id(2L).jlptLevel("N4").content("...").build();
-        when(passageRepository.findRandomApproved("N4", 10)).thenReturn(List.of(tooLong, fits));
+        when(passageRepository.findApprovedForLearner(USER_ID, "N4", 10)).thenReturn(List.of(tooLong, fits));
         when(questionRepository.findAllWithLinksByPassageIdIn(List.of(1L, 2L))).thenReturn(List.of(
                 blank(11L, 1L, 1), blank(12L, 1L, 2), blank(13L, 1L, 3), blank(14L, 1L, 4), blank(15L, 1L, 5),
                 blank(23L, 2L, 3), blank(21L, 2L, 1), blank(22L, 2L, 2), blank(24L, 2L, 4)));
 
-        List<JlptExamAssembler.Mondai> mondai = assembler.assemble("N4", section, new HashSet<>());
+        List<JlptExamAssembler.Mondai> mondai = assembler.assemble(USER_ID, "N4", section, new HashSet<>());
 
         // Đoạn 1 có 5 chỗ trống, quá 4 câu của 問題: bỏ qua; đoạn 2 lấy trọn, theo thứ tự chỗ trống.
         assertThat(mondai).singleElement().satisfies(part -> assertThat(part.questions())

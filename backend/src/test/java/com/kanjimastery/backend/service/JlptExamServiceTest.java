@@ -142,7 +142,7 @@ class JlptExamServiceTest {
         });
         List<ExamQuestion> reading = questions(1, 7);
         List<ExamQuestion> context = questions(101, 8);
-        when(assembler.assemble(eq("N4"), eq(vocabulary), any())).thenReturn(List.of(
+        when(assembler.assemble(eq(USER_ID), eq("N4"), eq(vocabulary), any())).thenReturn(List.of(
                 new JlptExamAssembler.Mondai(1, KANJI_READING, 7, reading),
                 new JlptExamAssembler.Mondai(2, ORTHOGRAPHY, 5, List.of()),
                 new JlptExamAssembler.Mondai(3, CONTEXT, 8, context),
@@ -203,7 +203,7 @@ class JlptExamServiceTest {
         when(questionRepository.findAllWithWordsByIdIn(List.of(1L, 2L))).thenReturn(List.of(
                 ExamQuestion.builder().id(1L).kanjiIds(Set.of(10L)).build(),
                 ExamQuestion.builder().id(2L).kanjiIds(Set.of(11L)).build()));
-        when(assembler.assemble("N4", grammar, Set.of(10L, 11L))).thenReturn(List.of(
+        when(assembler.assemble(USER_ID, "N4", grammar, Set.of(10L, 11L))).thenReturn(List.of(
                 new JlptExamAssembler.Mondai(1, GRAMMAR_FORM, 13, questions(201, 1))));
         ArgumentCaptor<UserExamAttempt> attempt = ArgumentCaptor.forClass(UserExamAttempt.class);
         when(examService.begin(attempt.capture(), any(), any())).thenReturn(StartExamResponse.builder().build());

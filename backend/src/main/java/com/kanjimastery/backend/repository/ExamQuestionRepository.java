@@ -36,14 +36,25 @@ public interface ExamQuestionRepository
             """, nativeQuery = true)
     List<ExamQuestion> findRandomUnclassifiedByLevel(@Param("level") String level, @Param("count") int count);
 
-    /** Câu đã duyệt của một dạng câu trong đề JLPT ({@link com.kanjimastery.backend.model.JlptQuestionType}). */
+    /**
+     * Câu đã duyệt của một dạng câu trong đề JLPT ({@link com.kanjimastery.backend.model.JlptQuestionType}) cho một
+     * người học: câu người đó chưa gặp trong lượt thi nào đứng trước (ngẫu nhiên), rồi tới câu gặp lâu nhất.
+     */
     @Query(value = """
-            SELECT * FROM exam_questions
-            WHERE jlpt_level = :level AND question_type = :type AND status = 'APPROVED'
-            ORDER BY RANDOM() LIMIT :count
+            SELECT q.* FROM exam_questions q
+            LEFT JOIN (
+                SELECT answer.question_id, MAX(attempt.started_at) AS seen_at
+                FROM user_exam_answers answer
+                JOIN user_exam_attempts attempt ON attempt.id = answer.attempt_id
+                WHERE attempt.user_id = :userId
+                GROUP BY answer.question_id
+            ) seen ON seen.question_id = q.id
+            WHERE q.jlpt_level = :level AND q.question_type = :type AND q.status = 'APPROVED'
+            ORDER BY seen.seen_at NULLS FIRST, RANDOM()
+            LIMIT :count
             """, nativeQuery = true)
-    List<ExamQuestion> findRandomByLevelAndType(@Param("level") String level, @Param("type") String type,
-                                                @Param("count") int count);
+    List<ExamQuestion> findForLearnerByLevelAndType(@Param("userId") Long userId, @Param("level") String level,
+                                                    @Param("type") String type, @Param("count") int count);
 
     /** Số câu đã duyệt của một dạng câu JLPT. */
     interface TypeCount {

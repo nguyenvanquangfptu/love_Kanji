@@ -144,7 +144,7 @@ public class JlptExamService {
     private StartExamResponse startSection(ExamSitting sitting, String sectionName, Set<Long> wordsAsked) {
         JlptBlueprintProperties.Section section = blueprints.section(sitting.getJlptLevel(), sectionName)
                 .orElseThrow(() -> new BadRequestException("Không còn cấu trúc đề cho phần thi: " + sectionName));
-        List<JlptExamAssembler.Mondai> mondai = assembler.assemble(sitting.getJlptLevel(), section, wordsAsked).stream()
+        List<JlptExamAssembler.Mondai> mondai = assembler.assemble(sitting.getUserId(), sitting.getJlptLevel(), section, wordsAsked).stream()
                 .filter(part -> !part.questions().isEmpty())
                 .toList();
         List<ExamQuestion> questions = mondai.stream().flatMap(part -> part.questions().stream()).toList();

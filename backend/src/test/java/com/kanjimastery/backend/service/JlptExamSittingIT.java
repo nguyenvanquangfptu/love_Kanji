@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static com.kanjimastery.backend.model.JlptQuestionType.CONTEXT;
 import static com.kanjimastery.backend.model.JlptQuestionType.GRAMMAR_FORM;
@@ -208,6 +209,22 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
         assertThat(review.getQuestions()).extracting(item -> item.getQuestionId())
                 .containsExactlyElementsOf(vocabulary.getQuestions().stream().map(ExamQuestionPublicResponse::getId)
                         .toList());
+    }
+
+    @Test
+    void aNewSitting_shouldFirstAskQuestionsTheLearnerHasNotMetYet() {
+        StartExamResponse first = jlptExamService.startSitting(userId, request(ExamSection.GRAMMAR));
+        examService.submit(userId, first.getAttemptId());
+        List<Long> asked = first.getQuestions().stream().map(ExamQuestionPublicResponse::getId).toList();
+        Long notAsked = Stream.of(grammarOnFirstWord, grammarOnFourthWord, grammarOnFifthWord).map(ExamQuestion::getId)
+                .filter(id -> !asked.contains(id))
+                .findFirst().orElseThrow();
+
+        StartExamResponse second = jlptExamService.startSitting(userId, request(ExamSection.GRAMMAR));
+
+        // 3 câu ngữ pháp, đề lấy 2: lần đầu gặp 2 câu, lần sau phải có câu còn lại.
+        assertThat(asked).hasSize(2);
+        assertThat(second.getQuestions()).extracting(ExamQuestionPublicResponse::getId).hasSize(2).contains(notAsked);
     }
 
     @Test
