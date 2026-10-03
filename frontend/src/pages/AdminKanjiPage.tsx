@@ -29,6 +29,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { KanjiFormDialog } from '@/components/KanjiFormDialog'
 import { TagManagerDialog } from '@/components/TagManagerDialog'
 import { PageHeader } from '@/components/PageHeader'
+import { AdminNav } from '@/components/AdminNav'
 import { LevelTabs, type LevelKey } from '@/components/LevelTabs'
 
 const KANJI_LIST_KEY = ['admin', 'kanji']
@@ -150,6 +151,7 @@ export function AdminKanjiPage() {
     const style = activeGridLevel === 'OTHER' ? OTHER_STYLE : LEVEL_META[activeGridLevel].style
     return (
       <div>
+        <AdminNav />
         <PageHeader
           title="Quản trị từ vựng"
           subtitle="Chọn một bài để xem, thêm và chỉnh sửa từ."

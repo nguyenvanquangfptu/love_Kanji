@@ -79,4 +79,11 @@ public class ExamQuestion {
     @Column(name = "kanji_id")
     @Builder.Default
     private Set<Long> kanjiIds = new HashSet<>();
+
+    /** Các điểm ngữ pháp câu này kiểm tra ({@link GrammarPoint}); rỗng với câu từ vựng. */
+    @ElementCollection
+    @CollectionTable(name = "exam_question_grammar", joinColumns = @JoinColumn(name = "question_id"))
+    @Column(name = "grammar_point_id")
+    @Builder.Default
+    private Set<Long> grammarPointIds = new HashSet<>();
 }

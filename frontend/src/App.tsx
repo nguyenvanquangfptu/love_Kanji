@@ -13,6 +13,7 @@ import { ExamWorkspacePage } from '@/pages/ExamWorkspacePage'
 import { ExamResultPage } from '@/pages/ExamResultPage'
 import { ExamSittingPage } from '@/pages/ExamSittingPage'
 import { AdminKanjiPage } from '@/pages/AdminKanjiPage'
+import { AdminGrammarPage } from '@/pages/AdminGrammarPage'
 import { StudyBrowsePage } from '@/pages/StudyBrowsePage'
 import { StudyVocabListPage } from '@/pages/StudyVocabListPage'
 import { StudyFlashcardPage } from '@/pages/StudyFlashcardPage'
@@ -37,7 +38,9 @@ export default function App() {
           <Route path="exam/:attemptId/result" element={<ExamResultPage />} />
           <Route path="exam/jlpt/:sittingId" element={<ExamSittingPage />} />
           <Route element={<AdminRoute />}>
+            <Route path="admin" element={<Navigate to="/admin/kanji" replace />} />
             <Route path="admin/kanji" element={<AdminKanjiPage />} />
+            <Route path="admin/grammar" element={<AdminGrammarPage />} />
           </Route>
         </Route>
 

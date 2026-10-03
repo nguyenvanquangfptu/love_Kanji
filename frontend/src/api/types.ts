@@ -458,3 +458,36 @@ export interface QuizAnswerResponse {
   inReview: boolean
   nextReviewAt: string | null
 }
+
+/** Một điểm ngữ pháp (〜てから...) của một cấp độ. */
+export interface GrammarPoint {
+  id: number
+  jlptLevel: string
+  /** Bài trong giáo trình (N4-26...); null = không theo bài. */
+  lesson: string | null
+  pattern: string
+  /** Cách nối: Vて + から. */
+  connection: string | null
+  meaningVi: string
+  explanationVi: string | null
+  /** Số câu thi gắn với điểm này: đã duyệt và đang chờ duyệt. */
+  approvedQuestions: number
+  draftQuestions: number
+}
+
+export interface GrammarPointRequest {
+  jlptLevel: string
+  lesson: string
+  pattern: string
+  connection: string
+  meaningVi: string
+  explanationVi: string
+}
+
+/** Kết quả nhập CSV: số điểm mới / được cập nhật / giữ nguyên, và các dòng bị bỏ qua kèm lý do. */
+export interface GrammarImportResult {
+  created: number
+  updated: number
+  unchanged: number
+  errors: string[]
+}
