@@ -18,7 +18,8 @@ import com.kanjimastery.backend.repository.ExamSessionStore;
  * Kết quả từng câu cũng được đưa vào ôn tập ở đây, trong transaction riêng
  * ({@link ExamDiagnosisService}); lỗi ở bước này không chặn phần Redis.
  * Lượt thi là một phần của đề JLPT thì không tính vào bảng xếp hạng thi
- * nhanh; làm xong phần cuối thì buổi thi hoàn thành ({@link JlptExamService}).
+ * nhanh; làm xong phần cuối thì buổi thi hoàn thành ({@link JlptExamService}),
+ * và buổi thi trọn vẹn lên bảng xếp hạng đề JLPT.
  */
 @Component
 @RequiredArgsConstructor
@@ -41,7 +42,7 @@ public class ExamFinalizedEventListener {
             leaderboardService.pushScore(event.jlptLevel(), event.userId(), event.totalScore(), event.timeSpentSeconds());
         } else {
             try {
-                jlptExamService.onSectionFinished(event.sittingId());
+                jlptExamService.onSectionFinished(event.sittingId()).ifPresent(leaderboardService::pushJlptResult);
             } catch (Exception e) {
                 log.error("Không cập nhật được buổi thi {} sau khi chốt lượt thi {} - job dọn dẹp sẽ xử lý bù.",
                         event.sittingId(), event.attemptId(), e);

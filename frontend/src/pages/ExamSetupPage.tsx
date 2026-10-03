@@ -15,6 +15,7 @@ import { Card } from '@/components/ui/card'
 import { PageSpinner } from '@/components/ui/spinner'
 import { PageHeader } from '@/components/PageHeader'
 import { Leaderboard } from '@/components/Leaderboard'
+import { JlptLeaderboard } from '@/components/JlptLeaderboard'
 
 type Mode = 'jlpt' | 'quick'
 
@@ -201,7 +202,15 @@ function JlptSetup() {
         </Button>
       </Card>
 
-      <StructureCard level={current} />
+      <div className="flex flex-col gap-6">
+        <StructureCard level={current} />
+        <Card className="p-5">
+          <h2 className="mb-4 flex items-center gap-2 font-black">
+            <Trophy className="h-5 w-5 text-accent-dark" strokeWidth={3} /> Bảng xếp hạng đề {current.jlptLevel}
+          </h2>
+          <JlptLeaderboard level={current.jlptLevel} />
+        </Card>
+      </div>
     </div>
   )
 }

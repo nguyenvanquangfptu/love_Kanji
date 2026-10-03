@@ -256,17 +256,43 @@ class JlptExamServiceTest {
     }
 
     @Test
-    void onSectionFinished_shouldCompleteTheSittingOnlyAfterItsLastSection() {
+    void onSectionFinished_shouldCompleteTheSittingOnlyAfterItsLastSection_andReportTheWholeSitting() {
         when(sittingRepository.findById(SITTING_ID)).thenReturn(Optional.of(sitting(ExamSittingStatus.IN_PROGRESS)));
-        when(attemptRepository.findBySittingIdOrderByIdAsc(SITTING_ID)).thenReturn(
-                List.of(attempt(30L, ExamSection.VOCABULARY, ExamAttemptStatus.TIMEOUT)),
-                List.of(attempt(30L, ExamSection.VOCABULARY, ExamAttemptStatus.TIMEOUT),
-                        attempt(31L, ExamSection.GRAMMAR, ExamAttemptStatus.COMPLETED)));
+        UserExamAttempt vocabulary = attempt(30L, ExamSection.VOCABULARY, ExamAttemptStatus.TIMEOUT);
+        vocabulary.setTotalScore(20);
+        vocabulary.setTimeSpentSeconds(1510);
+        vocabulary.setDurationSeconds(1500);
+        UserExamAttempt grammar = attempt(31L, ExamSection.GRAMMAR, ExamAttemptStatus.COMPLETED);
+        grammar.setTotalScore(15);
+        grammar.setTimeSpentSeconds(900);
+        grammar.setDurationSeconds(1200);
+        when(attemptRepository.findBySittingIdOrderByIdAsc(SITTING_ID))
+                .thenReturn(List.of(vocabulary), List.of(vocabulary, grammar));
+        when(sittingRepository.finishIfInProgress(eq(SITTING_ID), eq(ExamSittingStatus.COMPLETED),
+                any(LocalDateTime.class))).thenReturn(1);
+        when(answerRepository.countByAttemptId(30L)).thenReturn(28L);
+        when(answerRepository.countByAttemptId(31L)).thenReturn(21L);
 
-        jlptExamService.onSectionFinished(SITTING_ID);
+        assertThat(jlptExamService.onSectionFinished(SITTING_ID)).isEmpty();
         verify(sittingRepository, never()).finishIfInProgress(anyLong(), anyString(), any());
 
-        jlptExamService.onSectionFinished(SITTING_ID);
+        // Phần Từ vựng tự nộp trễ 10 giây sau khi hết giờ: chỉ tính đủ 25 phút.
+        assertThat(jlptExamService.onSectionFinished(SITTING_ID))
+                .contains(new JlptExamService.CompletedSitting(USER_ID, "N4", 35, 49, 1500 + 900));
+    }
+
+    @Test
+    void onSectionFinished_shouldNotReportSittingsWithoutEverySectionOfTheLevel() {
+        ExamSitting grammarOnly = sitting(ExamSittingStatus.IN_PROGRESS);
+        grammarOnly.setSections(ExamSection.GRAMMAR);
+        when(sittingRepository.findById(SITTING_ID)).thenReturn(Optional.of(grammarOnly));
+        when(attemptRepository.findBySittingIdOrderByIdAsc(SITTING_ID))
+                .thenReturn(List.of(attempt(31L, ExamSection.GRAMMAR, ExamAttemptStatus.COMPLETED)));
+        when(sittingRepository.finishIfInProgress(eq(SITTING_ID), eq(ExamSittingStatus.COMPLETED),
+                any(LocalDateTime.class))).thenReturn(1);
+
+        // Buổi thi vẫn hoàn thành, nhưng chỉ một phần nên không lên bảng xếp hạng đề JLPT.
+        assertThat(jlptExamService.onSectionFinished(SITTING_ID)).isEmpty();
         verify(sittingRepository).finishIfInProgress(eq(SITTING_ID), eq(ExamSittingStatus.COMPLETED),
                 any(LocalDateTime.class));
     }

@@ -6,6 +6,7 @@ import com.kanjimastery.backend.dto.ExamMondaiResponse;
 import com.kanjimastery.backend.dto.ExamQuestionPublicResponse;
 import com.kanjimastery.backend.dto.ExamReviewResponse;
 import com.kanjimastery.backend.dto.ExamSittingResponse;
+import com.kanjimastery.backend.dto.JlptLeaderboardEntryResponse;
 import com.kanjimastery.backend.dto.SaveAnswerRequest;
 import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.dto.StartJlptExamRequest;
@@ -127,6 +128,7 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
 
     @AfterEach
     void tearDown() {
+        redisTemplate.delete(List.of("leaderboard:jlpt:" + LEVEL, "leaderboard:jlpt:" + LEVEL + ":detail"));
         blueprints.getLevels().remove(LEVEL);
         attemptRepository.findAll().stream()
                 .filter(attempt -> attempt.getUserId().equals(userId))
@@ -192,6 +194,14 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
 
         ExamSittingResponse finished = jlptExamService.getSitting(userId, sittingId);
         assertThat(finished.getStatus()).isEqualTo(ExamSittingStatus.COMPLETED);
+        // Buổi thi đủ hai phần lên bảng xếp hạng đề JLPT: đúng 1/5 câu (3 câu Từ vựng + 2 câu Ngữ pháp).
+        JlptLeaderboardEntryResponse mine = leaderboardService.getMyJlptRank(LEVEL, userId);
+        assertThat(mine.rank()).isEqualTo(1);
+        assertThat(mine.correct()).isEqualTo(1);
+        assertThat(mine.total()).isEqualTo(5);
+        assertThat(mine.estimatedScore()).isEqualTo(12);
+        assertThat(leaderboardService.getJlptTop(LEVEL, 10)).extracting(JlptLeaderboardEntryResponse::userId)
+                .containsExactly(userId);
         assertThat(finished.getFinishedAt()).isNotNull();
         assertThat(finished.getNextSection()).isNull();
         assertThat(finished.getSections()).extracting(ExamSittingResponse.Section::getStatus)

@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -44,6 +45,15 @@ public class JlptExamService {
 
     /** Thang điểm ước tính của buổi thi. */
     static final int ESTIMATED_SCALE = 60;
+
+    /**
+     * Một buổi thi vừa hoàn thành với đủ các phần của cấp độ - để đưa lên bảng xếp hạng đề JLPT.
+     *
+     * @param correct số câu đúng trên {@code total} câu của các phần
+     * @param seconds tổng thời gian làm các phần (không tính phần chốt trễ quá giờ)
+     */
+    public record CompletedSitting(Long userId, String level, int correct, int total, int seconds) {
+    }
 
     private final JlptBlueprintProperties blueprints;
     private final JlptExamAssembler assembler;
@@ -233,16 +243,21 @@ public class JlptExamService {
     /**
      * Một phần thi vừa chốt điểm (nộp bài, hết giờ): làm xong mọi phần thì buổi thi hoàn thành. Gọi sau khi transaction
      * chốt điểm đã commit nên chạy trong transaction riêng.
+     *
+     * @return kết quả buổi thi khi lần gọi này hoàn thành một buổi thi đủ các phần của cấp độ
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void onSectionFinished(Long sittingId) {
+    public Optional<CompletedSitting> onSectionFinished(Long sittingId) {
         ExamSitting sitting = sittingRepository.findById(sittingId).orElse(null);
         if (sitting == null || !ExamSittingStatus.IN_PROGRESS.equals(sitting.getStatus())) {
-            return;
+            return Optional.empty();
         }
-        if (allSectionsFinished(sitting, attemptRepository.findBySittingIdOrderByIdAsc(sittingId))) {
-            sittingRepository.finishIfInProgress(sittingId, ExamSittingStatus.COMPLETED, LocalDateTime.now());
+        List<UserExamAttempt> attempts = attemptRepository.findBySittingIdOrderByIdAsc(sittingId);
+        if (allSectionsFinished(sitting, attempts)
+                && sittingRepository.finishIfInProgress(sittingId, ExamSittingStatus.COMPLETED, LocalDateTime.now()) > 0) {
+            return completedSitting(sitting, attempts);
         }
+        return Optional.empty();
     }
 
     /**
@@ -250,19 +265,42 @@ public class JlptExamService {
      * các phần đã làm vẫn giữ. Còn phần đang làm dở thì để lượt quét sau.
      */
     @Transactional
-    public void closeStale(Long sittingId) {
+    public Optional<CompletedSitting> closeStale(Long sittingId) {
         ExamSitting sitting = sittingRepository.findByIdForUpdate(sittingId).orElse(null);
         if (sitting == null || !ExamSittingStatus.IN_PROGRESS.equals(sitting.getStatus())) {
-            return;
+            return Optional.empty();
         }
         List<UserExamAttempt> attempts = attemptRepository.findBySittingIdOrderByIdAsc(sittingId);
         if (attempts.stream().anyMatch(JlptExamService::inProgress)) {
-            return;
+            return Optional.empty();
         }
-        String status = allSectionsFinished(sitting, attempts)
-                ? ExamSittingStatus.COMPLETED
-                : ExamSittingStatus.ABANDONED;
-        sittingRepository.finishIfInProgress(sittingId, status, LocalDateTime.now());
+        boolean finished = allSectionsFinished(sitting, attempts);
+        int updated = sittingRepository.finishIfInProgress(sittingId,
+                finished ? ExamSittingStatus.COMPLETED : ExamSittingStatus.ABANDONED, LocalDateTime.now());
+        return finished && updated > 0 ? completedSitting(sitting, attempts) : Optional.empty();
+    }
+
+    /** Kết quả cả buổi thi, chỉ khi buổi thi gồm mọi phần trong cấu trúc đề của cấp độ (đề trọn vẹn). */
+    private Optional<CompletedSitting> completedSitting(ExamSitting sitting, List<UserExamAttempt> attempts) {
+        JlptBlueprintProperties.Level blueprint = blueprints.getLevels().get(sitting.getJlptLevel());
+        List<String> allSections = blueprint == null
+                ? List.of()
+                : blueprint.getSections().stream().map(JlptBlueprintProperties.Section::getName).toList();
+        if (allSections.isEmpty() || !sitting.sectionList().containsAll(allSections)) {
+            return Optional.empty();
+        }
+        int correct = 0;
+        int total = 0;
+        int seconds = 0;
+        for (UserExamAttempt attempt : attempts) {
+            correct += attempt.getTotalScore() == null ? 0 : attempt.getTotalScore();
+            total += (int) answerRepository.countByAttemptId(attempt.getId());
+            int spent = attempt.getTimeSpentSeconds() == null ? 0 : attempt.getTimeSpentSeconds();
+            seconds += attempt.getDurationSeconds() == null ? spent : Math.min(spent, attempt.getDurationSeconds());
+        }
+        return total > 0
+                ? Optional.of(new CompletedSitting(sitting.getUserId(), sitting.getJlptLevel(), correct, total, seconds))
+                : Optional.empty();
     }
 
     /** Điểm ước tính thang 0-60 (thang của môn Kiến thức ngôn ngữ N3): tỉ lệ đúng × 60, làm tròn. */

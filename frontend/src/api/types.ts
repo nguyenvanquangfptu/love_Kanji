@@ -456,6 +456,19 @@ export interface LeaderboardEntryResponse {
   score: number
 }
 
+/** Một dòng của bảng xếp hạng đề JLPT (buổi thi làm đủ các phần tốt nhất của người học). */
+export interface JlptLeaderboardEntry {
+  /** null khi người học chưa có buổi thi trọn vẹn nào ở cấp độ này. */
+  rank: number | null
+  userId: number
+  username: string | null
+  /** Điểm ước tính thang 0-60. */
+  estimatedScore: number | null
+  correct: number | null
+  total: number | null
+  timeSpentSeconds: number | null
+}
+
 export interface MyRankResponse {
   userId: number
   rank: number | null

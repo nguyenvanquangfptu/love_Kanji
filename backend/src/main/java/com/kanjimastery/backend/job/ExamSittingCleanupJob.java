@@ -5,6 +5,7 @@ import com.kanjimastery.backend.model.ExamSitting;
 import com.kanjimastery.backend.model.ExamSittingStatus;
 import com.kanjimastery.backend.repository.ExamSittingRepository;
 import com.kanjimastery.backend.service.JlptExamService;
+import com.kanjimastery.backend.service.LeaderboardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -24,6 +25,7 @@ public class ExamSittingCleanupJob {
 
     private final ExamSittingRepository sittingRepository;
     private final JlptExamService jlptExamService;
+    private final LeaderboardService leaderboardService;
     private final ExamProperties examProperties;
 
     @Scheduled(fixedDelayString = "${app.exam.sitting-cleanup-interval-ms:600000}")
@@ -32,7 +34,7 @@ public class ExamSittingCleanupJob {
         for (ExamSitting sitting : sittingRepository.findByStatusAndStartedAtBefore(ExamSittingStatus.IN_PROGRESS,
                 cutoff)) {
             try {
-                jlptExamService.closeStale(sitting.getId());
+                jlptExamService.closeStale(sitting.getId()).ifPresent(leaderboardService::pushJlptResult);
             } catch (Exception e) {
                 log.error("Không kết thúc được buổi thi {} - sẽ thử lại ở lượt quét sau.", sitting.getId(), e);
             }

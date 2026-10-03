@@ -4,6 +4,7 @@ import type {
   ExamReviewResponse,
   ExamSessionResponse,
   ExamSittingResponse,
+  JlptLeaderboardEntry,
   JlptLevelResponse,
   PracticeQuestion,
   SaveAnswerRequest,
@@ -42,6 +43,16 @@ export const examApi = {
 
   getSitting: (sittingId: number) =>
     apiClient.get<ExamSittingResponse>(`/exams/jlpt/sittings/${sittingId}`).then((r) => r.data),
+
+  /** Bảng xếp hạng đề JLPT của cấp độ (tách riêng với bảng xếp hạng thi nhanh). */
+  jlptLeaderboard: (level: string, limit: number) =>
+    apiClient
+      .get<JlptLeaderboardEntry[]>('/exams/jlpt/leaderboard', { params: { level, limit } })
+      .then((r) => r.data),
+
+  /** Dòng của người học trên bảng xếp hạng đề JLPT; rank null khi chưa có buổi thi trọn vẹn. */
+  myJlptRank: (level: string) =>
+    apiClient.get<JlptLeaderboardEntry>('/exams/jlpt/leaderboard/me', { params: { level } }).then((r) => r.data),
 
   /** Các điểm ngữ pháp người học hay làm sai trong các đề JLPT gần đây của một cấp độ. */
   weakGrammar: (level: string) =>
