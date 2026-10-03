@@ -1,17 +1,20 @@
 package com.kanjimastery.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.ResourceNotFoundException;
 import com.kanjimastery.backend.model.ExamQuestion;
-import com.kanjimastery.backend.model.ExamQuestionFlag;
-import com.kanjimastery.backend.model.ExamQuestionSource;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
+import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.GrammarPoint;
 import com.kanjimastery.backend.model.JlptQuestionType;
+import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.GrammarPointRepository;
+import com.kanjimastery.backend.repository.KanjiRepository;
+import com.kanjimastery.backend.service.DraftReviewer.Draft;
+import com.kanjimastery.backend.service.WordClassifier.PartOfSpeech;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,10 +22,10 @@ import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -30,10 +33,10 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * Nhờ AI (Gemini) viết nháp câu thi ngữ pháp cho một điểm ngữ pháp, rồi kiểm tra tự động trước khi tới tay người
- * duyệt: đúng cấu trúc của dạng câu (sai thì loại luôn, kèm lý do), từ vựng không vượt cấp độ, và nhờ AI giải lại câu
- * hỏi (không cho xem đáp án) để bắt câu sai đáp án hoặc có hơn một đáp án đúng. Câu qua cấu trúc thì vào hàng chờ duyệt,
- * có cảnh báo thì gắn cờ. Mỗi lần sinh tốn hai request Gemini (viết + giải lại).
+ * Nhờ AI (Gemini) viết nháp câu thi: câu ngữ pháp (文法形式の判断, 文の組み立て) cho một điểm ngữ pháp, và câu từ vựng
+ * (言い換え類義, 用法) cho các từ trong bài của một cấp độ chưa có câu dạng đó. Câu nháp qua các bước kiểm tra của
+ * {@link DraftReviewer} (cấu trúc - sai thì loại luôn, kèm lý do; từ vượt cấp; AI giải lại) rồi vào hàng chờ duyệt, có
+ * cảnh báo thì gắn cờ. Mỗi lần sinh tốn hai request Gemini (viết + giải lại).
  * <p>
  * Không giữ transaction trong lúc chờ Gemini trả lời: chỉ lưu câu ở bước cuối.
  */
@@ -46,16 +49,29 @@ public class QuestionDraftService {
     static final int MAX_DRAFTS = 8;
     static final String GRAMMAR_FORM_TEXT = "Chọn từ hoặc mẫu ngữ pháp thích hợp điền vào chỗ trống.";
     static final String SENTENCE_ORDER_TEXT = "Sắp xếp các vế thành câu đúng rồi chọn vế ở vị trí ★.";
-    private static final Set<String> DRAFTABLE = Set.of(JlptQuestionType.GRAMMAR_FORM, JlptQuestionType.SENTENCE_ORDER);
+    /** 言い換え類義 từ N3: thay phần gạch chân bằng từ, cách nói khác. */
+    static final String PARAPHRASE_PART_TEXT = "Chọn từ hoặc cách nói gần nghĩa nhất với phần được gạch chân.";
+    /** 言い換え類義 của N4, N5: cả câu được gạch chân, chọn câu gần nghĩa nhất. */
+    static final String PARAPHRASE_SENTENCE_TEXT = "Chọn câu gần nghĩa nhất với câu được gạch chân.";
+    private static final Set<String> GRAMMAR_TYPES = Set.of(JlptQuestionType.GRAMMAR_FORM,
+            JlptQuestionType.SENTENCE_ORDER);
+    private static final Set<String> VOCABULARY_TYPES = Set.of(JlptQuestionType.PARAPHRASE, JlptQuestionType.USAGE);
+    /** Các cấp độ mà 言い換え類義 gạch chân cả câu. */
+    private static final Set<String> WHOLE_SENTENCE_PARAPHRASE = Set.of("N4", "N5");
+    /** Từ loại hỏi được 言い換え, 用法 - không hỏi liên từ, từ chỉ định, câu chào... */
+    private static final Set<PartOfSpeech> VOCABULARY_CLASSES = EnumSet.of(PartOfSpeech.NOUN, PartOfSpeech.VERB,
+            PartOfSpeech.I_ADJECTIVE, PartOfSpeech.NA_ADJECTIVE, PartOfSpeech.ADVERB);
+    /** Mục từ là cả một cụm (có dấu cách, dấu câu) thì không hỏi được. */
+    private static final Pattern PHRASE = Pattern.compile("[\\s、。,.!?！？〜~]");
     /** Ô trống AI hay viết lệch: （ ）, (　　), （　）... */
     private static final Pattern LOOSE_BLANK = Pattern.compile("[（(][\\s　]*[）)]");
-    private static final String LETTERS = "ABCD";
 
     private final GeminiClient geminiClient;
-    private final ObjectMapper objectMapper;
+    private final DraftReviewer reviewer;
     private final GrammarPointRepository grammarPointRepository;
     private final ExamQuestionRepository questionRepository;
-    private final VocabularyLevelChecker levelChecker;
+    private final KanjiRepository kanjiRepository;
+    private final JlptBlueprintProperties blueprints;
 
     /**
      * @param drafted    số câu vào hàng chờ duyệt (kể cả câu có cảnh báo)
@@ -66,29 +82,20 @@ public class QuestionDraftService {
     public record DraftResult(int drafted, int flagged, int rejected, int unreadable) {
     }
 
-    /** Một câu nháp đọc được từ AI, đã dựng thành câu thi; {@code fullSentence} là câu hoàn chỉnh để kiểm tra từ. */
-    record Draft(ExamQuestion question, String fullSentence) {
-    }
-
+    /** Câu ngữ pháp 文法形式の判断 hoặc 文の組み立て cho một điểm ngữ pháp. */
     public DraftResult draft(Long grammarPointId, String type, int count) {
-        if (!geminiClient.isEnabled()) {
-            throw new BadRequestException("Chưa cấu hình Gemini (GEMINI_API_KEY) nên chưa sinh nháp được");
-        }
-        if (!DRAFTABLE.contains(type)) {
+        requireGemini();
+        if (!GRAMMAR_TYPES.contains(type)) {
             throw new BadRequestException("Chỉ sinh nháp được dạng 文法形式の判断 và 文の組み立て");
         }
         GrammarPoint point = grammarPointRepository.findById(grammarPointId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy điểm ngữ pháp: " + grammarPointId));
-        int wanted = Math.max(1, Math.min(count, MAX_DRAFTS));
         List<String> existing = questionRepository.findSentencesByGrammarPoint(grammarPointId);
 
-        String answer = geminiClient.generateJson(draftPrompt(point, type, wanted, existing))
-                .orElseThrow(() -> new BadRequestException(
-                        "Gemini không trả lời (hết hạn mức trong ngày hoặc lỗi mạng) - thử lại sau"));
-        List<JsonNode> items = items(answer);
+        String answer = ask(grammarPrompt(point, type, limit(count), existing));
         List<Draft> drafts = new ArrayList<>();
         int unreadable = 0;
-        for (JsonNode item : items) {
+        for (JsonNode item : reviewer.items(answer)) {
             Optional<Draft> draft = JlptQuestionType.GRAMMAR_FORM.equals(type) ? grammarForm(item, point)
                     : sentenceOrder(item, point);
             if (draft.isPresent()) {
@@ -97,32 +104,90 @@ public class QuestionDraftService {
                 unreadable++;
             }
         }
+        String task = JlptQuestionType.GRAMMAR_FORM.equals(type)
+                ? "Mỗi câu chọn lựa chọn điền vào chỗ trống " + ExamQuestionGenerator.BLANK + "."
+                : "Mỗi câu sắp xếp 4 vế vào 4 ô " + ExamQuestionValidator.ORDER_SLOT
+                + " cho thành câu đúng, rồi cho biết vế nào nằm ở ô ★.";
+        return review(point.getJlptLevel(), task, drafts, unreadable,
+                type + " cho 「" + point.getPattern() + "」 (" + point.getJlptLevel() + ")");
+    }
 
-        List<Draft> wellFormed = new ArrayList<>();
-        int rejected = 0;
-        for (Draft draft : drafts) {
-            ExamQuestion question = draft.question();
-            List<String> problems = ExamQuestionValidator.problems(type, question.getQuestionText(),
-                    question.getSentence(), question.getHighlight(), options(question), question.getCorrectOption());
-            if (problems.isEmpty()) {
-                wellFormed.add(draft);
+    /**
+     * Câu từ vựng 言い換え類義 hoặc 用法 (dạng câu phải có trong đề của cấp độ) cho các từ trong bài của cấp độ chưa có
+     * câu dạng đó, mỗi từ một câu.
+     */
+    public DraftResult draftVocabulary(String level, String type, int count) {
+        requireGemini();
+        String normalized = level.strip().toUpperCase(Locale.ROOT);
+        if (!VOCABULARY_TYPES.contains(type)) {
+            throw new BadRequestException("Chỉ sinh nháp từ vựng được dạng 言い換え類義 và 用法");
+        }
+        boolean inExam = blueprints.section(normalized, ExamSection.VOCABULARY)
+                .map(section -> section.getQuestions().containsKey(type))
+                .orElse(false);
+        if (!inExam) {
+            throw new BadRequestException("Đề " + normalized + " không có dạng câu này");
+        }
+        List<Kanji> words = wordsWithoutQuestion(normalized, type, limit(count));
+        if (words.isEmpty()) {
+            throw new BadRequestException("Các từ trong bài " + normalized + " đều đã có câu dạng này");
+        }
+
+        boolean wholeSentence = WHOLE_SENTENCE_PARAPHRASE.contains(normalized);
+        String answer = ask(vocabularyPrompt(normalized, type, wholeSentence, words));
+        List<Draft> drafts = new ArrayList<>();
+        int unreadable = 0;
+        for (JsonNode item : reviewer.items(answer)) {
+            Optional<Draft> draft = JlptQuestionType.USAGE.equals(type) ? usage(item, normalized, words)
+                    : paraphrase(item, normalized, wholeSentence, words);
+            if (draft.isPresent()) {
+                drafts.add(draft.get());
             } else {
-                question.setStatus(ExamQuestionStatus.REJECTED);
-                question.setReviewNote("Loại tự động - sai cấu trúc: " + String.join("; ", problems));
-                rejected++;
+                unreadable++;
             }
         }
-        checkLevel(point.getJlptLevel(), wellFormed);
-        checkBySolvingAgain(type, wellFormed);
+        String task = switch (type) {
+            case JlptQuestionType.USAGE ->
+                    "Mỗi câu chọn câu dùng từ đã cho đúng nhất (đúng nghĩa, đúng cách kết hợp từ).";
+            default -> wholeSentence ? "Mỗi câu chọn câu có nghĩa gần nhất với câu đã cho."
+                    : "Mỗi câu chọn từ hoặc cách nói gần nghĩa nhất với phần được gạch chân.";
+        };
+        return review(normalized, task, drafts, unreadable, type + " " + normalized);
+    }
+
+    private void requireGemini() {
+        if (!geminiClient.isEnabled()) {
+            throw new BadRequestException("Chưa cấu hình Gemini (GEMINI_API_KEY) nên chưa sinh nháp được");
+        }
+    }
+
+    private static int limit(int count) {
+        return Math.max(1, Math.min(count, MAX_DRAFTS));
+    }
+
+    private String ask(String prompt) {
+        return geminiClient.generateJson(prompt).orElseThrow(() -> new BadRequestException(
+                "Gemini không trả lời (hết hạn mức trong ngày hoặc lỗi mạng) - thử lại sau"));
+    }
+
+    /** Kiểm tra các câu nháp (câu đã bị loại từ trước thì bỏ qua), lưu tất cả, kể cả câu bị loại. */
+    private DraftResult review(String level, String task, List<Draft> drafts, int unreadable, String subject) {
+        List<Draft> candidates = drafts.stream()
+                .filter(draft -> !ExamQuestionStatus.REJECTED.equals(draft.question().getStatus()))
+                .toList();
+        List<Draft> wellFormed = reviewer.keepWellFormed(candidates);
+        reviewer.checkLevel(level, wellFormed);
+        reviewer.checkBySolvingAgain(task, null, wellFormed);
 
         questionRepository.saveAll(drafts.stream().map(Draft::question).toList());
         int flagged = (int) wellFormed.stream().filter(draft -> draft.question().getFlag() != null).count();
-        log.info("Sinh nháp {} cho 「{}」 ({}): {} chờ duyệt ({} có cảnh báo), {} bị loại, {} không đọc được",
-                type, point.getPattern(), point.getJlptLevel(), wellFormed.size(), flagged, rejected, unreadable);
+        int rejected = drafts.size() - wellFormed.size();
+        log.info("Sinh nháp {}: {} chờ duyệt ({} có cảnh báo), {} bị loại, {} không đọc được", subject,
+                wellFormed.size(), flagged, rejected, unreadable);
         return new DraftResult(wellFormed.size(), flagged, rejected, unreadable);
     }
 
-    private static String draftPrompt(GrammarPoint point, String type, int count, List<String> existing) {
+    private static String grammarPrompt(GrammarPoint point, String type, int count, List<String> existing) {
         String grammar = "「%s」 - nghĩa: %s%s".formatted(point.getPattern(), point.getMeaningVi(),
                 StringUtils.hasText(point.getConnection()) ? " - cách nối: " + point.getConnection() : "");
         String avoid = existing.isEmpty() ? "" : "\nĐã có các câu sau, hãy viết câu khác hẳn về ngữ cảnh:\n"
@@ -159,42 +224,27 @@ public class QuestionDraftService {
                 """;
     }
 
-    /** Mảng câu hỏi trong câu trả lời của AI (mảng, hoặc object có mảng "questions"); JSON hỏng thì rỗng. */
-    private List<JsonNode> items(String answer) {
-        try {
-            JsonNode root = objectMapper.readTree(GeminiClient.stripCodeFence(answer.strip()));
-            JsonNode array = root.isArray() ? root : root.path("questions");
-            List<JsonNode> items = new ArrayList<>();
-            array.forEach(items::add);
-            return items;
-        } catch (Exception ex) {
-            log.warn("Không đọc được JSON câu nháp từ Gemini: {}", ex.getMessage());
-            return List.of();
-        }
-    }
-
-    private Optional<Draft> grammarForm(JsonNode item, GrammarPoint point) {
+    private static Optional<Draft> grammarForm(JsonNode item, GrammarPoint point) {
         String sentence = LOOSE_BLANK.matcher(item.path("sentence").asText("").strip())
                 .replaceAll(ExamQuestionGenerator.BLANK);
-        List<String> options = texts(item.path("options"));
+        List<String> options = DraftReviewer.texts(item.path("options"));
         int answer = item.path("answer").asInt(-1);
-        if (sentence.isEmpty() || options.size() != 4 || answer < 0 || answer > 3) {
+        if (sentence.isEmpty() || !DraftReviewer.storable(options, answer)) {
             return Optional.empty();
         }
         String correct = options.get(answer);
-        List<String> shuffled = new ArrayList<>(options);
-        Collections.shuffle(shuffled);
-        ExamQuestion question = question(point, JlptQuestionType.GRAMMAR_FORM, GRAMMAR_FORM_TEXT, sentence, shuffled,
-                shuffled.indexOf(correct), item.path("explanation").asText("").strip());
-        return Optional.of(new Draft(question, sentence.replace(ExamQuestionGenerator.BLANK, correct)));
+        ExamQuestion question = DraftReviewer.question(point.getJlptLevel(), JlptQuestionType.GRAMMAR_FORM,
+                GRAMMAR_FORM_TEXT, sentence, null, options, correct, item.path("explanation").asText(""));
+        question.getGrammarPointIds().add(point.getId());
+        return Optional.of(new Draft(question, sentence.replace(ExamQuestionGenerator.BLANK, correct), sentence));
     }
 
-    private Optional<Draft> sentenceOrder(JsonNode item, GrammarPoint point) {
+    private static Optional<Draft> sentenceOrder(JsonNode item, GrammarPoint point) {
         String before = item.path("before").asText("").strip();
         String after = item.path("after").asText("").strip();
-        List<String> parts = texts(item.path("parts"));
+        List<String> parts = DraftReviewer.texts(item.path("parts"));
         int star = item.path("star").asInt(3);
-        if (parts.size() != 4 || star < 1 || star > 4) {
+        if (!DraftReviewer.storable(parts, star - 1)) {
             return Optional.empty();
         }
         String slots = IntStream.rangeClosed(1, 4)
@@ -203,134 +253,171 @@ public class QuestionDraftService {
         String sentence = (before + " " + slots + " " + after).strip();
         String full = before + String.join("", parts) + after;
         String correct = parts.get(star - 1);
-        List<String> shuffled = new ArrayList<>(parts);
-        Collections.shuffle(shuffled);
         String explanation = (item.path("explanation").asText("").strip() + " Câu đúng: " + full + " ("
                 + String.join(" → ", parts) + "). Vế ở vị trí ★ là 「" + correct + "」.").strip();
-        ExamQuestion question = question(point, JlptQuestionType.SENTENCE_ORDER, SENTENCE_ORDER_TEXT, sentence,
-                shuffled, shuffled.indexOf(correct), explanation);
-        return Optional.of(new Draft(question, full));
+        ExamQuestion question = DraftReviewer.question(point.getJlptLevel(), JlptQuestionType.SENTENCE_ORDER,
+                SENTENCE_ORDER_TEXT, sentence, null, parts, correct, explanation);
+        question.getGrammarPointIds().add(point.getId());
+        return Optional.of(new Draft(question, full, sentence));
     }
 
-    private static ExamQuestion question(GrammarPoint point, String type, String text, String sentence,
-                                         List<String> options, int correctIndex, String explanation) {
-        return ExamQuestion.builder()
-                .jlptLevel(point.getJlptLevel())
-                .questionText(text)
-                .sentence(sentence)
-                .optionA(options.get(0))
-                .optionB(options.get(1))
-                .optionC(options.get(2))
-                .optionD(options.get(3))
-                .correctOption(String.valueOf(LETTERS.charAt(correctIndex)))
-                .explanation(explanation.isEmpty() ? null : explanation)
-                .questionType(type)
-                .status(ExamQuestionStatus.DRAFT)
-                .source(ExamQuestionSource.AI)
-                .grammarPointIds(new HashSet<>(Set.of(point.getId())))
-                .build();
-    }
-
-    private void checkLevel(String level, List<Draft> drafts) {
-        if (drafts.isEmpty()) {
-            return;
+    /** Từ trong bài của cấp độ chưa có câu dạng {@code type}, có nghĩa, đúng từ loại hỏi được; chọn ngẫu nhiên. */
+    private List<Kanji> wordsWithoutQuestion(String level, String type, int count) {
+        Set<Long> covered = new HashSet<>(questionRepository.findWordIdsWithQuestion(level, type));
+        List<Kanji> candidates = kanjiRepository.findAllByTagNamePrefix(level + "-%").stream()
+                .filter(word -> !covered.contains(word.getId()))
+                .filter(word -> StringUtils.hasText(word.getMeaning()))
+                .filter(word -> !PHRASE.matcher(word.getCharacter()).find())
+                .collect(Collectors.toCollection(ArrayList::new));
+        Collections.shuffle(candidates);
+        List<Kanji> words = new ArrayList<>();
+        if (candidates.isEmpty()) {
+            return words;
         }
-        VocabularyLevelChecker.Session session = levelChecker.open(level);
-        for (Draft draft : drafts) {
-            VocabularyLevelChecker.Result result = session.check(draft.fullSentence());
-            if (result.suspicious()) {
-                flag(draft.question(), ExamQuestionFlag.ABOVE_LEVEL, result.describe());
-            } else if (!result.describe().isEmpty()) {
-                note(draft.question(), result.describe());
+        WordClassifier classifier = new WordClassifier();
+        for (Kanji word : candidates) {
+            if (words.size() >= count) {
+                break;
+            }
+            if (VOCABULARY_CLASSES.contains(classifier.classify(word.getCharacter()))) {
+                words.add(word);
             }
         }
+        return words;
+    }
+
+    private static String vocabularyPrompt(String level, String type, boolean wholeSentence, List<Kanji> words) {
+        String list = IntStream.range(0, words.size())
+                .mapToObj(index -> (index + 1) + ". " + words.get(index).getCharacter()
+                        + readingInBrackets(words.get(index)) + " - " + words.get(index).getMeaning())
+                .collect(Collectors.joining("\n"));
+        String common = """
+                Bạn là giáo viên tiếng Nhật đang soạn câu hỏi luyện thi JLPT %s.
+                Viết cho MỖI từ dưới đây đúng một câu hỏi MỚI do bạn tự nghĩ - không chép đề thi thật, sách hay trang \
+                web nào. Viết từ đúng như trong danh sách (được chia dạng khi cần). Chỉ dùng từ vựng và chữ Hán tới \
+                trình độ %s. Mỗi câu chỉ có MỘT đáp án đúng; không lựa chọn nào khác cũng chấp nhận được.
+                Các từ (số thứ tự. từ (cách đọc) - nghĩa):
+                %s
+                """.formatted(level, level, list);
+        if (JlptQuestionType.USAGE.equals(type)) {
+            return common + """
+                    Dạng 問題5 用法: chọn câu dùng từ đúng nhất.
+                    - "index": số thứ tự của từ trong danh sách.
+                    - "options": đúng 4 câu ngắn, câu nào cũng có từ đó: 1 câu dùng đúng nghĩa và đúng cách kết hợp \
+                    từ; 3 câu dùng từ sai mà người Nhật thấy sai rõ ràng (nhầm nghĩa với từ khác, sai kết hợp \
+                    từ) - không phải lỗi ngữ pháp.
+                    - "answer": vị trí (0-3) của câu đúng trong "options".
+                    - "explanation": giải thích ngắn bằng tiếng Việt: nghĩa của từ, và mỗi câu sai lẽ ra nên dùng từ gì.
+                    Trả về một mảng JSON, không thêm gì khác:
+                    [{"index": 1, "options": ["...", "...", "...", "..."], "answer": 0, "explanation": "..."}]
+                    """;
+        }
+        if (wholeSentence) {
+            return common + """
+                    Dạng 問題4 言い換え類義 (kiểu N4, N5): một câu ngắn có dùng từ đó, cả câu được gạch chân; chọn câu có \
+                    nghĩa gần nhất với câu đó.
+                    - "index": số thứ tự của từ trong danh sách.
+                    - "sentence": câu ngắn có dùng từ.
+                    - "options": đúng 4 câu: 1 câu cùng nghĩa với "sentence" nhưng nói bằng từ khác (không dùng lại từ \
+                    đang hỏi); 3 câu giống về hình thức nhưng nghĩa khác rõ ràng.
+                    - "answer": vị trí (0-3) của câu đúng trong "options".
+                    - "explanation": giải thích ngắn bằng tiếng Việt.
+                    Trả về một mảng JSON, không thêm gì khác:
+                    [{"index": 1, "sentence": "...", "options": ["...", "...", "...", "..."], "answer": 0, \
+                    "explanation": "..."}]
+                    """;
+        }
+        return common + """
+                Dạng 問題4 言い換え類義: một câu có dùng từ đó, phần chứa từ được gạch chân; chọn từ hoặc cách nói gần \
+                nghĩa nhất với phần gạch chân.
+                - "index": số thứ tự của từ trong danh sách.
+                - "sentence": câu có dùng từ.
+                - "highlight": phần được gạch chân - chép nguyên văn một đoạn liền của "sentence" có chứa từ (thường \
+                là chính từ đó cùng đuôi chia).
+                - "options": đúng 4 từ hoặc cách nói thay được vào chỗ phần gạch chân mà câu vẫn đúng ngữ pháp (cùng \
+                dạng chia): 1 lựa chọn cùng nghĩa với phần gạch chân, 3 lựa chọn nghĩa khác hẳn.
+                - "answer": vị trí (0-3) của lựa chọn đúng trong "options".
+                - "explanation": giải thích ngắn bằng tiếng Việt.
+                Trả về một mảng JSON, không thêm gì khác:
+                [{"index": 1, "sentence": "...", "highlight": "...", "options": ["...", "...", "...", "..."], \
+                "answer": 0, "explanation": "..."}]
+                """;
+    }
+
+    private static Optional<Draft> paraphrase(JsonNode item, String level, boolean wholeSentence, List<Kanji> words) {
+        Optional<Kanji> word = word(item, words);
+        String sentence = item.path("sentence").asText("").strip();
+        List<String> options = DraftReviewer.texts(item.path("options"));
+        int answer = item.path("answer").asInt(-1);
+        String highlight = wholeSentence ? sentence : item.path("highlight").asText("").strip();
+        if (word.isEmpty() || sentence.isEmpty() || !DraftReviewer.storable(options, answer)
+                || highlight.length() > ExamQuestionValidator.MAX_HIGHLIGHT_LENGTH) {
+            return Optional.empty();
+        }
+        ExamQuestion question = DraftReviewer.question(level, JlptQuestionType.PARAPHRASE,
+                wholeSentence ? PARAPHRASE_SENTENCE_TEXT : PARAPHRASE_PART_TEXT, sentence, highlight, options,
+                options.get(answer), item.path("explanation").asText(""));
+        question.getKanjiIds().add(word.get().getId());
+        if (!mentions(highlight, word.get())) {
+            reject(question, "phần gạch chân không có từ 「" + word.get().getCharacter() + "」");
+        }
+        String prompt = wholeSentence ? sentence : sentence + " (phần gạch chân: 「" + highlight + "」)";
+        return Optional.of(new Draft(question, sentence + "\n" + String.join("\n", options), prompt));
+    }
+
+    private static Optional<Draft> usage(JsonNode item, String level, List<Kanji> words) {
+        Optional<Kanji> word = word(item, words);
+        List<String> options = DraftReviewer.texts(item.path("options"));
+        int answer = item.path("answer").asInt(-1);
+        if (word.isEmpty() || !DraftReviewer.storable(options, answer)) {
+            return Optional.empty();
+        }
+        String character = word.get().getCharacter();
+        ExamQuestion question = DraftReviewer.question(level, JlptQuestionType.USAGE,
+                "Chọn câu dùng từ 「" + character + "」 đúng nhất.", null, null, options, options.get(answer),
+                item.path("explanation").asText(""));
+        question.getKanjiIds().add(word.get().getId());
+        if (!options.stream().allMatch(option -> mentions(option, word.get()))) {
+            reject(question, "có câu không dùng từ 「" + character + "」");
+        }
+        return Optional.of(new Draft(question, String.join("\n", options), "Từ 「" + character + "」"));
+    }
+
+    /** Từ trong danh sách mà mục AI trả về đang hỏi ("index" 1..n). */
+    private static Optional<Kanji> word(JsonNode item, List<Kanji> words) {
+        int index = item.path("index").asInt(0);
+        return index >= 1 && index <= words.size() ? Optional.of(words.get(index - 1)) : Optional.empty();
     }
 
     /**
-     * Nhờ AI giải lại các câu (không kèm đáp án): chọn khác đáp án đã cho thì gắn cờ sai đáp án, thấy lựa chọn khác
-     * cũng đúng thì gắn cờ nghi có hai đáp án. Gemini không trả lời thì ghi chú để người duyệt tự kiểm tra kỹ.
+     * {@code text} có dùng từ (kể cả dạng chia, hoặc viết bằng hiragana): so phần gốc của từ - bỏ đuôi する và chữ
+     * hiragana cuối. Cách đọc chỉ dùng khi phần gốc đủ dài (「み」 của 見る thì chữ nào cũng khớp).
      */
-    private void checkBySolvingAgain(String type, List<Draft> drafts) {
-        if (drafts.isEmpty()) {
-            return;
+    static boolean mentions(String text, Kanji word) {
+        if (text.contains(stem(word.getCharacter()))) {
+            return true;
         }
-        Map<Integer, JsonNode> verdicts = new HashMap<>();
-        geminiClient.generateJson(solvePrompt(type, drafts)).ifPresent(answer ->
-                items(answer).forEach(item -> verdicts.put(item.path("index").asInt(-1), item)));
-        for (int index = 0; index < drafts.size(); index++) {
-            ExamQuestion question = drafts.get(index).question();
-            JsonNode verdict = verdicts.get(index + 1);
-            if (verdict == null) {
-                note(question, "Chưa nhờ AI giải lại được - người duyệt tự kiểm tra kỹ.");
-                continue;
-            }
-            String reason = verdict.path("note").asText("").strip();
-            int chosen = verdict.path("answer").asInt(0);
-            String correct = question.getCorrectOption();
-            if (chosen < 1 || chosen > 4 || LETTERS.charAt(chosen - 1) != correct.charAt(0)) {
-                flag(question, ExamQuestionFlag.WRONG_ANSWER, "AI giải lại chọn "
-                        + (chosen >= 1 && chosen <= 4 ? LETTERS.charAt(chosen - 1) : "?") + " thay vì " + correct
-                        + (reason.isEmpty() ? "." : ": " + reason));
-                continue;
-            }
-            List<String> others = texts(verdict.path("alsoCorrect")).stream()
-                    .filter(value -> value.matches("[1-4]"))
-                    .map(value -> String.valueOf(LETTERS.charAt(Integer.parseInt(value) - 1)))
-                    .filter(letter -> !letter.equals(correct))
-                    .toList();
-            if (!others.isEmpty()) {
-                flag(question, ExamQuestionFlag.AMBIGUOUS, "AI giải lại thấy " + String.join(", ", others)
-                        + " cũng có thể đúng" + (reason.isEmpty() ? "." : ": " + reason));
-            }
-        }
+        String reading = word.getReading() == null ? "" : stem(word.getReading());
+        return reading.length() >= 2 && text.contains(reading);
     }
 
-    private static String solvePrompt(String type, List<Draft> drafts) {
-        StringBuilder questions = new StringBuilder();
-        for (int index = 0; index < drafts.size(); index++) {
-            ExamQuestion question = drafts.get(index).question();
-            List<String> options = options(question);
-            questions.append("Câu ").append(index + 1).append(": ").append(question.getSentence()).append('\n');
-            for (int option = 0; option < 4; option++) {
-                questions.append("  ").append(option + 1).append(") ").append(options.get(option)).append('\n');
-            }
+    static String stem(String word) {
+        String plain = word.replaceAll("[()（）]", "").strip();
+        if (plain.length() > 2 && plain.endsWith("する")) {
+            return plain.substring(0, plain.length() - 2);
         }
-        String task = JlptQuestionType.GRAMMAR_FORM.equals(type)
-                ? "Mỗi câu chọn lựa chọn điền vào chỗ trống （　　）."
-                : "Mỗi câu sắp xếp 4 vế vào 4 ô ＿＿＿ cho thành câu đúng, rồi cho biết vế nào nằm ở ô ★.";
-        return """
-                Bạn là thí sinh rất giỏi tiếng Nhật đang làm đề JLPT. %s Xét kỹ từng lựa chọn: có lựa chọn nào khác \
-                cũng chấp nhận được không (về ngữ pháp và nghĩa)?
-                %s
-                Trả về một mảng JSON, không thêm gì khác: [{"index": số thứ tự câu, "answer": số thứ tự lựa chọn đúng \
-                nhất (1-4), "alsoCorrect": [số thứ tự các lựa chọn khác cũng chấp nhận được, có thể rỗng], "note": \
-                "lý do ngắn bằng tiếng Việt"}]
-                """.formatted(task, questions);
+        boolean endsInHiragana = plain.length() > 1
+                && Character.UnicodeBlock.of(plain.charAt(plain.length() - 1)) == Character.UnicodeBlock.HIRAGANA;
+        return endsInHiragana ? plain.substring(0, plain.length() - 1) : plain;
     }
 
-    private static void flag(ExamQuestion question, String flag, String detail) {
-        // Một câu chỉ giữ một cờ: sai đáp án nặng nhất, rồi tới hai đáp án, rồi tới từ vượt cấp.
-        List<String> severity = List.of(ExamQuestionFlag.WRONG_ANSWER, ExamQuestionFlag.AMBIGUOUS,
-                ExamQuestionFlag.ABOVE_LEVEL);
-        if (question.getFlag() == null || severity.indexOf(flag) < severity.indexOf(question.getFlag())) {
-            question.setFlag(flag);
-        }
-        note(question, detail);
+    private static String readingInBrackets(Kanji word) {
+        boolean showsReading = StringUtils.hasText(word.getReading()) && !word.getReading().equals(word.getCharacter());
+        return showsReading ? " (" + word.getReading() + ")" : "";
     }
 
-    private static void note(ExamQuestion question, String detail) {
-        question.setReviewNote(question.getReviewNote() == null ? detail : question.getReviewNote() + " " + detail);
-    }
-
-    private static List<String> options(ExamQuestion question) {
-        return List.of(question.getOptionA(), question.getOptionB(), question.getOptionC(), question.getOptionD());
-    }
-
-    private static List<String> texts(JsonNode array) {
-        List<String> values = new ArrayList<>();
-        if (array.isArray()) {
-            array.forEach(value -> values.add(value.asText("").strip()));
-        }
-        return values;
+    private static void reject(ExamQuestion question, String problem) {
+        question.setStatus(ExamQuestionStatus.REJECTED);
+        DraftReviewer.note(question, "Loại tự động - " + problem + ".");
     }
 }

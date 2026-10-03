@@ -27,6 +27,7 @@ import { SentenceWithTarget } from '@/components/SentenceWithTarget'
 import { QuestionEditDialog } from '@/components/QuestionEditDialog'
 import { ReviewNoteDialog } from '@/components/ReviewNoteDialog'
 import { PassageReviewList } from '@/components/PassageReviewList'
+import { VocabularyDraftPanel } from '@/components/VocabularyDraftPanel'
 
 const STATUS_TABS: { value: ExamQuestionStatus | ''; label: string }[] = [
   { value: 'DRAFT', label: 'Chờ duyệt' },
@@ -37,6 +38,8 @@ const STATUS_TABS: { value: ExamQuestionStatus | ''; label: string }[] = [
 ]
 
 const OPTIONS = ['A', 'B', 'C', 'D'] as const
+/** Dạng câu từ vựng nhờ AI viết nháp được theo từ trong bài. */
+const VOCABULARY_DRAFT_TYPES: JlptQuestionType[] = ['PARAPHRASE', 'USAGE']
 const PAGE_SIZE = 20
 
 /** Một thao tác cần ghi lý do: loại câu (bắt buộc) hoặc rút khỏi đề. */
@@ -101,6 +104,11 @@ export function AdminQuestionsPage() {
   })
 
   const levelStats = statsQuery.data?.find((stats) => stats.jlptLevel === level)
+  // Chỉ nhờ AI viết dạng câu có trong đề của cấp độ (đề N5 không có 用法).
+  const canDraftVocabulary =
+    type !== undefined &&
+    VOCABULARY_DRAFT_TYPES.includes(type) &&
+    (levelStats?.types.some((row) => row.type === type) ?? false)
   const data = questionsQuery.data
   const grammarLabel = data?.content.flatMap((q) => q.grammarPoints).find((g) => g.id === grammarPointId)?.pattern
 
@@ -221,6 +229,9 @@ export function AdminQuestionsPage() {
       </div>
 
       {statusMutation.isError && <Alert className="mb-4">{extractErrorMessage(statusMutation.error)}</Alert>}
+      {canDraftVocabulary && type && (
+        <VocabularyDraftPanel key={`${level}-${type}`} level={level} type={type} onDrafted={refresh} />
+      )}
 
       {type === 'TEXT_GRAMMAR' ? (
         <PassageReviewList level={level} status={status || undefined} />

@@ -6,6 +6,7 @@ import { examAdminApi } from '@/api/examAdmin'
 import { extractErrorMessage } from '@/api/client'
 import type { GrammarPoint, JlptQuestionType } from '@/api/types'
 import { QUESTION_TYPE_META } from '@/lib/jlpt'
+import { draftSummary } from '@/lib/questionReview'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
@@ -56,10 +57,7 @@ export function QuestionDraftDialog({
         {draftMutation.isError && <Alert>{extractErrorMessage(draftMutation.error)}</Alert>}
         {result && point && (
           <div className="rounded-2xl bg-secondary-soft px-4 py-3 text-sm font-bold text-secondary-dark">
-            {result.drafted} câu vào hàng chờ duyệt
-            {result.flagged > 0 && ` (${result.flagged} câu có cảnh báo)`}
-            {result.rejected > 0 && ` · ${result.rejected} câu sai cấu trúc bị loại`}
-            {result.unreadable > 0 && ` · ${result.unreadable} mục không đọc được`}
+            {draftSummary(result)}
             {result.drafted > 0 && (
               <Link
                 to={`/admin/questions?level=${point.jlptLevel}&grammarPointId=${point.id}&status=DRAFT`}

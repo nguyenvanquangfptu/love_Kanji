@@ -104,6 +104,14 @@ public interface ExamQuestionRepository
             """, nativeQuery = true)
     List<BankCount> countByLevelTypeAndStatus();
 
+    /** Các từ đã có câu (chưa bị loại) của một dạng câu ở một cấp độ - để AI viết câu cho từ khác. */
+    @Query(value = """
+            SELECT DISTINCT link.kanji_id FROM exam_questions question
+            JOIN exam_question_kanji link ON link.question_id = question.id
+            WHERE question.jlpt_level = :level AND question.question_type = :type AND question.status <> 'REJECTED'
+            """, nativeQuery = true)
+    List<Long> findWordIdsWithQuestion(@Param("level") String level, @Param("type") String type);
+
     /** Câu trong đề của các câu hỏi gắn với một điểm ngữ pháp - để AI viết câu mới không trùng ý. */
     @Query("""
             SELECT q.sentence FROM ExamQuestion q JOIN q.grammarPointIds point

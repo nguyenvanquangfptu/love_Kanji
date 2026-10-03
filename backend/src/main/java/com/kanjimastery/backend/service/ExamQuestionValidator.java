@@ -22,7 +22,9 @@ final class ExamQuestionValidator {
 
     static final String ORDER_SLOT = "＿＿＿";
     static final String ORDER_STAR = "＿★＿";
-    private static final int MAX_OPTION_LENGTH = 255;
+    /** Cột option_a..option_d là VARCHAR(255), highlight là VARCHAR(100). */
+    static final int MAX_OPTION_LENGTH = 255;
+    static final int MAX_HIGHLIGHT_LENGTH = 100;
     /** Chỗ trống 【n】 trong đoạn văn 文章の文法. */
     static final Pattern PASSAGE_BLANK = Pattern.compile("【(\\d+)】");
 

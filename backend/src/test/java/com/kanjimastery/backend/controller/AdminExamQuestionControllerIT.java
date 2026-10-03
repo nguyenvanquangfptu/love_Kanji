@@ -87,5 +87,14 @@ class AdminExamQuestionControllerIT extends AbstractIntegrationTest {
                         .content("{\"grammarPointId\": 1, \"type\": \"GRAMMAR_FORM\", \"count\": 5}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().string(containsString("GEMINI_API_KEY")));
+        mockMvc.perform(post("/api/v1/admin/exam-questions/vocabulary-drafts").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"level\": \"N4\", \"type\": \"USAGE\", \"count\": 5}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(containsString("GEMINI_API_KEY")));
+        mockMvc.perform(post("/api/v1/admin/exam-questions/vocabulary-drafts").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"type\": \"USAGE\", \"count\": 9}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(containsString("level:")))
+                .andExpect(content().string(containsString("count:")));
     }
 }

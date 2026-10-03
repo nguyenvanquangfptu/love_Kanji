@@ -5,6 +5,7 @@ import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
 import com.kanjimastery.backend.dto.ExamQuestionStatusRequest;
 import com.kanjimastery.backend.dto.QuestionBankStatsResponse;
 import com.kanjimastery.backend.dto.QuestionDraftRequest;
+import com.kanjimastery.backend.dto.VocabularyDraftRequest;
 import com.kanjimastery.backend.service.ExamQuestionReviewService;
 import com.kanjimastery.backend.service.QuestionDraftService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -72,5 +73,16 @@ public class AdminExamQuestionController {
     @PostMapping("/drafts")
     public ResponseEntity<QuestionDraftService.DraftResult> draft(@Valid @RequestBody QuestionDraftRequest request) {
         return ResponseEntity.ok(draftService.draft(request.getGrammarPointId(), request.getType(), request.getCount()));
+    }
+
+    @Operation(summary = "Nhờ AI viết nháp câu từ vựng",
+            description = "Dạng PARAPHRASE hoặc USAGE (phải có trong đề của cấp độ), tối đa 8 câu, mỗi câu cho một từ "
+                    + "trong bài của cấp độ chưa có câu dạng đó. Kiểm tra tự động như câu ngữ pháp; tốn 2 request "
+                    + "Gemini. Chưa cấu hình GEMINI_API_KEY, Gemini không trả lời hoặc hết từ thì trả 400.")
+    @PostMapping("/vocabulary-drafts")
+    public ResponseEntity<QuestionDraftService.DraftResult> draftVocabulary(
+            @Valid @RequestBody VocabularyDraftRequest request) {
+        return ResponseEntity.ok(draftService.draftVocabulary(request.getLevel(), request.getType(),
+                request.getCount()));
     }
 }

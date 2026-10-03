@@ -40,6 +40,12 @@ export const examAdminApi = {
       .post<QuestionDraftResult>('/admin/exam-questions/drafts', { grammarPointId, type, count }, { timeout: 120_000 })
       .then((r) => r.data),
 
+  /** Nhờ AI viết nháp câu 言い換え類義 / 用法, mỗi câu cho một từ trong bài của cấp độ chưa có câu dạng đó. */
+  draftVocabulary: (level: string, type: JlptQuestionType, count: number) =>
+    apiClient
+      .post<QuestionDraftResult>('/admin/exam-questions/vocabulary-drafts', { level, type, count }, { timeout: 120_000 })
+      .then((r) => r.data),
+
   /** Đoạn văn 文章の文法 của một cấp độ, kèm câu hỏi. */
   passages: (filter: { level: string; status?: ExamQuestionStatus; page?: number; size?: number }) =>
     apiClient.get<Page<AdminExamPassage>>('/admin/exam-passages', { params: filter }).then((r) => r.data),

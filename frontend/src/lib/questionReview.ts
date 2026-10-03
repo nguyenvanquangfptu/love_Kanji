@@ -1,4 +1,4 @@
-import type { ExamQuestionFlag, ExamQuestionStatus } from '@/api/types'
+import type { ExamQuestionFlag, ExamQuestionStatus, QuestionDraftResult } from '@/api/types'
 
 /** Nhãn trạng thái duyệt của câu thi / đoạn văn. */
 export const STATUS_BADGE: Record<
@@ -24,3 +24,15 @@ export const SOURCE_LABEL: Record<string, string> = {
   GENERATED: 'Sinh từ kho từ',
   AI: 'AI viết nháp',
 }
+
+/** Tóm tắt một lần nhờ AI viết nháp câu thi. */
+export function draftSummary(result: QuestionDraftResult): string {
+  return [
+    `${result.drafted} câu vào hàng chờ duyệt${result.flagged > 0 ? ` (${result.flagged} câu có cảnh báo)` : ''}`,
+    result.rejected > 0 && `${result.rejected} câu sai cấu trúc bị loại`,
+    result.unreadable > 0 && `${result.unreadable} mục không đọc được`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
