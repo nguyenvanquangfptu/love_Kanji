@@ -16,6 +16,7 @@ import { Modal } from '@/components/ui/modal'
 import { Textarea } from '@/components/ui/textarea'
 import { PageSpinner } from '@/components/ui/spinner'
 import { PassageText } from '@/components/PassageText'
+import { QuestionReports } from '@/components/QuestionReports'
 import { QuestionEditDialog } from '@/components/QuestionEditDialog'
 import { ReviewNoteDialog } from '@/components/ReviewNoteDialog'
 
@@ -65,6 +66,10 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
   })
   const draftMutation = useMutation({
     mutationFn: () => examAdminApi.draftPassage(level),
+    onSuccess: refresh,
+  })
+  const dismissMutation = useMutation({
+    mutationFn: (id: number) => examAdminApi.dismissReports(id),
     onSuccess: refresh,
   })
   const questionMutation = useMutation({
@@ -177,6 +182,11 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
                       {question.reviewNote && (
                         <p className="mt-1 text-sm font-semibold text-orange-dark">{question.reviewNote}</p>
                       )}
+                      <QuestionReports
+                        reports={question.reports}
+                        busy={dismissMutation.isPending}
+                        onDismiss={() => dismissMutation.mutate(question.id)}
+                      />
                     </li>
                   ))}
                 </ol>

@@ -45,6 +45,13 @@ public class AdminExamQuestionResponse {
     public record Word(Long id, String character, String reading) {
     }
 
+    /** Báo lỗi của người học đang chờ xem, cũ nhất trước. */
+    private List<Report> reports;
+
+    /** {@code reason}: {@link com.kanjimastery.backend.model.QuestionReportReason}. */
+    public record Report(String reason, String note, LocalDateTime createdAt) {
+    }
+
     public record Grammar(Long id, String pattern) {
     }
 }

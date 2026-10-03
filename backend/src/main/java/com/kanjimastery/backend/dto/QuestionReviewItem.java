@@ -32,6 +32,8 @@ public class QuestionReviewItem {
     private Integer blankNo;
     /** Các điểm ngữ pháp câu này kiểm tra; rỗng với câu từ vựng. */
     private List<Grammar> grammarPoints;
+    /** Người học đang xem đã báo lỗi câu này. */
+    private boolean reported;
 
     public record Grammar(Long id, String pattern, String meaningVi) {
     }

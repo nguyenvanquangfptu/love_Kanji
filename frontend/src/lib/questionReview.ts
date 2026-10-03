@@ -1,4 +1,10 @@
-import type { ExamQuestionFlag, ExamQuestionStatus, PassageDraftResult, QuestionDraftResult } from '@/api/types'
+import type {
+  ExamQuestionFlag,
+  ExamQuestionStatus,
+  PassageDraftResult,
+  QuestionDraftResult,
+  QuestionReportReason,
+} from '@/api/types'
 
 /** Nhãn trạng thái duyệt của câu thi / đoạn văn. */
 export const STATUS_BADGE: Record<
@@ -16,6 +22,15 @@ export const FLAG_LABEL: Record<ExamQuestionFlag, string> = {
   AMBIGUOUS: 'Nghi có 2 đáp án',
   WRONG_ANSWER: 'Máy chọn đáp án khác',
   ABOVE_LEVEL: 'Từ vượt cấp độ',
+  REPORTED: 'Người học báo lỗi',
+}
+
+/** Lý do người học báo lỗi câu hỏi. */
+export const REPORT_REASON_LABEL: Record<QuestionReportReason, string> = {
+  WRONG_ANSWER: 'Đáp án sai',
+  AMBIGUOUS: 'Có hơn một đáp án đúng',
+  UNCLEAR: 'Câu khó hiểu hoặc viết sai',
+  OTHER: 'Lý do khác',
 }
 
 /** Nguồn của câu thi / đoạn văn. */

@@ -1,6 +1,19 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, BookOpen, Check, CheckCircle2, Clock, Lightbulb, RotateCcw, Target, Trophy, XCircle } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  ArrowLeft,
+  BookOpen,
+  Check,
+  CheckCircle2,
+  Clock,
+  Flag,
+  Lightbulb,
+  RotateCcw,
+  Target,
+  Trophy,
+  XCircle,
+} from 'lucide-react'
 import { examApi } from '@/api/exam'
 import { extractErrorMessage } from '@/api/client'
 import type { ExamReviewResponse, QuizDirection } from '@/api/types'
@@ -17,6 +30,7 @@ import { StatTile } from '@/components/StatTile'
 import { Meter } from '@/components/Meter'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
 import { PassageText } from '@/components/PassageText'
+import { ReportQuestionDialog } from '@/components/ReportQuestionDialog'
 
 const SKILL_LABELS: Record<QuizDirection, string> = {
   KANJI_TO_READING: 'Đọc chữ Hán',
@@ -34,6 +48,10 @@ export function ExamResultPage() {
   const { attemptId: attemptIdParam } = useParams()
   const attemptId = Number(attemptIdParam)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  // Câu đang báo lỗi (hộp thoại); key đổi mỗi lần mở để hộp thoại bắt đầu trống.
+  const [reporting, setReporting] = useState<number | null>(null)
+  const [reportKey, setReportKey] = useState(0)
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['exam', attemptId, 'review'],
@@ -188,6 +206,25 @@ export function ExamResultPage() {
                         {q.explanation}
                       </p>
                     )}
+                    <div className="mt-2 flex justify-end">
+                      {q.reported ? (
+                        <span className="flex items-center gap-1 text-xs font-bold text-muted-foreground">
+                          <Flag className="h-3.5 w-3.5" /> Đã báo lỗi - cảm ơn bạn
+                        </span>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-muted-foreground"
+                          onClick={() => {
+                            setReportKey((key) => key + 1)
+                            setReporting(q.questionId)
+                          }}
+                        >
+                          <Flag className="h-4 w-4" /> Báo lỗi câu này
+                        </Button>
+                      )}
+                    </div>
                   </Card>
                 </div>
               )
@@ -199,6 +236,16 @@ export function ExamResultPage() {
           <Leaderboard level={data.jlptLevel} />
         </TabsContent>
       </Tabs>
+
+      <ReportQuestionDialog
+        key={reportKey}
+        questionId={reporting}
+        onClose={() => setReporting(null)}
+        onReported={() => {
+          setReporting(null)
+          queryClient.invalidateQueries({ queryKey: ['exam', attemptId, 'review'] })
+        }}
+      />
     </div>
   )
 }

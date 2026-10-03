@@ -6,7 +6,9 @@ import com.kanjimastery.backend.exception.ResourceNotFoundException;
 import com.kanjimastery.backend.model.ExamPassage;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
+import com.kanjimastery.backend.model.QuestionReportStatus;
 import com.kanjimastery.backend.repository.ExamPassageRepository;
+import com.kanjimastery.backend.repository.ExamQuestionReportRepository;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -38,6 +40,7 @@ public class ExamPassageReviewService {
     private final ExamPassageRepository passageRepository;
     private final ExamQuestionRepository questionRepository;
     private final ExamQuestionReviewService questionReviewService;
+    private final ExamQuestionReportRepository reportRepository;
 
     @Transactional(readOnly = true)
     public Page<AdminExamPassageResponse> search(String level, String status, int page, int size) {
@@ -100,6 +103,11 @@ public class ExamPassageReviewService {
         for (ExamQuestion question : questions) {
             question.setStatus(status);
             question.setReviewedAt(now);
+        }
+        if (!questions.isEmpty()) {
+            // Người duyệt đã quyết định về cả đoạn: các báo lỗi đang mở của các câu coi như đã xử lý.
+            reportRepository.closeOpen(questions.stream().map(ExamQuestion::getId).toList(),
+                    QuestionReportStatus.RESOLVED, now);
         }
         return toResponse(passage, questions);
     }

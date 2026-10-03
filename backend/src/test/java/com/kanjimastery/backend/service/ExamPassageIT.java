@@ -108,7 +108,7 @@ class ExamPassageIT extends AbstractIntegrationTest {
         assertThat(draft.getQuestions()).extracting(question -> question.getId())
                 .containsExactly(first.getId(), second.getId());
         // Câu của đoạn không hiện riêng ở danh sách câu, và không duyệt lẻ được.
-        assertThat(questionReviewService.search(new ExamQuestionReviewService.Filter(LEVEL, null, null, false, null),
+        assertThat(questionReviewService.search(new ExamQuestionReviewService.Filter(LEVEL, null, null, false, null, false),
                 0, 20).getContent()).isEmpty();
         assertThatThrownBy(() -> questionReviewService.changeStatus(first.getId(), ExamQuestionStatus.APPROVED, null))
                 .isInstanceOf(BadRequestException.class);

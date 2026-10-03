@@ -398,6 +398,8 @@ export interface QuestionReviewItem {
   blankNo: number | null
   /** Các điểm ngữ pháp câu này kiểm tra; rỗng với câu từ vựng. */
   grammarPoints: { id: number; pattern: string; meaningVi: string }[]
+  /** Người học đang xem đã báo lỗi câu này. */
+  reported: boolean
 }
 
 /** Một điểm ngữ pháp người học hay làm sai trong các đề JLPT gần đây. */
@@ -555,7 +557,10 @@ export interface GrammarImportResult {
 export type ExamQuestionStatus = 'DRAFT' | 'APPROVED' | 'REJECTED' | 'RETIRED'
 
 /** Cảnh báo của bước kiểm tra tự động cho người duyệt. */
-export type ExamQuestionFlag = 'AMBIGUOUS' | 'WRONG_ANSWER' | 'ABOVE_LEVEL'
+export type ExamQuestionFlag = 'AMBIGUOUS' | 'WRONG_ANSWER' | 'ABOVE_LEVEL' | 'REPORTED'
+
+/** Lý do người học báo lỗi một câu hỏi. */
+export type QuestionReportReason = 'WRONG_ANSWER' | 'AMBIGUOUS' | 'UNCLEAR' | 'OTHER'
 
 /** Một câu thi trên trang duyệt (có đáp án đúng). */
 export interface AdminExamQuestion {
@@ -581,6 +586,8 @@ export interface AdminExamQuestion {
   blankNo: number | null
   words: { id: number; character: string; reading: string | null }[]
   grammarPoints: { id: number; pattern: string }[]
+  /** Báo lỗi của người học đang chờ xem, cũ nhất trước. */
+  reports: { reason: QuestionReportReason; note: string | null; createdAt: string }[]
 }
 
 export interface AdminExamQuestionRequest {

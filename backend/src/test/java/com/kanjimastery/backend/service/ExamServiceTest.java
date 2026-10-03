@@ -18,6 +18,7 @@ import com.kanjimastery.backend.model.UserExamAnswer;
 import com.kanjimastery.backend.model.UserExamAttempt;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.ExamSessionStore;
+import com.kanjimastery.backend.repository.ExamQuestionReportRepository;
 import com.kanjimastery.backend.repository.GrammarPointRepository;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.repository.UserExamAnswerRepository;
@@ -67,6 +68,8 @@ class ExamServiceTest {
     private KanjiRepository kanjiRepository;
     @Mock
     private GrammarPointRepository grammarPointRepository;
+    @Mock
+    private ExamQuestionReportRepository reportRepository;
     @Spy
     private JlptBlueprintProperties blueprints = new JlptBlueprintProperties();
 

@@ -61,7 +61,7 @@ class ExamQuestionReviewIT extends AbstractIntegrationTest {
     @Test
     void aDraft_shouldStayOutOfExamsUntilApproved_andRejectingNeedsAReason() {
         ExamQuestionReviewService.Filter flaggedDrafts = new ExamQuestionReviewService.Filter("n5",
-                JlptQuestionType.GRAMMAR_FORM, ExamQuestionStatus.DRAFT, true, particle.getId());
+                JlptQuestionType.GRAMMAR_FORM, ExamQuestionStatus.DRAFT, true, particle.getId(), false);
         assertThat(reviewService.search(flaggedDrafts, 0, 20).getContent()).singleElement().satisfies(found -> {
             assertThat(found.getId()).isEqualTo(draft.getId());
             assertThat(found.getGrammarPoints()).extracting(AdminExamQuestionResponse.Grammar::pattern)

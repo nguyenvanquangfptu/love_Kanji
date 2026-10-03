@@ -42,6 +42,7 @@ import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.UserExamAnswer;
 import com.kanjimastery.backend.model.UserExamAttempt;
 import com.kanjimastery.backend.repository.ExamPassageRepository;
+import com.kanjimastery.backend.repository.ExamQuestionReportRepository;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.ExamSessionStore;
 import com.kanjimastery.backend.repository.GrammarPointRepository;
@@ -67,6 +68,7 @@ public class ExamService {
     private final JlptBlueprintProperties blueprints;
     private final ExamPassageRepository passageRepository;
     private final GrammarPointRepository grammarPointRepository;
+    private final ExamQuestionReportRepository reportRepository;
 
     @Transactional
     public StartExamResponse start(Long userId, StartExamRequest request) {
@@ -188,6 +190,9 @@ public class ExamService {
         Map<Long, ExamQuestion> questionsById = questionRepository.findAllWithLinksByIdIn(questionIds).stream()
                 .collect(Collectors.toMap(ExamQuestion::getId, Function.identity()));
         Map<Long, GrammarPoint> grammarById = grammarPoints(questionsById.values());
+        Set<Long> reported = questionIds.isEmpty()
+                ? Set.of()
+                : new HashSet<>(reportRepository.findQuestionIdsReportedBy(userId, questionIds));
 
         List<QuestionReviewItem> items = answers.stream()
                 .map(answer -> {
@@ -214,6 +219,7 @@ public class ExamService {
                                     .map(point -> new QuestionReviewItem.Grammar(point.getId(), point.getPattern(),
                                             point.getMeaningVi()))
                                     .toList())
+                            .reported(reported.contains(answer.getQuestionId()))
                             .build();
                 })
                 .toList();

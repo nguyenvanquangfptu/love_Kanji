@@ -1,6 +1,6 @@
 package com.kanjimastery.backend.model;
 
-/** Các giá trị của cột {@code exam_questions.flag}: cảnh báo cho người duyệt, từ bước kiểm tra tự động. */
+/** Các giá trị của cột {@code exam_questions.flag}: cảnh báo cho người duyệt (kiểm tra tự động, người học báo lỗi). */
 public final class ExamQuestionFlag {
     /** Máy giải lại thấy có hơn một đáp án hợp. */
     public static final String AMBIGUOUS = "AMBIGUOUS";
@@ -8,6 +8,8 @@ public final class ExamQuestionFlag {
     public static final String WRONG_ANSWER = "WRONG_ANSWER";
     /** Câu dùng nhiều từ vượt cấp độ. */
     public static final String ABOVE_LEVEL = "ABOVE_LEVEL";
+    /** Nhiều người học báo lỗi - câu đã tự rút khỏi đề. */
+    public static final String REPORTED = "REPORTED";
 
     private ExamQuestionFlag() {
     }

@@ -38,10 +38,11 @@ public class AdminExamQuestionController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "false") boolean flagged,
             @RequestParam(required = false) Long grammarPointId,
+            @RequestParam(defaultValue = "false") boolean reported,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ExamQuestionReviewService.Filter filter =
-                new ExamQuestionReviewService.Filter(level, type, status, flagged, grammarPointId);
+                new ExamQuestionReviewService.Filter(level, type, status, flagged, grammarPointId, reported);
         return ResponseEntity.ok(reviewService.search(filter, page, Math.min(Math.max(size, 1), 100)));
     }
 
@@ -68,6 +69,14 @@ public class AdminExamQuestionController {
     public ResponseEntity<ExamQuestionReviewService.BulkApproval> approveAll(
             @Valid @RequestBody BulkApproveRequest request) {
         return ResponseEntity.ok(reviewService.approveAll(request.getIds()));
+    }
+
+    @Operation(summary = "Bỏ qua báo lỗi của một câu",
+            description = "Người duyệt thấy câu không sai: đóng các báo lỗi đang mở, bỏ cờ báo lỗi. Không đổi trạng thái "
+                    + "câu - câu đã tự rút khỏi đề thì duyệt lại để đưa vào đề.")
+    @PostMapping("/{id}/reports/dismiss")
+    public ResponseEntity<AdminExamQuestionResponse> dismissReports(@PathVariable Long id) {
+        return ResponseEntity.ok(reviewService.dismissReports(id));
     }
 
     @Operation(summary = "Ngân hàng câu theo cấp độ và dạng câu", description = "Số câu theo trạng thái, đủ cho bao nhiêu đề.")

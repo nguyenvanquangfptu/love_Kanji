@@ -10,6 +10,7 @@ import type {
   SaveAnswerRequest,
   StartExamRequest,
   StartExamResponse,
+  QuestionReportReason,
   StartJlptExamRequest,
   WeakGrammarPoint,
 } from './types'
@@ -53,6 +54,10 @@ export const examApi = {
   /** Dòng của người học trên bảng xếp hạng đề JLPT; rank null khi chưa có buổi thi trọn vẹn. */
   myJlptRank: (level: string) =>
     apiClient.get<JlptLeaderboardEntry>('/exams/jlpt/leaderboard/me', { params: { level } }).then((r) => r.data),
+
+  /** Báo lỗi một câu đã làm; câu bị nhiều người báo tự rút khỏi đề chờ duyệt lại. */
+  reportQuestion: (questionId: number, payload: { reason: QuestionReportReason; note?: string }) =>
+    apiClient.post<void>(`/exams/questions/${questionId}/reports`, payload).then((r) => r.data),
 
   /** Các điểm ngữ pháp người học hay làm sai trong các đề JLPT gần đây của một cấp độ. */
   weakGrammar: (level: string) =>

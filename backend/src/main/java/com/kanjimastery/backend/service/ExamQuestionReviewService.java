@@ -7,13 +7,19 @@ import com.kanjimastery.backend.dto.QuestionBankStatsResponse;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.ResourceNotFoundException;
 import com.kanjimastery.backend.model.ExamQuestion;
+import com.kanjimastery.backend.model.ExamQuestionFlag;
+import com.kanjimastery.backend.model.ExamQuestionReport;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.GrammarPoint;
 import com.kanjimastery.backend.model.Kanji;
+import com.kanjimastery.backend.model.QuestionReportStatus;
+import com.kanjimastery.backend.repository.ExamQuestionReportRepository;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.GrammarPointRepository;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -51,9 +57,15 @@ public class ExamQuestionReviewService {
     private final KanjiRepository kanjiRepository;
     private final GrammarPointRepository grammarPointRepository;
     private final JlptBlueprintProperties blueprints;
+    private final ExamQuestionReportRepository reportRepository;
 
-    /** Bộ lọc của trang duyệt; trường null = không lọc. Chỉ có câu thuộc một dạng đề JLPT. */
-    public record Filter(String level, String type, String status, boolean flaggedOnly, Long grammarPointId) {
+    /**
+     * Bộ lọc của trang duyệt; trường null = không lọc. Chỉ có câu thuộc một dạng đề JLPT.
+     *
+     * @param reportedOnly chỉ câu có báo lỗi của người học đang chờ xem
+     */
+    public record Filter(String level, String type, String status, boolean flaggedOnly, Long grammarPointId,
+                         boolean reportedOnly) {
     }
 
     /**
@@ -99,6 +111,13 @@ public class ExamQuestionReviewService {
             }
             if (filter.grammarPointId() != null) {
                 predicates.add(builder.isMember(filter.grammarPointId(), root.<Set<Long>>get("grammarPointIds")));
+            }
+            if (filter.reportedOnly()) {
+                Subquery<Long> openReports = query.subquery(Long.class);
+                Root<ExamQuestionReport> report = openReports.from(ExamQuestionReport.class);
+                openReports.select(report.get("id")).where(builder.equal(report.get("questionId"), root.get("id")),
+                        builder.equal(report.get("status"), QuestionReportStatus.OPEN));
+                predicates.add(builder.exists(openReports));
             }
             return builder.and(predicates.toArray(new Predicate[0]));
         };
@@ -162,7 +181,24 @@ public class ExamQuestionReviewService {
         if (StringUtils.hasText(note)) {
             question.setReviewNote(note.strip());
         }
-        question.setReviewedAt(LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        question.setReviewedAt(now);
+        // Người duyệt đã quyết định về câu: các báo lỗi đang mở coi như đã xử lý.
+        reportRepository.closeOpen(List.of(id), QuestionReportStatus.RESOLVED, now);
+        return toResponse(question);
+    }
+
+    /**
+     * Bỏ qua các báo lỗi đang mở của một câu (người duyệt xem và thấy câu không sai); bỏ cờ báo lỗi nếu có. Không đổi
+     * trạng thái: câu đã bị rút tự động thì người duyệt duyệt lại để đưa vào đề.
+     */
+    @Transactional
+    public AdminExamQuestionResponse dismissReports(Long id) {
+        ExamQuestion question = questionWithLinks(id);
+        reportRepository.closeOpen(List.of(id), QuestionReportStatus.DISMISSED, LocalDateTime.now());
+        if (ExamQuestionFlag.REPORTED.equals(question.getFlag())) {
+            question.setFlag(null);
+        }
         return toResponse(question);
     }
 
@@ -259,11 +295,22 @@ public class ExamQuestionReviewService {
         Map<Long, GrammarPoint> points = grammarPointRepository.findAllById(questions.stream()
                         .flatMap(question -> question.getGrammarPointIds().stream()).collect(Collectors.toSet())).stream()
                 .collect(Collectors.toMap(GrammarPoint::getId, Function.identity()));
-        return questions.stream().map(question -> toResponse(question, words, points)).toList();
+        Map<Long, List<AdminExamQuestionResponse.Report>> reports = questions.isEmpty()
+                ? Map.of()
+                : reportRepository.findByQuestionIdInAndStatusOrderByCreatedAtAsc(
+                                questions.stream().map(ExamQuestion::getId).toList(), QuestionReportStatus.OPEN).stream()
+                        .collect(Collectors.groupingBy(ExamQuestionReport::getQuestionId,
+                                Collectors.mapping(report -> new AdminExamQuestionResponse.Report(report.getReason(),
+                                        report.getNote(), report.getCreatedAt()), Collectors.toList())));
+        return questions.stream()
+                .map(question -> toResponse(question, words, points,
+                        reports.getOrDefault(question.getId(), List.of())))
+                .toList();
     }
 
     private static AdminExamQuestionResponse toResponse(ExamQuestion question, Map<Long, Kanji> words,
-                                                        Map<Long, GrammarPoint> points) {
+                                                        Map<Long, GrammarPoint> points,
+                                                        List<AdminExamQuestionResponse.Report> reports) {
         return AdminExamQuestionResponse.builder()
                 .id(question.getId())
                 .jlptLevel(question.getJlptLevel())
@@ -292,6 +339,7 @@ public class ExamQuestionReviewService {
                 .grammarPoints(question.getGrammarPointIds().stream().map(points::get).filter(point -> point != null)
                         .map(point -> new AdminExamQuestionResponse.Grammar(point.getId(), point.getPattern()))
                         .toList())
+                .reports(reports)
                 .build();
     }
 }

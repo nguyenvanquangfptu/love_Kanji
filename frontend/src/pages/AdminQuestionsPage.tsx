@@ -28,6 +28,7 @@ import { SentenceWithTarget } from '@/components/SentenceWithTarget'
 import { QuestionEditDialog } from '@/components/QuestionEditDialog'
 import { ReviewNoteDialog } from '@/components/ReviewNoteDialog'
 import { PassageReviewList } from '@/components/PassageReviewList'
+import { QuestionReports } from '@/components/QuestionReports'
 import { VocabularyDraftPanel } from '@/components/VocabularyDraftPanel'
 
 const STATUS_TABS: { value: ExamQuestionStatus | ''; label: string }[] = [
@@ -57,6 +58,7 @@ export function AdminQuestionsPage() {
   const type = (params.get('type') as JlptQuestionType | null) ?? undefined
   const status = params.has('status') ? (params.get('status') as ExamQuestionStatus | '') : 'DRAFT'
   const flagged = params.get('flagged') === 'true'
+  const reported = params.get('reported') === 'true'
   const grammarPointId = params.get('grammarPointId') ? Number(params.get('grammarPointId')) : undefined
   const page = Number(params.get('page') ?? 0)
 
@@ -77,7 +79,7 @@ export function AdminQuestionsPage() {
     setParams(next, { replace: true })
   }
 
-  const filter = { level, type, status: status || undefined, flagged, grammarPointId, page, size: PAGE_SIZE }
+  const filter = { level, type, status: status || undefined, flagged, reported, grammarPointId, page, size: PAGE_SIZE }
   const questionsQuery = useQuery({
     queryKey: ['admin', 'exam-questions', filter],
     queryFn: () => examAdminApi.search(filter),
@@ -95,6 +97,10 @@ export function AdminQuestionsPage() {
       setPendingNote(null)
       refresh()
     },
+  })
+  const dismissMutation = useMutation({
+    mutationFn: (id: number) => examAdminApi.dismissReports(id),
+    onSuccess: refresh,
   })
   const bulkMutation = useMutation({
     mutationFn: (ids: number[]) => examAdminApi.approveAll(ids),
@@ -231,6 +237,15 @@ export function AdminQuestionsPage() {
           />
           Chỉ câu có cảnh báo
         </label>
+        <label className="flex items-center gap-2 text-sm font-bold">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-secondary"
+            checked={reported}
+            onChange={(e) => update({ reported: e.target.checked ? 'true' : undefined })}
+          />
+          Chỉ câu bị báo lỗi
+        </label>
         {grammarPointId && (
           <Badge variant="purple" className="gap-1.5 py-1 text-sm">
             Điểm ngữ pháp: <span className="font-jp">{grammarLabel ?? `#${grammarPointId}`}</span>
@@ -290,6 +305,8 @@ export function AdminQuestionsPage() {
                   setEditKey((key) => key + 1)
                   setEditing(question)
                 }}
+                onDismissReports={() => dismissMutation.mutate(question.id)}
+                dismissing={dismissMutation.isPending}
               />
             ))}
           </div>
@@ -362,6 +379,8 @@ function QuestionReviewCard({
   onBackToDraft,
   onNote,
   onEdit,
+  onDismissReports,
+  dismissing,
 }: {
   question: AdminExamQuestion
   busy: boolean
@@ -369,6 +388,8 @@ function QuestionReviewCard({
   onBackToDraft: () => void
   onNote: (status: 'REJECTED' | 'RETIRED') => void
   onEdit: () => void
+  onDismissReports: () => void
+  dismissing: boolean
 }) {
   const meta = QUESTION_TYPE_META[question.questionType]
   const badge = STATUS_BADGE[question.status]
@@ -410,6 +431,7 @@ function QuestionReviewCard({
       </div>
 
       {question.explanation && <p className="mt-3 text-sm font-semibold text-secondary-dark">{question.explanation}</p>}
+      <QuestionReports reports={question.reports} busy={dismissing} onDismiss={onDismissReports} />
       {question.reviewNote && (
         <p
           className={cn(

@@ -18,6 +18,8 @@ export interface ExamQuestionFilter {
   status?: ExamQuestionStatus
   flagged?: boolean
   grammarPointId?: number
+  /** Chỉ câu có báo lỗi của người học đang chờ xem. */
+  reported?: boolean
   page?: number
   size?: number
 }
@@ -37,6 +39,10 @@ export const examAdminApi = {
   /** Duyệt một lượt các câu đã đọc trên trang; chỉ câu chờ duyệt, không cảnh báo, đúng cấu trúc mới được duyệt. */
   approveAll: (ids: number[]) =>
     apiClient.post<BulkApprovalResult>('/admin/exam-questions/approve', { ids }).then((r) => r.data),
+
+  /** Bỏ qua các báo lỗi đang mở của một câu (câu không sai); không đổi trạng thái câu. */
+  dismissReports: (id: number) =>
+    apiClient.post<AdminExamQuestion>(`/admin/exam-questions/${id}/reports/dismiss`).then((r) => r.data),
 
   stats: () => apiClient.get<QuestionBankStats[]>('/admin/exam-questions/stats').then((r) => r.data),
 
