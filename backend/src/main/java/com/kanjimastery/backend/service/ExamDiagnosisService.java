@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +34,7 @@ public class ExamDiagnosisService {
     private final UserExamAnswerRepository answerRepository;
     private final ExamQuestionRepository questionRepository;
     private final SrsService srsService;
+    private final Clock clock;
 
     /**
      * Chạy sau khi bài thi đã chốt điểm và commit (listener AFTER_COMMIT), nên cần transaction riêng. Mỗi bài thi chỉ
@@ -43,7 +45,7 @@ public class ExamDiagnosisService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int diagnose(Long attemptId) {
-        if (attemptRepository.markDiagnosed(attemptId, LocalDateTime.now()) == 0) {
+        if (attemptRepository.markDiagnosed(attemptId, LocalDateTime.now(clock)) == 0) {
             return 0;
         }
         UserExamAttempt attempt = attemptRepository.findById(attemptId).orElseThrow();

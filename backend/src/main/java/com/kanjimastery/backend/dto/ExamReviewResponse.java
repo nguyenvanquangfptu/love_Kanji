@@ -1,5 +1,10 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.JlptLevel;
+import com.kanjimastery.backend.model.JlptQuestionType;
+import com.kanjimastery.backend.model.ExamSection;
+import com.kanjimastery.backend.model.ExamAttemptStatus;
+import com.kanjimastery.backend.model.QuizDirection;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -11,8 +16,8 @@ import java.util.List;
 @AllArgsConstructor
 public class ExamReviewResponse {
     private Long attemptId;
-    private String jlptLevel;
-    private String status;
+    private JlptLevel jlptLevel;
+    private ExamAttemptStatus status;
     private Integer totalScore;
     private Integer totalQuestions;
     private Integer timeSpentSeconds;
@@ -23,6 +28,13 @@ public class ExamReviewResponse {
     private List<Word> wrongWords;
     /** Kết quả bài thi đã được đưa vào ôn tập: từ của câu sai đã nằm trong lịch ôn. */
     private boolean addedToReview;
+    /** Buổi làm đề JLPT và phần của lượt thi này; null với thi nhanh. */
+    private Long sittingId;
+    private ExamSection section;
+    /** Điểm theo từng 問題 của phần đề JLPT, theo thứ tự trong đề; rỗng với thi nhanh. */
+    private List<MondaiScore> mondai;
+    /** Đoạn văn của các câu 文章の文法 trong bài; rỗng nếu không có. */
+    private List<ExamPassageResponse> passages;
 
     @Getter
     @Builder
@@ -37,9 +49,21 @@ public class ExamReviewResponse {
     @Getter
     @Builder
     @AllArgsConstructor
+    public static class MondaiScore {
+        /** Số thứ tự trong đề thật (問題1, 問題2...). */
+        private int number;
+        /** {@link com.kanjimastery.backend.model.JlptQuestionType} */
+        private JlptQuestionType type;
+        private int correct;
+        private int total;
+    }
+
+    @Getter
+    @Builder
+    @AllArgsConstructor
     public static class SkillScore {
         /** Như hướng hỏi trắc nghiệm: KANJI_TO_READING (đọc), READING_TO_KANJI (viết), MEANING (nghĩa). */
-        private String skill;
+        private QuizDirection skill;
         private int correct;
         private int total;
     }

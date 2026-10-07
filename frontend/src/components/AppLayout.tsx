@@ -22,7 +22,7 @@ const NAV_ITEMS: NavItem[] = [
 /** Số cột của thanh tab dưới đáy theo số mục (thêm mục Quản trị cho admin). */
 const TAB_COLUMNS: Record<number, string> = { 4: 'grid-cols-4', 5: 'grid-cols-5' }
 
-const ADMIN_ITEM: NavItem = { to: '/admin/kanji', label: 'Quản trị', icon: ShieldCheck, iconColor: 'text-purple' }
+const ADMIN_ITEM: NavItem = { to: '/admin', label: 'Quản trị', icon: ShieldCheck, iconColor: 'text-purple' }
 
 function useLogout() {
   const navigate = useNavigate()

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.User;
 import com.kanjimastery.backend.repository.UserRepository;
@@ -74,12 +75,12 @@ class ExamFinalizationConcurrencyIT extends AbstractIntegrationTest {
 
         UserExamAttempt attempt = attemptRepository.save(UserExamAttempt.builder()
                 .userId(testUserId)
-                .jlptLevel("N5")
+                .jlptLevel(JlptLevel.N5)
                 .startedAt(LocalDateTime.now())
                 .build());
         attemptId = attempt.getId();
 
-        examSessionStore.initSession(attemptId, questionIds);
+        examSessionStore.initSession(attemptId, questionIds, 1800);
     }
 
     @AfterEach

@@ -1,8 +1,8 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -15,8 +15,7 @@ public class QuizAnswerRequest {
     private Long kanjiId;
 
     @NotNull(message = "direction không được để trống")
-    @Pattern(regexp = "KANJI_TO_READING|READING_TO_KANJI|MEANING", message = "direction không hợp lệ")
-    private String direction;
+    private QuizDirection direction;
 
     @NotBlank(message = "chosenAnswer không được để trống")
     @Size(max = 1000, message = "chosenAnswer quá dài")

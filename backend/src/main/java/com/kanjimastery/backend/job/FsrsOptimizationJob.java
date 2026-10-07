@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -20,13 +21,20 @@ import java.util.List;
 public class FsrsOptimizationJob {
 
     private static final int ACTIVE_DAYS = 7;
+    /**
+     * Ngưỡng xem xét chia review_logs theo tháng (partition). Dưới ngưỡng, hai index (user_id, reviewed_at) và (user_id,
+     * kanji_id, reviewed_at) đủ nhanh; chia sớm chỉ thêm phức tạp.
+     */
+    static final long PARTITION_ROWS = 50_000_000L;
+    static final long PARTITION_BYTES = 10L * 1024 * 1024 * 1024;
 
     private final ReviewLogRepository reviewLogRepository;
     private final FsrsParametersService fsrsParametersService;
+    private final Clock clock;
 
     @Scheduled(cron = "${app.srs.fsrs-optimize-cron}", zone = "${app.srs.day-zone}")
     public void optimizeActiveLearners() {
-        List<Long> userIds = reviewLogRepository.userIdsActiveSince(LocalDateTime.now().minusDays(ACTIVE_DAYS));
+        List<Long> userIds = reviewLogRepository.userIdsActiveSince(LocalDateTime.now(clock).minusDays(ACTIVE_DAYS));
         int personalized = 0;
         for (Long userId : userIds) {
             try {
@@ -39,5 +47,22 @@ public class FsrsOptimizationJob {
         }
         log.info("Tối ưu tham số FSRS: {} người ôn trong tuần qua, {} người có tham số riêng.", userIds.size(),
                 personalized);
+        reportReviewLogSize();
+    }
+
+    /** review_logs lớn nhanh nhất (mỗi câu trả lời một dòng): ghi kích thước mỗi tuần, cảnh báo khi tới ngưỡng. */
+    private void reportReviewLogSize() {
+        ReviewLogRepository.TableSize size = reviewLogRepository.tableSize();
+        long megabytes = size.getBytes() / (1024 * 1024);
+        if (needsPartitioning(size.getRows(), size.getBytes())) {
+            log.warn("review_logs: khoảng {} dòng, {} MB - đã tới ngưỡng, cân nhắc chia partition theo tháng.",
+                    size.getRows(), megabytes);
+        } else {
+            log.info("review_logs: khoảng {} dòng, {} MB.", size.getRows(), megabytes);
+        }
+    }
+
+    static boolean needsPartitioning(long rows, long bytes) {
+        return rows >= PARTITION_ROWS || bytes >= PARTITION_BYTES;
     }
 }

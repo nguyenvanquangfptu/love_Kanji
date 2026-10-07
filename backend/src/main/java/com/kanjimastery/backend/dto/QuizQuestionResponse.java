@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -15,8 +16,7 @@ import java.util.List;
 @AllArgsConstructor
 public class QuizQuestionResponse {
     private Long kanjiId;
-    /** KANJI_TO_READING | READING_TO_KANJI | MEANING */
-    private String direction;
+    private QuizDirection direction;
     /** Từ cần hỏi: dạng Kanji (KANJI_TO_READING, MEANING) hoặc hiragana (READING_TO_KANJI). */
     private String prompt;
     /** Câu ví dụ kiểu đề JLPT có chứa nguyên văn {@link #prompt} (để gạch chân); null nếu chưa có câu. */

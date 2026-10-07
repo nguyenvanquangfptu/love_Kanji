@@ -14,6 +14,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
@@ -44,13 +45,13 @@ class FsrsParametersServiceTest {
     void setUp() {
         SrsProperties properties = new SrsProperties();
         service = new FsrsParametersService(parametersRepository, reviewLogRepository, properties,
-                new StudyCalendar(properties));
+                new StudyCalendar(properties, Clock.systemDefaultZone()));
     }
 
     @Test
     void optimize_shouldSaveThePersonalParameters_onceARatingHasEnoughFirstReviews() {
         // 60 từ chấm "Nhớ" lần đầu, hôm sau chỉ còn nhớ 36 từ (60%).
-        givenFirstReviews(ReviewRating.GOOD, 1, 60, 36);
+        givenFirstReviews(ReviewRating.GOOD.value(), 1, 60, 36);
         when(parametersRepository.findById(USER_ID)).thenReturn(Optional.empty());
         when(parametersRepository.save(any(FsrsParameters.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -65,19 +66,19 @@ class FsrsParametersServiceTest {
         // Chỉ độ ổn định ban đầu (w0-w3) thay đổi, phần còn lại giữ tham số chung.
         assertThat(saved.getParameters().subList(4, 21))
                 .containsExactlyElementsOf(Arrays.stream(Fsrs.DEFAULT_PARAMETERS, 4, 21).boxed().toList());
-        assertThat(saved.getParameters().get(ReviewRating.GOOD - 1))
-                .isLessThan(Fsrs.DEFAULT_PARAMETERS[ReviewRating.GOOD - 1]);
+        assertThat(saved.getParameters().get(ReviewRating.GOOD.value() - 1))
+                .isLessThan(Fsrs.DEFAULT_PARAMETERS[ReviewRating.GOOD.value() - 1]);
 
         assertThat(status.isPersonalized()).isTrue();
         assertThat(status.getFirstReviews()).containsExactly(0, 0, 60, 0);
         assertThat(status.getInitialStabilities()).isEqualTo(saved.getParameters().subList(0, 4));
-        assertThat(status.getDefaultInitialStabilities().get(ReviewRating.GOOD - 1))
-                .isEqualTo(Fsrs.DEFAULT_PARAMETERS[ReviewRating.GOOD - 1]);
+        assertThat(status.getDefaultInitialStabilities().get(ReviewRating.GOOD.value() - 1))
+                .isEqualTo(Fsrs.DEFAULT_PARAMETERS[ReviewRating.GOOD.value() - 1]);
     }
 
     @Test
     void optimize_shouldKeepTheSharedParameters_whileThereIsTooLittleData() {
-        givenFirstReviews(ReviewRating.GOOD, 2, 12, 11);
+        givenFirstReviews(ReviewRating.GOOD.value(), 2, 12, 11);
         when(parametersRepository.findById(USER_ID)).thenReturn(Optional.empty());
 
         FsrsParametersResponse status = service.optimize(USER_ID);
@@ -94,7 +95,7 @@ class FsrsParametersServiceTest {
         List<Double> personal = Arrays.stream(Fsrs.withInitialStabilities(new double[]{0.5, 1.5, 5, 12}).parameters())
                 .boxed().toList();
         when(parametersRepository.findById(USER_ID)).thenReturn(Optional.of(saved("FSRS-6", personal)));
-        assertThat(service.fsrsFor(USER_ID).first(ReviewRating.GOOD).stability()).isEqualTo(5);
+        assertThat(service.fsrsFor(USER_ID).first(ReviewRating.GOOD.value()).stability()).isEqualTo(5);
 
         when(parametersRepository.findById(USER_ID)).thenReturn(Optional.of(saved("FSRS-5", personal)));
         assertThat(service.fsrsFor(USER_ID)).isSameAs(Fsrs.withDefaults());

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.ExamAttemptStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -11,7 +12,10 @@ import com.kanjimastery.backend.model.UserExamAttempt;
 
 public interface UserExamAttemptRepository extends JpaRepository<UserExamAttempt, Long> {
 
-    List<UserExamAttempt> findByStatusAndStartedAtLessThanEqual(String status, LocalDateTime cutoff);
+    List<UserExamAttempt> findByStatusAndStartedAtLessThanEqual(ExamAttemptStatus status, LocalDateTime cutoff);
+
+    /** Các phần đã bắt đầu của một buổi làm đề JLPT, theo thứ tự làm. */
+    List<UserExamAttempt> findBySittingIdOrderByIdAsc(Long sittingId);
 
     /**
      * UPDATE có điều kiện (compare-and-swap ở tầng SQL) - chỉ luồng nào khiến
@@ -23,10 +27,10 @@ public interface UserExamAttemptRepository extends JpaRepository<UserExamAttempt
     @Query("""
             UPDATE UserExamAttempt a
             SET a.status = :status, a.totalScore = :score, a.timeSpentSeconds = :timeSpent, a.submittedAt = :submittedAt
-            WHERE a.id = :id AND a.status = 'IN_PROGRESS'
+            WHERE a.id = :id AND a.status = com.kanjimastery.backend.model.ExamAttemptStatus.IN_PROGRESS
             """)
     int finalizeIfInProgress(@Param("id") Long id,
-                              @Param("status") String status,
+                              @Param("status") ExamAttemptStatus status,
                               @Param("score") int score,
                               @Param("timeSpent") int timeSpent,
                               @Param("submittedAt") LocalDateTime submittedAt);
@@ -36,7 +40,8 @@ public interface UserExamAttemptRepository extends JpaRepository<UserExamAttempt
     @Query("""
             UPDATE UserExamAttempt a
             SET a.diagnosedAt = :diagnosedAt
-            WHERE a.id = :id AND a.diagnosedAt IS NULL AND a.status <> 'IN_PROGRESS'
+            WHERE a.id = :id AND a.diagnosedAt IS NULL
+              AND a.status <> com.kanjimastery.backend.model.ExamAttemptStatus.IN_PROGRESS
             """)
     int markDiagnosed(@Param("id") Long id, @Param("diagnosedAt") LocalDateTime diagnosedAt);
 }

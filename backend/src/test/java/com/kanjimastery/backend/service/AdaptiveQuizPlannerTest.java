@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.Sm2State;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.UserKanjiSrs;
 import com.kanjimastery.backend.service.AdaptiveQuizPlanner.Group;
@@ -160,8 +161,8 @@ class AdaptiveQuizPlannerTest {
     private static UserKanjiSrs card(long kanjiId, LocalDateTime nextReviewAt, int intervalDays, String easiness) {
         return UserKanjiSrs.builder()
                 .kanjiId(kanjiId)
-                .repetitionCount(3)
-                .easinessFactor(new BigDecimal(easiness))
+                .sm2(new Sm2State(3, new BigDecimal(easiness)))
+                
                 .reviewIntervalDays(intervalDays)
                 .nextReviewAt(nextReviewAt)
                 .lastReviewedAt(nextReviewAt.minusDays(intervalDays))

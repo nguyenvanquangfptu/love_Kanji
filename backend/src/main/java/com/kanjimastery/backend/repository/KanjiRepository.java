@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -26,7 +27,7 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
               AND (:tagId IS NULL OR t.id = :tagId)
             """)
     Page<Kanji> search(
-            @Param("level") String level,
+            @Param("level") JlptLevel level,
             @Param("pattern") String pattern,
             @Param("tagId") Long tagId,
             Pageable pageable);
@@ -45,7 +46,7 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
             WHERE (:level IS NULL OR k.jlptLevel = :level)
               AND (:tagId IS NULL OR t.id = :tagId)
             """)
-    List<Kanji> findAllByFilters(@Param("level") String level, @Param("tagId") Long tagId);
+    List<Kanji> findAllByFilters(@Param("level") JlptLevel level, @Param("tagId") Long tagId);
 
     /** Từ thuộc các bài có tên bắt đầu bằng {@code prefix} (vd. "N5-%") - một từ có thể nằm ở bài của nhiều cấp độ. */
     @Query("SELECT DISTINCT k FROM Kanji k JOIN k.tags t WHERE t.name LIKE :prefix")
@@ -72,4 +73,17 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
 
     @Query("SELECT k.mnemonic FROM Kanji k WHERE k.id = :id")
     Optional<String> findMnemonicById(@Param("id") Long id);
+
+    /** Cách viết, cách đọc và cấp độ của một từ. */
+    interface WordLevel {
+        String getCharacter();
+
+        String getReading();
+
+        JlptLevel getJlptLevel();
+    }
+
+    /** Mọi từ trong kho - để kiểm tra một câu có dùng từ vượt cấp độ không. */
+    @Query("SELECT k.character AS character, k.reading AS reading, k.jlptLevel AS jlptLevel FROM Kanji k")
+    List<WordLevel> findAllWordLevels();
 }

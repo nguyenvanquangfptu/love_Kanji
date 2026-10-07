@@ -22,6 +22,7 @@
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>2.6.0</springdoc.version>
         <testcontainers.version>1.21.4</testcontainers.version>
+        <kuromoji.version>0.9.0</kuromoji.version>
     </properties>
 
     <dependencies>
@@ -89,6 +90,13 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- Phân tích hình thái tiếng Nhật (từ loại, tách cụm) cho câu thi JLPT -->
+        <dependency>
+            <groupId>com.atilika.kuromoji</groupId>
+            <artifactId>kuromoji-ipadic</artifactId>
+            <version>${kuromoji.version}</version>
         </dependency>
 
         <!-- Lombok -->

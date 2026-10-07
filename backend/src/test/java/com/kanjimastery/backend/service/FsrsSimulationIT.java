@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.config.SrsProperties;
 import com.kanjimastery.backend.dto.DailyCardResponse;
@@ -175,7 +176,7 @@ class FsrsSimulationIT extends AbstractIntegrationTest {
         LocalDate firstDay = LocalDate.now(VIETNAM).minusDays(DAYS);
         for (int i = 0; i < WORDS; i++) {
             wordIds.add(kanjiRepository.save(Kanji.builder().character(String.format("模%04d", i))
-                    .reading("も" + i).hanViet("MÔ").meaning("Từ mô phỏng " + i).jlptLevel("N4").strokeCount(14)
+                    .reading("も" + i).hanViet("MÔ").meaning("Từ mô phỏng " + i).jlptLevel(JlptLevel.N4).strokeCount(14)
                     .build()).getId());
         }
         Learner sm2 = learner("sm2", SchedulerType.SM2);
@@ -237,7 +238,7 @@ class FsrsSimulationIT extends AbstractIntegrationTest {
         assertThat(status.isPersonalized()).isTrue();
         assertThat(status.getFirstReviews()).allSatisfy(count -> assertThat(count).isGreaterThanOrEqualTo(50));
         List<Double> fitted = status.getInitialStabilities();
-        assertThat(fitted.get(ReviewRating.GOOD - 1)).isBetween(0.45, 1.6);
+        assertThat(fitted.get(ReviewRating.GOOD.value() - 1)).isBetween(0.45, 1.6);
         double logRatio = 0;
         for (int rating = 0; rating < 4; rating++) {
             logRatio += Math.log(fitted.get(rating) / Fsrs.DEFAULT_PARAMETERS[rating]);
@@ -259,7 +260,7 @@ class FsrsSimulationIT extends AbstractIntegrationTest {
                 """, Long.class, sm2.userId, fsrs.userId)).isZero();
     }
 
-    private Learner learner(String name, String scheduler) {
+    private Learner learner(String name, SchedulerType scheduler) {
         String suffix = name + "_" + System.nanoTime();
         Long userId = userRepository.save(User.builder().username("sim_" + suffix).email("sim_" + suffix + "@test.local")
                 .passwordHash("x").build()).getId();
@@ -296,7 +297,7 @@ class FsrsSimulationIT extends AbstractIntegrationTest {
             } else {
                 long elapsed = ChronoUnit.DAYS.between(learner.lastStudied.get(kanjiId), today);
                 boolean recalled = learner.random.nextDouble() < truth.retrievability(memory.stability(), elapsed);
-                rating = recalled ? recalledRating(learner.random) : ReviewRating.AGAIN;
+                rating = recalled ? recalledRating(learner.random) : ReviewRating.AGAIN.value();
                 learner.memory.put(kanjiId, truth.next(memory, rating, elapsed));
                 learner.reviews[day]++;
                 if (recalled) {
@@ -336,14 +337,14 @@ class FsrsSimulationIT extends AbstractIntegrationTest {
     /** Lần học đầu: 15% Quên, 15% Khó, 55% Nhớ, 15% Dễ. */
     private static int firstRating(Random random) {
         double draw = random.nextDouble();
-        return draw < 0.15 ? ReviewRating.AGAIN : draw < 0.30 ? ReviewRating.HARD
-                : draw < 0.85 ? ReviewRating.GOOD : ReviewRating.EASY;
+        return draw < 0.15 ? ReviewRating.AGAIN.value() : draw < 0.30 ? ReviewRating.HARD.value()
+                : draw < 0.85 ? ReviewRating.GOOD.value() : ReviewRating.EASY.value();
     }
 
     /** Nhớ được: 10% Khó, 80% Nhớ, 10% Dễ. */
     private static int recalledRating(Random random) {
         double draw = random.nextDouble();
-        return draw < 0.10 ? ReviewRating.HARD : draw < 0.90 ? ReviewRating.GOOD : ReviewRating.EASY;
+        return draw < 0.10 ? ReviewRating.HARD.value() : draw < 0.90 ? ReviewRating.GOOD.value() : ReviewRating.EASY.value();
     }
 
     private ReviewLogRepository.Calibration calibrationBetween(Long userId, LocalDate firstDay, int fromDay, int toDay) {

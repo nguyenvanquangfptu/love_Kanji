@@ -37,7 +37,7 @@ public class KanjiResponse implements Serializable {
                 .hanViet(kanji.getHanViet())
                 .reading(kanji.getReading())
                 .strokeCount(kanji.getStrokeCount())
-                .jlptLevel(kanji.getJlptLevel())
+                .jlptLevel(kanji.getJlptLevel() == null ? null : kanji.getJlptLevel().name())
                 .meaning(kanji.getMeaning())
                 .exampleSentence(kanji.getExampleSentence())
                 .mnemonic(kanji.getMnemonic())

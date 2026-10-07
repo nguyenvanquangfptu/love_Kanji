@@ -10,6 +10,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -19,6 +21,7 @@ import java.util.stream.Collectors;
 public class TagService {
 
     private final TagRepository tagRepository;
+    private final Clock clock;
 
     public List<TagResponse> list() {
         Map<Long, Long> counts = tagRepository.countKanjiPerTag().stream()
@@ -38,6 +41,7 @@ public class TagService {
         }
         Tag tag = new Tag();
         tag.setName(request.getName());
+        tag.setCreatedAt(LocalDateTime.now(clock));
         return TagResponse.from(tagRepository.save(tag));
     }
 

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.dto.KanjiRequest;
 import com.kanjimastery.backend.dto.KanjiResponse;
 import com.kanjimastery.backend.exception.BadRequestException;
@@ -11,8 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -34,6 +37,9 @@ class KanjiServiceTest {
     @Mock
     private TagRepository tagRepository;
 
+    @Spy
+    private Clock clock = Clock.systemDefaultZone();
+
     @InjectMocks
     private KanjiService kanjiService;
 
@@ -41,7 +47,7 @@ class KanjiServiceTest {
     private final Tag lesson27 = Tag.builder().id(27L).name("N4-27").build();
     // 開く (ひらく) đã có ở bài 27.
     private final Kanji open = Kanji.builder().id(1L).character("開く").reading("ひらく").meaning("Mở [lớp]")
-            .hanViet("KHAI").strokeCount(12).jlptLevel("N4").tags(new HashSet<>(Set.of(lesson27))).build();
+            .hanViet("KHAI").strokeCount(12).jlptLevel(JlptLevel.N4).tags(new HashSet<>(Set.of(lesson27))).build();
 
     @Test
     void create_shouldAllowSameWordWithAnotherMeaning_whenItBelongsToAnotherLesson() {

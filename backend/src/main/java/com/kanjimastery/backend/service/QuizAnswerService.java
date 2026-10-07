@@ -43,7 +43,7 @@ public class QuizAnswerService {
 
         Kanji kanji = kanjiRepository.findById(request.getKanjiId())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Kanji với id: " + request.getKanjiId()));
-        String direction = request.getDirection();
+        QuizDirection direction = request.getDirection();
         String correctAnswer = correctAnswer(kanji, direction);
         if (correctAnswer == null) {
             throw new BadRequestException("Từ '" + kanji.getCharacter() + "' không có cách đọc để hỏi theo hướng " + direction);
@@ -52,7 +52,7 @@ public class QuizAnswerService {
         Long userId = userService.getByUsername(username).getId();
         boolean correct = correctAnswer.equals(request.getChosenAnswer());
         Integer responseMs = ResponseTimeRater.normalize(request.getResponseMs());
-        int rating = correct ? responseTimeRater.rateCorrectAnswer(userId, direction, responseMs) : ReviewRating.AGAIN;
+        ReviewRating rating = correct ? responseTimeRater.rateCorrectAnswer(userId, direction, responseMs) : ReviewRating.AGAIN;
 
         Optional<LocalDateTime> nextReviewAt = srsService.recordQuizAnswer(userId, kanji.getId(), new SrsService.Answer(
                 ReviewSource.QUIZ, direction, correct, rating, responseMs, request.getChosenAnswer()));
@@ -65,11 +65,11 @@ public class QuizAnswerService {
     }
 
     /** Đáp án đúng giống hệt cách {@link QuizService} dựng câu hỏi; null nếu từ không hỏi được theo hướng đó. */
-    static String correctAnswer(Kanji kanji, String direction) {
+    static String correctAnswer(Kanji kanji, QuizDirection direction) {
         return switch (direction) {
-            case QuizDirection.KANJI_TO_READING -> StringUtils.hasText(kanji.getReading()) ? kanji.getReading() : null;
-            case QuizDirection.READING_TO_KANJI -> StringUtils.hasText(kanji.getReading()) ? kanji.getCharacter() : null;
-            default -> kanji.getMeaning();
+            case KANJI_TO_READING -> StringUtils.hasText(kanji.getReading()) ? kanji.getReading() : null;
+            case READING_TO_KANJI -> StringUtils.hasText(kanji.getReading()) ? kanji.getCharacter() : null;
+            case MEANING -> kanji.getMeaning();
         };
     }
 }

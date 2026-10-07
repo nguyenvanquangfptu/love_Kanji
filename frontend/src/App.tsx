@@ -11,11 +11,15 @@ import { ProgressPage } from '@/pages/ProgressPage'
 import { ExamSetupPage } from '@/pages/ExamSetupPage'
 import { ExamWorkspacePage } from '@/pages/ExamWorkspacePage'
 import { ExamResultPage } from '@/pages/ExamResultPage'
+import { ExamSittingPage } from '@/pages/ExamSittingPage'
 import { AdminKanjiPage } from '@/pages/AdminKanjiPage'
+import { AdminGrammarPage } from '@/pages/AdminGrammarPage'
+import { AdminQuestionsPage } from '@/pages/AdminQuestionsPage'
 import { StudyBrowsePage } from '@/pages/StudyBrowsePage'
 import { StudyVocabListPage } from '@/pages/StudyVocabListPage'
 import { StudyFlashcardPage } from '@/pages/StudyFlashcardPage'
 import { StudyQuizPage } from '@/pages/StudyQuizPage'
+import { GrammarPracticePage } from '@/pages/GrammarPracticePage'
 
 export default function App() {
   return (
@@ -34,8 +38,12 @@ export default function App() {
           <Route path="progress" element={<ProgressPage />} />
           <Route path="exam" element={<ExamSetupPage />} />
           <Route path="exam/:attemptId/result" element={<ExamResultPage />} />
+          <Route path="exam/jlpt/:sittingId" element={<ExamSittingPage />} />
           <Route element={<AdminRoute />}>
+            <Route path="admin" element={<Navigate to="/admin/kanji" replace />} />
             <Route path="admin/kanji" element={<AdminKanjiPage />} />
+            <Route path="admin/grammar" element={<AdminGrammarPage />} />
+            <Route path="admin/questions" element={<AdminQuestionsPage />} />
           </Route>
         </Route>
 
@@ -43,6 +51,7 @@ export default function App() {
           <Route path="study/flashcards" element={<StudyFlashcardPage />} />
           <Route path="study/quiz" element={<StudyQuizPage />} />
           <Route path="exam/:attemptId" element={<ExamWorkspacePage />} />
+          <Route path="exam/grammar-practice" element={<GrammarPracticePage />} />
         </Route>
       </Route>
 

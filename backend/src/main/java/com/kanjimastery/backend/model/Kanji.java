@@ -38,8 +38,9 @@ public class Kanji {
     @Column(name = "stroke_count", nullable = false)
     private Integer strokeCount;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "jlpt_level", nullable = false, length = 5)
-    private String jlptLevel;
+    private JlptLevel jlptLevel;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String meaning;

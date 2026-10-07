@@ -1,5 +1,8 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.FsrsState;
+import com.kanjimastery.backend.model.Sm2State;
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.config.SrsProperties;
 import com.kanjimastery.backend.dto.AddSrsCardsResponse;
 import com.kanjimastery.backend.dto.DailyCardResponse;
@@ -31,6 +34,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -74,7 +78,7 @@ class SrsServiceTest {
     private StudyPlanService studyPlanService;
 
     @Spy
-    private StudyCalendar calendar = new StudyCalendar(new SrsProperties());
+    private StudyCalendar calendar = new StudyCalendar(new SrsProperties(), Clock.systemDefaultZone());
 
     @Mock
     private LearningProfileService learningProfileService;
@@ -134,12 +138,13 @@ class SrsServiceTest {
         UserKanjiSrs saved = savedCard();
         assertThat(saved.getRepetitionCount()).isEqualTo(1);
         assertThat(saved.getReviewIntervalDays()).isEqualTo(1);
+        assertThat(saved.getLapseCount()).isZero();
 
         ReviewLog log = savedLog();
         assertThat(log.getSource()).isEqualTo(ReviewSource.FLASHCARD);
         assertThat(log.getDirection()).isNull();
         assertThat(log.getCorrect()).isTrue();
-        assertThat(log.getRating()).isEqualTo((short) ReviewRating.GOOD);
+        assertThat(log.getRating()).isEqualTo(ReviewRating.GOOD);
         assertThat(log.getStateBefore()).isEqualTo(CardState.NEW);
         assertThat(log.getEfBefore()).isNull();
         assertThat(log.getIntervalBefore()).isNull();
@@ -187,9 +192,10 @@ class SrsServiceTest {
     @Test
     void submitReview_shouldGrowTheFsrsMemory_andLogThePredictedRecall() {
         LocalDateTime now = LocalDateTime.now();
-        UserKanjiSrs card = UserKanjiSrs.builder().userId(USER_ID).kanjiId(KANJI_ID).repetitionCount(3)
-                .easinessFactor(new BigDecimal("2.40")).reviewIntervalDays(10).nextReviewAt(now)
-                .lastReviewedAt(now.minusDays(10)).stability(10.0).difficulty(5.0).build();
+        UserKanjiSrs card = UserKanjiSrs.builder().userId(USER_ID).kanjiId(KANJI_ID)
+                .sm2(new Sm2State(3, new BigDecimal("2.40")))
+                .reviewIntervalDays(10).nextReviewAt(now)
+                .lastReviewedAt(now.minusDays(10)).fsrs(new FsrsState(10.0, 5.0)).build();
         when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
         when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.of(card));
         givenSaveReturnsCard();
@@ -204,8 +210,9 @@ class SrsServiceTest {
     @Test
     void submitReview_shouldEstimateTheFsrsMemoryFromSm2_forACardReviewedBeforeFsrs() {
         LocalDateTime now = LocalDateTime.now();
-        UserKanjiSrs card = UserKanjiSrs.builder().userId(USER_ID).kanjiId(KANJI_ID).repetitionCount(3)
-                .easinessFactor(new BigDecimal("2.50")).reviewIntervalDays(15).nextReviewAt(now)
+        UserKanjiSrs card = UserKanjiSrs.builder().userId(USER_ID).kanjiId(KANJI_ID)
+                .sm2(new Sm2State(3, new BigDecimal("2.50")))
+                .reviewIntervalDays(15).nextReviewAt(now)
                 .lastReviewedAt(now.minusDays(15)).build();
         when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
         when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.of(card));
@@ -350,8 +357,9 @@ class SrsServiceTest {
 
     @Test
     void submitReview_shouldNotCountALapse_whenANewCardIsForgotten() {
-        UserKanjiSrs neverReviewed = UserKanjiSrs.builder().userId(USER_ID).kanjiId(KANJI_ID).repetitionCount(0)
-                .easinessFactor(new BigDecimal("2.50")).reviewIntervalDays(0).nextReviewAt(LocalDateTime.now()).build();
+        UserKanjiSrs neverReviewed = UserKanjiSrs.builder().userId(USER_ID).kanjiId(KANJI_ID)
+                .sm2(new Sm2State(0, new BigDecimal("2.50")))
+                .reviewIntervalDays(0).nextReviewAt(LocalDateTime.now()).build();
         when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
         when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.of(neverReviewed));
         givenSaveReturnsCard();
@@ -379,8 +387,9 @@ class SrsServiceTest {
 
     @Test
     void getDailyCards_shouldFollowTodaysPlan_andMarkNewWords() {
-        UserKanjiSrs newWord = UserKanjiSrs.builder().id(300L).userId(USER_ID).kanjiId(30L).repetitionCount(0)
-                .easinessFactor(new BigDecimal("2.50")).reviewIntervalDays(0).nextReviewAt(DUE).lapseCount(0).build();
+        UserKanjiSrs newWord = UserKanjiSrs.builder().id(300L).userId(USER_ID).kanjiId(30L)
+                .sm2(new Sm2State(0, new BigDecimal("2.50")))
+                .reviewIntervalDays(0).nextReviewAt(DUE).lapseCount(0).build();
         List<UserKanjiSrs> due = List.of(dueCard(1L, 0), dueCard(2L, 0), dueCard(3L, 0), newWord);
         givenDueCards(due);
         givenPlan(2, 1);
@@ -395,8 +404,9 @@ class SrsServiceTest {
 
     @Test
     void getDailyCards_shouldPreviewTheNextReviewOfEveryRating_withTheLearnersScheduler() {
-        UserKanjiSrs newWord = UserKanjiSrs.builder().id(300L).userId(USER_ID).kanjiId(30L).repetitionCount(0)
-                .easinessFactor(new BigDecimal("2.50")).reviewIntervalDays(0).nextReviewAt(DUE).lapseCount(0).build();
+        UserKanjiSrs newWord = UserKanjiSrs.builder().id(300L).userId(USER_ID).kanjiId(30L)
+                .sm2(new Sm2State(0, new BigDecimal("2.50")))
+                .reviewIntervalDays(0).nextReviewAt(DUE).lapseCount(0).build();
         List<UserKanjiSrs> due = List.of(dueCard(1L, 0), newWord);
         givenDueCards(due);
         when(kanjiRepository.findAllById(anyList())).thenReturn(due.stream().map(card -> kanji(card.getKanjiId())).toList());
@@ -420,12 +430,14 @@ class SrsServiceTest {
         LocalDateTime now = LocalDateTime.now();
         // SM-2 coi thẻ 1 trễ hơn (trễ nửa khoảng ôn), nhưng FSRS thấy thẻ 2 yếu hơn nhiều: độ ổn định 3 ngày mà đã
         // 12 ngày chưa ôn (còn nhớ ~78%), còn thẻ 1 ổn định 20 ngày mới qua 3 ngày (~98%).
-        UserKanjiSrs strong = UserKanjiSrs.builder().id(101L).userId(USER_ID).kanjiId(1L).repetitionCount(2)
-                .easinessFactor(new BigDecimal("2.50")).reviewIntervalDays(2).nextReviewAt(now.minusDays(1))
-                .lastReviewedAt(now.minusDays(3)).stability(20.0).difficulty(4.0).lapseCount(0).build();
-        UserKanjiSrs weak = UserKanjiSrs.builder().id(102L).userId(USER_ID).kanjiId(2L).repetitionCount(3)
-                .easinessFactor(new BigDecimal("2.50")).reviewIntervalDays(10).nextReviewAt(now.minusDays(2))
-                .lastReviewedAt(now.minusDays(12)).stability(3.0).difficulty(6.0).lapseCount(0).build();
+        UserKanjiSrs strong = UserKanjiSrs.builder().id(101L).userId(USER_ID).kanjiId(1L)
+                .sm2(new Sm2State(2, new BigDecimal("2.50")))
+                .reviewIntervalDays(2).nextReviewAt(now.minusDays(1))
+                .lastReviewedAt(now.minusDays(3)).fsrs(new FsrsState(20.0, 4.0)).lapseCount(0).build();
+        UserKanjiSrs weak = UserKanjiSrs.builder().id(102L).userId(USER_ID).kanjiId(2L)
+                .sm2(new Sm2State(3, new BigDecimal("2.50")))
+                .reviewIntervalDays(10).nextReviewAt(now.minusDays(2))
+                .lastReviewedAt(now.minusDays(12)).fsrs(new FsrsState(3.0, 6.0)).lapseCount(0).build();
         List<UserKanjiSrs> due = List.of(strong, weak);
         givenDueCards(due);
         when(kanjiRepository.findAllById(anyList())).thenReturn(due.stream().map(card -> kanji(card.getKanjiId())).toList());
@@ -511,16 +523,16 @@ class SrsServiceTest {
         assertThat(log.getStateBefore()).isEqualTo(CardState.REVIEW);
     }
 
-    private static ReviewRequest reviewRequest(int rating, Integer responseMs) {
+    private static ReviewRequest reviewRequest(ReviewRating rating, Integer responseMs) {
         ReviewRequest request = new ReviewRequest();
         request.setKanjiId(KANJI_ID);
-        request.setRating(rating);
+        request.setRating(rating.value());
         request.setResponseMs(responseMs);
         return request;
     }
 
-    private static SrsService.Answer quizAnswer(boolean correct, int rating) {
-        return new SrsService.Answer(ReviewSource.QUIZ, "KANJI_TO_READING", correct, rating, 3_000, "あく");
+    private static SrsService.Answer quizAnswer(boolean correct, ReviewRating rating) {
+        return new SrsService.Answer(ReviewSource.QUIZ, QuizDirection.KANJI_TO_READING, correct, rating, 3_000, "あく");
     }
 
     /** Thẻ đã ôn ít nhất một lần, lần ôn trước cách {@code nextReviewAt} đúng một khoảng ôn. */
@@ -528,8 +540,8 @@ class SrsServiceTest {
         return UserKanjiSrs.builder()
                 .userId(USER_ID)
                 .kanjiId(KANJI_ID)
-                .repetitionCount(repetitions)
-                .easinessFactor(new BigDecimal(ef))
+                .sm2(new Sm2State(repetitions, new BigDecimal(ef)))
+                
                 .reviewIntervalDays(intervalDays)
                 .nextReviewAt(nextReviewAt)
                 .lastReviewedAt(nextReviewAt.minusDays(intervalDays))
@@ -541,8 +553,9 @@ class SrsServiceTest {
     /** Thẻ đã học, đến hạn cùng lúc với các thẻ khác (cùng mức trễ). */
     private static UserKanjiSrs dueCard(long kanjiId, int lapses) {
         LocalDateTime due = DUE;
-        return UserKanjiSrs.builder().id(kanjiId + 100).userId(USER_ID).kanjiId(kanjiId).repetitionCount(1)
-                .easinessFactor(new BigDecimal("2.30")).reviewIntervalDays(1).nextReviewAt(due)
+        return UserKanjiSrs.builder().id(kanjiId + 100).userId(USER_ID).kanjiId(kanjiId)
+                .sm2(new Sm2State(1, new BigDecimal("2.30")))
+                .reviewIntervalDays(1).nextReviewAt(due)
                 .lastReviewedAt(due.minusDays(1)).lapseCount(lapses).build();
     }
 
@@ -560,11 +573,11 @@ class SrsServiceTest {
                 .thenReturn(DailyPlanResponse.builder().reviewsToday(reviewsToday).newToday(newToday).build());
     }
 
-    private void givenScheduling(String scheduler, double desiredRetention) {
+    private void givenScheduling(SchedulerType scheduler, double desiredRetention) {
         givenScheduling(scheduler, desiredRetention, Fsrs.withDefaults());
     }
 
-    private void givenScheduling(String scheduler, double desiredRetention, Fsrs fsrs) {
+    private void givenScheduling(SchedulerType scheduler, double desiredRetention, Fsrs fsrs) {
         when(learningProfileService.scheduling(USER_ID))
                 .thenReturn(new SchedulingSettings(scheduler, desiredRetention, fsrs));
     }

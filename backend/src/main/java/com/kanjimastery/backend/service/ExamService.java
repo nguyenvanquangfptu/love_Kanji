@@ -1,25 +1,34 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import com.kanjimastery.backend.config.ExamProperties;
+import com.kanjimastery.backend.config.JlptBlueprintProperties;
+import com.kanjimastery.backend.dto.ExamMondaiResponse;
+import com.kanjimastery.backend.dto.ExamPassageResponse;
 import com.kanjimastery.backend.dto.ExamQuestionPublicResponse;
 import com.kanjimastery.backend.dto.ExamResultResponse;
 import com.kanjimastery.backend.dto.ExamReviewResponse;
@@ -29,13 +38,18 @@ import com.kanjimastery.backend.dto.SaveAnswerRequest;
 import com.kanjimastery.backend.dto.StartExamRequest;
 import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
+import com.kanjimastery.backend.model.ExamPassage;
 import com.kanjimastery.backend.model.ExamQuestion;
+import com.kanjimastery.backend.model.GrammarPoint;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.UserExamAnswer;
 import com.kanjimastery.backend.model.UserExamAttempt;
+import com.kanjimastery.backend.repository.ExamPassageRepository;
+import com.kanjimastery.backend.repository.ExamQuestionReportRepository;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.ExamSessionStore;
+import com.kanjimastery.backend.repository.GrammarPointRepository;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.repository.UserExamAnswerRepository;
 import com.kanjimastery.backend.repository.UserExamAttemptRepository;
@@ -44,10 +58,6 @@ import com.kanjimastery.backend.repository.UserExamAttemptRepository;
 @RequiredArgsConstructor
 public class ExamService {
 
-    /** Thứ tự kỹ năng khi chia câu thi và khi báo điểm: đọc, viết, nghĩa. */
-    private static final List<String> SKILLS =
-            List.of(QuizDirection.KANJI_TO_READING, QuizDirection.READING_TO_KANJI, QuizDirection.MEANING);
-
     private final ExamQuestionRepository questionRepository;
     private final UserExamAttemptRepository attemptRepository;
     private final UserExamAnswerRepository answerRepository;
@@ -55,10 +65,15 @@ public class ExamService {
     private final ExamFinalizationService examFinalizationService;
     private final ExamProperties examProperties;
     private final KanjiRepository kanjiRepository;
+    private final JlptBlueprintProperties blueprints;
+    private final ExamPassageRepository passageRepository;
+    private final GrammarPointRepository grammarPointRepository;
+    private final ExamQuestionReportRepository reportRepository;
+    private final Clock clock;
 
     @Transactional
     public StartExamResponse start(Long userId, StartExamRequest request) {
-        String level = request.getJlptLevel().toUpperCase();
+        JlptLevel level = Levels.require(request.getJlptLevel());
         int count = request.getQuestionCount() != null ? request.getQuestionCount() : examProperties.getDefaultQuestionCount();
 
         List<ExamQuestion> questions = pickQuestions(level, count);
@@ -66,26 +81,32 @@ public class ExamService {
             throw new BadRequestException("Không có câu hỏi nào cho cấp độ: " + level);
         }
 
-        UserExamAttempt attempt = UserExamAttempt.builder()
-                .userId(userId)
-                .jlptLevel(level)
-                .startedAt(LocalDateTime.now())
-                .build();
-        attempt = attemptRepository.save(attempt);
+        return begin(UserExamAttempt.builder().userId(userId).jlptLevel(level).build(), questions, null);
+    }
 
-        List<Long> questionIds = questions.stream().map(ExamQuestion::getId).toList();
-        examSessionStore.initSession(attempt.getId(), questionIds);
-
-        List<ExamQuestionPublicResponse> publicQuestions = questions.stream()
-                .map(ExamQuestionPublicResponse::from)
-                .toList();
+    /**
+     * Lưu lượt thi với các câu đã chọn (theo thứ tự hiển thị) và bắt đầu tính giờ theo thời gian làm bài của lượt -
+     * dùng chung cho thi nhanh và từng phần của đề JLPT ({@code mondai}: các 問題 của phần thi, null với thi nhanh).
+     */
+    @Transactional
+    public StartExamResponse begin(UserExamAttempt attempt, List<ExamQuestion> questions,
+                                   List<ExamMondaiResponse> mondai) {
+        attempt.setStartedAt(LocalDateTime.now(clock));
+        UserExamAttempt saved = attemptRepository.save(attempt);
+        int durationSeconds = examProperties.durationOf(saved);
+        examSessionStore.initSession(saved.getId(), questions.stream().map(ExamQuestion::getId).toList(),
+                durationSeconds);
 
         return StartExamResponse.builder()
-                .attemptId(attempt.getId())
-                .jlptLevel(level)
-                .questions(publicQuestions)
-                .remainingSeconds(examProperties.getDurationSeconds())
-                .startedAt(attempt.getStartedAt())
+                .attemptId(saved.getId())
+                .jlptLevel(saved.getJlptLevel())
+                .questions(questions.stream().map(ExamQuestionPublicResponse::from).toList())
+                .remainingSeconds(durationSeconds)
+                .startedAt(saved.getStartedAt())
+                .sittingId(saved.getSittingId())
+                .section(saved.getSection())
+                .mondai(mondai)
+                .passages(passagesOf(questions))
                 .build();
     }
 
@@ -94,12 +115,12 @@ public class ExamService {
      * kỹ năng - ngân hàng câu sinh từ kho từ vựng có nhiều câu hỏi nghĩa hơn hẳn. Mỗi từ tối đa một câu: câu hỏi nghĩa
      * ghi kèm cách đọc sẽ lộ đáp án câu hỏi đọc của cùng từ đó. Xáo thứ tự ở cuối.
      */
-    private List<ExamQuestion> pickQuestions(String level, int count) {
+    private List<ExamQuestion> pickQuestions(JlptLevel level, int count) {
         List<List<ExamQuestion>> candidates = new ArrayList<>();
-        for (String skill : SKILLS) {
-            candidates.add(questionRepository.findRandomByLevelAndSkill(level, skill, count * 2));
+        for (QuizDirection skill : QuizDirection.values()) {
+            candidates.add(questionRepository.findRandomByLevelAndSkill(level.name(), skill.name(), count * 2));
         }
-        candidates.add(questionRepository.findRandomUnclassifiedByLevel(level, count * 2));
+        candidates.add(questionRepository.findRandomUnclassifiedByLevel(level.name(), count * 2));
         Map<Long, ExamQuestion> withWords = questionRepository
                 .findAllWithWordsByIdIn(candidates.stream().flatMap(List::stream).map(ExamQuestion::getId).toList())
                 .stream()
@@ -131,20 +152,22 @@ public class ExamService {
     }
 
     public void saveAnswer(Long userId, Long attemptId, SaveAnswerRequest request) {
-        getOwnedInProgressAttempt(attemptId, userId);
+        UserExamAttempt attempt = getOwnedInProgressAttempt(attemptId, userId);
         String option = request.getSelectedOption() != null ? request.getSelectedOption().toUpperCase() : null;
-        examSessionStore.saveAnswer(attemptId, request.getQuestionId(), option);
+        examSessionStore.saveAnswer(attemptId, request.getQuestionId(), option, examProperties.durationOf(attempt));
     }
 
     public ExamSessionResponse getSession(Long userId, Long attemptId) {
         UserExamAttempt attempt = getOwnedAttempt(attemptId, userId);
-        long elapsed = Duration.between(attempt.getStartedAt(), LocalDateTime.now()).getSeconds();
-        long remaining = Math.max(0, examProperties.getDurationSeconds() - elapsed);
+        long elapsed = Duration.between(attempt.getStartedAt(), LocalDateTime.now(clock)).getSeconds();
+        long remaining = Math.max(0, examProperties.durationOf(attempt) - elapsed);
 
         return ExamSessionResponse.builder()
                 .attemptId(attemptId)
                 .remainingSeconds(remaining)
                 .answers(examSessionStore.getAnswers(attemptId))
+                .sittingId(attempt.getSittingId())
+                .section(attempt.getSection())
                 .build();
     }
 
@@ -163,10 +186,14 @@ public class ExamService {
             throw new BadRequestException("Bài thi chưa được nộp, không thể xem lại");
         }
 
-        List<UserExamAnswer> answers = answerRepository.findByAttemptId(attemptId);
+        List<UserExamAnswer> answers = answerRepository.findByAttemptIdOrderByIdAsc(attemptId);
         List<Long> questionIds = answers.stream().map(UserExamAnswer::getQuestionId).toList();
-        Map<Long, ExamQuestion> questionsById = questionRepository.findAllWithWordsByIdIn(questionIds).stream()
+        Map<Long, ExamQuestion> questionsById = questionRepository.findAllWithLinksByIdIn(questionIds).stream()
                 .collect(Collectors.toMap(ExamQuestion::getId, Function.identity()));
+        Map<Long, GrammarPoint> grammarById = grammarPoints(questionsById.values());
+        Set<Long> reported = questionIds.isEmpty()
+                ? Set.of()
+                : new HashSet<>(reportRepository.findQuestionIdsReportedBy(userId, questionIds));
 
         List<QuestionReviewItem> items = answers.stream()
                 .map(answer -> {
@@ -185,6 +212,15 @@ public class ExamService {
                             .correct(Boolean.TRUE.equals(answer.getIsCorrect()))
                             .explanation(question.getExplanation())
                             .skill(question.getSkill())
+                            .questionType(question.getQuestionType())
+                            .passageId(question.getPassageId())
+                            .blankNo(question.getBlankNo())
+                            .grammarPoints(question.getGrammarPointIds().stream().sorted().map(grammarById::get)
+                                    .filter(Objects::nonNull)
+                                    .map(point -> new QuestionReviewItem.Grammar(point.getId(), point.getPattern(),
+                                            point.getMeaningVi()))
+                                    .toList())
+                            .reported(reported.contains(answer.getQuestionId()))
                             .build();
                 })
                 .toList();
@@ -200,7 +236,65 @@ public class ExamService {
                 .skills(skillScores(items))
                 .wrongWords(wrongWords(answers, questionsById))
                 .addedToReview(attempt.getDiagnosedAt() != null)
+                .sittingId(attempt.getSittingId())
+                .section(attempt.getSection())
+                .mondai(mondaiScores(attempt, items))
+                .passages(passagesOf(answers.stream().map(answer -> questionsById.get(answer.getQuestionId()))
+                        .filter(Objects::nonNull).toList()))
                 .build();
+    }
+
+    /** Các điểm ngữ pháp mà các câu hỏi kiểm tra, theo id. */
+    private Map<Long, GrammarPoint> grammarPoints(Collection<ExamQuestion> questions) {
+        Set<Long> ids = questions.stream().flatMap(question -> question.getGrammarPointIds().stream())
+                .collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return grammarPointRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(GrammarPoint::getId, Function.identity()));
+    }
+
+    /** Đoạn văn (文章の文法) của các câu hỏi, theo thứ tự xuất hiện đầu tiên. */
+    private List<ExamPassageResponse> passagesOf(Collection<ExamQuestion> questions) {
+        Set<Long> ids = questions.stream().map(ExamQuestion::getPassageId).filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (ids.isEmpty()) {
+            return List.of();
+        }
+        Map<Long, ExamPassage> passages = passageRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(ExamPassage::getId, Function.identity()));
+        return ids.stream().map(passages::get).filter(Objects::nonNull)
+                .map(passage -> new ExamPassageResponse(passage.getId(), passage.getTitle(), passage.getContent()))
+                .toList();
+    }
+
+    /** Điểm theo từng 問題 của phần đề JLPT, theo thứ tự trong đề; thi nhanh thì rỗng. */
+    private List<ExamReviewResponse.MondaiScore> mondaiScores(UserExamAttempt attempt, List<QuestionReviewItem> items) {
+        if (attempt.getSection() == null) {
+            return List.of();
+        }
+        List<JlptQuestionType> types = blueprints.section(attempt.getJlptLevel(), attempt.getSection())
+                .map(JlptBlueprintProperties.Section::types)
+                .orElse(List.of());
+        Map<JlptQuestionType, int[]> byType = new LinkedHashMap<>();
+        for (JlptQuestionType type : types) {
+            byType.put(type, new int[2]);
+        }
+        for (QuestionReviewItem item : items) {
+            if (item.getQuestionType() != null) {
+                int[] tally = byType.computeIfAbsent(item.getQuestionType(), type -> new int[2]);
+                tally[1]++;
+                if (item.isCorrect()) {
+                    tally[0]++;
+                }
+            }
+        }
+        return byType.entrySet().stream()
+                .filter(entry -> entry.getValue()[1] > 0)
+                .map(entry -> new ExamReviewResponse.MondaiScore(types.indexOf(entry.getKey()) + 1, entry.getKey(),
+                        entry.getValue()[0], entry.getValue()[1]))
+                .toList();
     }
 
     /** Từ của các câu đã trả lời sai, theo thứ tự câu hỏi, không lặp. */
@@ -225,10 +319,10 @@ public class ExamService {
                 .toList();
     }
 
-    /** Số câu đúng trên số câu theo từng kỹ năng: đọc, viết, rồi nghĩa. */
+    /** Số câu đúng trên số câu theo từng kỹ năng, theo thứ tự khai báo của {@link QuizDirection}: đọc, viết, rồi nghĩa. */
     static List<ExamReviewResponse.SkillScore> skillScores(List<QuestionReviewItem> items) {
-        Map<String, int[]> bySkill = new LinkedHashMap<>();
-        for (String skill : SKILLS) {
+        Map<QuizDirection, int[]> bySkill = new EnumMap<>(QuizDirection.class);
+        for (QuizDirection skill : QuizDirection.values()) {
             bySkill.put(skill, new int[2]);
         }
         for (QuestionReviewItem item : items) {
@@ -271,6 +365,7 @@ public class ExamService {
                 .totalScore(attempt.getTotalScore())
                 .timeSpentSeconds(attempt.getTimeSpentSeconds())
                 .submittedAt(attempt.getSubmittedAt())
+                .sittingId(attempt.getSittingId())
                 .build();
     }
 }

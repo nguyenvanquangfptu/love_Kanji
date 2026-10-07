@@ -1,8 +1,10 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionSource;
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.Tag;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
@@ -24,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ExamQuestionGeneratorIT extends AbstractIntegrationTest {
 
     /** Cấp độ giả để không đụng tới các bài N5/N4 thật trong dữ liệu mẫu. */
-    private static final String LEVEL = "N9";
+    private static final JlptLevel LEVEL = JlptLevel.N1;
 
     @Autowired
     private ExamQuestionGenerator generator;
@@ -43,15 +45,15 @@ class ExamQuestionGeneratorIT extends AbstractIntegrationTest {
         lesson = tagRepository.save(Tag.builder().name(LEVEL + "-01").build());
         String[][] words = {
                 {"新聞", "しんぶん", "毎朝新聞を読みます。", "Báo"},
-                {"学校", "がっこう", "学校へ行きます。", "Trường học"},
-                {"先生", "せんせい", "先生に聞きます。", "Giáo viên"},
-                {"病院", "びょういん", "病院で働きます。", "Bệnh viện"},
-                {"電車", "でんしゃ", "電車に乗ります。", "Tàu điện"},
+                {"学校", "がっこう", "毎日歩いて学校へ行きます。", "Trường học"},
+                {"先生", "せんせい", "分からないことは先生に聞きます。", "Giáo viên"},
+                {"病院", "びょういん", "姉は駅の近くの病院で働きます。", "Bệnh viện"},
+                {"電車", "でんしゃ", "毎朝七時の電車に乗ります。", "Tàu điện"},
         };
         for (String[] word : words) {
             wordIds.add(kanjiRepository.save(Kanji.builder()
                     .character(word[0]).reading(word[1]).exampleSentence(word[2]).meaning(word[3])
-                    .hanViet("").jlptLevel("N5").strokeCount(10).tags(new HashSet<>(Set.of(lesson)))
+                    .hanViet("").jlptLevel(JlptLevel.N5).strokeCount(10).tags(new HashSet<>(Set.of(lesson)))
                     .build()).getId());
         }
     }
@@ -67,21 +69,25 @@ class ExamQuestionGeneratorIT extends AbstractIntegrationTest {
     }
 
     @Test
-    void generate_shouldSaveThreeQuestionsPerWord_andNothingMoreTheSecondTime() {
-        assertThat(generator.generate(LEVEL).created()).isEqualTo(15);
-        assertThat(generator.generate(LEVEL).created()).isZero();
+    void generate_shouldSaveFourQuestionsPerWord_andNothingMoreTheSecondTime() {
+        // Mỗi từ: đọc, viết, điền từ (4 danh từ còn lại làm đáp án nhiễu), nghĩa.
+        assertThat(generator.generate(LEVEL.name()).created()).isEqualTo(20);
+        assertThat(generator.generate(LEVEL.name()).created()).isZero();
 
         List<Long> ids = questionRepository.findAll().stream()
                 .filter(question -> LEVEL.equals(question.getJlptLevel()))
                 .map(ExamQuestion::getId)
                 .toList();
         List<ExamQuestion> saved = questionRepository.findAllWithWordsByIdIn(ids);
-        assertThat(saved).hasSize(15).allSatisfy(question -> {
+        assertThat(saved).hasSize(20).allSatisfy(question -> {
             assertThat(question.getSource()).isEqualTo(ExamQuestionSource.GENERATED);
             assertThat(question.getKanjiIds()).hasSize(1).isSubsetOf(wordIds);
             assertThat(question.getSentence()).isNotBlank();
-            assertThat(question.getSentence()).contains(question.getHighlight());
+            assertThat(question.getSentence()).contains(JlptQuestionType.CONTEXT.equals(question.getQuestionType())
+                    ? ExamQuestionGenerator.BLANK
+                    : question.getHighlight());
         });
-        assertThat(questionRepository.generatedQuestionWords(LEVEL)).hasSize(15);
+        assertThat(saved).filteredOn(question -> JlptQuestionType.CONTEXT.equals(question.getQuestionType())).hasSize(5);
+        assertThat(questionRepository.generatedQuestionWords(LEVEL.name())).hasSize(20);
     }
 }

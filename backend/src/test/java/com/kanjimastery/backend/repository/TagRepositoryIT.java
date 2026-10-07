@@ -1,5 +1,7 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.Sm2State;
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.Tag;
@@ -106,7 +108,7 @@ class TagRepositoryIT extends AbstractIntegrationTest {
                 .character(character + System.nanoTime() % 10_000)
                 .hanViet("")
                 .strokeCount(1)
-                .jlptLevel("N5")
+                .jlptLevel(JlptLevel.N5)
                 .meaning("nghĩa")
                 .tags(Set.of(tag))
                 .build());
@@ -118,8 +120,8 @@ class TagRepositoryIT extends AbstractIntegrationTest {
         return UserKanjiSrs.builder()
                 .userId(userId)
                 .kanjiId(kanjiId)
-                .repetitionCount(lastReviewedAt == null ? 0 : 1)
-                .easinessFactor(new BigDecimal("2.50"))
+                .sm2(new Sm2State(lastReviewedAt == null ? 0 : 1, new BigDecimal("2.50")))
+                
                 .reviewIntervalDays(lastReviewedAt == null ? 0 : 1)
                 .nextReviewAt(LocalDateTime.now())
                 .lastReviewedAt(lastReviewedAt)

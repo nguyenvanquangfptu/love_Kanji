@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.SchedulerType;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
@@ -34,8 +35,7 @@ public class LearningProfileRequest {
     private Integer newWordsPerDay;
 
     /** SM2 hoặc FSRS; null = giữ SM2. */
-    @Pattern(regexp = "SM2|FSRS", message = "scheduler phải là SM2 hoặc FSRS")
-    private String scheduler;
+    private SchedulerType scheduler;
 
     /** Tỉ lệ nhớ mong muốn khi dùng FSRS (0,70 - 0,97); null = 0,90. */
     @DecimalMin(value = "0.70", message = "Tỉ lệ nhớ mong muốn tối thiểu 70%")

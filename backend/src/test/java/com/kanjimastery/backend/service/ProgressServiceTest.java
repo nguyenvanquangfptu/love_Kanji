@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.config.SrsProperties;
 import com.kanjimastery.backend.dto.ProgressResponse;
 import com.kanjimastery.backend.model.CardState;
@@ -87,7 +88,7 @@ class ProgressServiceTest {
     void get_shouldReportQuizAccuracyPerDirection_andTheMostCommonMistakes() {
         when(reviewLogRepository.activitySince(eq(USER_ID), any())).thenReturn(List.of());
         when(reviewLogRepository.quizDirectionStats(eq(USER_ID), any()))
-                .thenReturn(List.of(directionStats("KANJI_TO_READING", 20, 5), directionStats(null, 3, 1)));
+                .thenReturn(List.of(directionStats(QuizDirection.KANJI_TO_READING, 20, 5), directionStats(null, 3, 1)));
         when(reviewLogRepository.topQuizMistakes(eq(USER_ID), any(), anyInt()))
                 .thenReturn(List.of(mistake(60L, "持つ", 3), mistake(99L, "消えた", 2)));
         // Từ 99 đã bị xoá khỏi kho: bỏ qua.
@@ -98,7 +99,7 @@ class ProgressServiceTest {
         ProgressResponse progress = service.get(USER_ID);
 
         assertThat(progress.getDirections()).singleElement().satisfies(direction -> {
-            assertThat(direction.getDirection()).isEqualTo("KANJI_TO_READING");
+            assertThat(direction.getDirection()).isEqualTo(QuizDirection.KANJI_TO_READING);
             assertThat(direction.getAnswers()).isEqualTo(20);
             assertThat(direction.getCorrect()).isEqualTo(15);
         });
@@ -151,7 +152,7 @@ class ProgressServiceTest {
         };
     }
 
-    private static Activity activity(String utc, String stateBefore, boolean scheduled, boolean correct) {
+    private static Activity activity(String utc, CardState stateBefore, boolean scheduled, boolean correct) {
         return new Activity() {
             @Override
             public LocalDateTime getReviewedAt() {
@@ -159,7 +160,7 @@ class ProgressServiceTest {
             }
 
             @Override
-            public String getStateBefore() {
+            public CardState getStateBefore() {
                 return stateBefore;
             }
 
@@ -175,10 +176,10 @@ class ProgressServiceTest {
         };
     }
 
-    private static DirectionStats directionStats(String direction, long answers, long errors) {
+    private static DirectionStats directionStats(QuizDirection direction, long answers, long errors) {
         return new DirectionStats() {
             @Override
-            public String getDirection() {
+            public QuizDirection getDirection() {
                 return direction;
             }
 
@@ -202,8 +203,8 @@ class ProgressServiceTest {
             }
 
             @Override
-            public String getDirection() {
-                return "READING_TO_KANJI";
+            public QuizDirection getDirection() {
+                return QuizDirection.READING_TO_KANJI;
             }
 
             @Override

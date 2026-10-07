@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamQuestion;
@@ -71,10 +72,10 @@ class ExamDiagnosisIT extends AbstractIntegrationTest {
                 .orElseThrow();
         attemptId = attemptRepository.save(UserExamAttempt.builder()
                 .userId(userId)
-                .jlptLevel("N5")
+                .jlptLevel(JlptLevel.N5)
                 .startedAt(LocalDateTime.now().minusMinutes(5))
                 .build()).getId();
-        examSessionStore.initSession(attemptId, List.of(waterQuestion.getId(), goldQuestion.getId()));
+        examSessionStore.initSession(attemptId, List.of(waterQuestion.getId(), goldQuestion.getId()), 1800);
     }
 
     @AfterEach
@@ -86,8 +87,8 @@ class ExamDiagnosisIT extends AbstractIntegrationTest {
 
     @Test
     void submittingAnExam_shouldAddTheWordsOfWrongAnswersToReview_onlyOnce() {
-        examSessionStore.saveAnswer(attemptId, waterQuestion.getId(), "A");   // sai: 水 là "Nước" (B)
-        examSessionStore.saveAnswer(attemptId, goldQuestion.getId(), "B");    // đúng: 金 là "Vàng, tiền"
+        examSessionStore.saveAnswer(attemptId, waterQuestion.getId(), "A", 1800);   // sai: 水 là "Nước" (B)
+        examSessionStore.saveAnswer(attemptId, goldQuestion.getId(), "B", 1800);    // đúng: 金 là "Vàng, tiền"
         Long water = waterQuestion.getKanjiIds().iterator().next();
         Long gold = goldQuestion.getKanjiIds().iterator().next();
 
@@ -98,8 +99,8 @@ class ExamDiagnosisIT extends AbstractIntegrationTest {
                 .extracting(ReviewLog::getKanjiId, ReviewLog::getDirection, ReviewLog::getCorrect,
                         ReviewLog::getRating, ReviewLog::getScheduled, ReviewLog::getChosenAnswer)
                 .containsExactlyInAnyOrder(
-                        tuple(water, QuizDirection.MEANING, false, (short) ReviewRating.AGAIN, false, "Lửa"),
-                        tuple(gold, QuizDirection.MEANING, true, (short) ReviewRating.GOOD, false, "Vàng, tiền"));
+                        tuple(water, QuizDirection.MEANING, false, ReviewRating.AGAIN, false, "Lửa"),
+                        tuple(gold, QuizDirection.MEANING, true, ReviewRating.GOOD, false, "Vàng, tiền"));
         // Từ làm sai chưa có trong lịch ôn: được thêm vào như từ đã gặp, đến hạn ngay; từ làm đúng thì không.
         assertThat(srsRepository.findByUserIdAndKanjiId(userId, water)).hasValueSatisfying(card ->
                 assertThat(card.getNextReviewAt()).isBeforeOrEqualTo(LocalDateTime.now()));

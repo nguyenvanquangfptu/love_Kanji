@@ -255,6 +255,42 @@ export interface ExamQuestionPublicResponse {
   /** Câu ví dụ kiểu đề JLPT, gạch chân `highlight`; null nếu không có. */
   sentence: string | null
   highlight: string | null
+  /** Dạng câu JLPT; null với câu chỉ dùng cho thi nhanh. */
+  questionType: JlptQuestionType | null
+  /** Câu điền vào chỗ trống 【blankNo】 của đoạn văn passageId (文章の文法); null với câu đứng riêng. */
+  passageId: number | null
+  blankNo: number | null
+}
+
+/** Đoạn văn của 問題3 文章の文法: chỗ trống đánh dấu 【1】【2】... theo blankNo của câu hỏi. */
+export interface ExamPassage {
+  id: number
+  title: string | null
+  content: string
+}
+
+/** Các phần của đề JLPT (chỉ phần Kiến thức ngôn ngữ). */
+export type ExamSectionName = 'VOCABULARY' | 'GRAMMAR'
+
+/** Dạng câu (大問) trong đề JLPT. */
+export type JlptQuestionType =
+  | 'KANJI_READING'
+  | 'ORTHOGRAPHY'
+  | 'CONTEXT'
+  | 'PARAPHRASE'
+  | 'USAGE'
+  | 'GRAMMAR_FORM'
+  | 'SENTENCE_ORDER'
+  | 'TEXT_GRAMMAR'
+
+/** Một 問題 của phần đề JLPT đang làm: câu hỏi của bài xếp liền nhau theo thứ tự các 問題. */
+export interface ExamMondai {
+  /** Số thứ tự trong đề thật (問題1, 問題2...). */
+  number: number
+  type: JlptQuestionType
+  questionCount: number
+  /** Số câu của dạng này trong đề thật - lớn hơn questionCount khi ngân hàng câu hỏi chưa đủ. */
+  plannedCount: number
 }
 
 export interface StartExamResponse {
@@ -263,6 +299,58 @@ export interface StartExamResponse {
   questions: ExamQuestionPublicResponse[]
   remainingSeconds: number
   startedAt: string
+  /** Buổi làm đề JLPT và phần đang làm; null với thi nhanh. */
+  sittingId: number | null
+  section: ExamSectionName | null
+  mondai: ExamMondai[] | null
+  /** Đoạn văn của các câu 文章の文法 trong bài. */
+  passages: ExamPassage[] | null
+}
+
+export interface StartJlptExamRequest {
+  jlptLevel: string
+  sections: ExamSectionName[]
+}
+
+/** Cấu trúc đề JLPT của một cấp độ và số câu hỏi hiện có. */
+export interface JlptLevelResponse {
+  jlptLevel: string
+  sections: {
+    name: ExamSectionName
+    /** Số câu và thời gian của đề thật. */
+    plannedQuestions: number
+    plannedMinutes: number
+    /** Đề ghép được lúc này (dạng chưa đủ câu thì ít câu hơn, thời gian giảm theo tỉ lệ); 0 câu = chưa làm được. */
+    questionCount: number
+    minutes: number
+    mondai: { number: number; type: JlptQuestionType; plannedCount: number; available: number }[]
+  }[]
+}
+
+export type ExamSittingStatus = 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED'
+
+/** Một buổi làm đề JLPT: các phần đã chọn (theo thứ tự làm bài) và kết quả từng phần. */
+export interface ExamSittingResponse {
+  sittingId: number
+  jlptLevel: string
+  status: ExamSittingStatus
+  startedAt: string
+  finishedAt: string | null
+  sections: {
+    name: ExamSectionName
+    /** null = chưa làm. */
+    attemptId: number | null
+    status: ExamAttemptStatus | null
+    totalScore: number | null
+    /** null khi chưa chốt điểm. */
+    totalQuestions: number | null
+    timeSpentSeconds: number | null
+    durationSeconds: number | null
+  }[]
+  /** Phần làm tiếp theo; null khi đang làm dở một phần, đã làm hết hoặc buổi thi đã kết thúc. */
+  nextSection: ExamSectionName | null
+  /** Điểm ước tính thang 0-60 trên các phần đã chốt điểm; null khi chưa phần nào xong. */
+  estimatedScore: number | null
 }
 
 export interface SaveAnswerRequest {
@@ -274,6 +362,8 @@ export interface ExamSessionResponse {
   attemptId: number
   remainingSeconds: number
   answers: Record<number, string>
+  sittingId: number | null
+  section: ExamSectionName | null
 }
 
 export type ExamAttemptStatus = 'IN_PROGRESS' | 'COMPLETED' | 'TIMEOUT'
@@ -284,6 +374,8 @@ export interface ExamResultResponse {
   totalScore: number
   timeSpentSeconds: number
   submittedAt: string
+  /** Buổi làm đề JLPT của lượt thi này; null với thi nhanh. */
+  sittingId: number | null
 }
 
 export interface QuestionReviewItem {
@@ -301,6 +393,39 @@ export interface QuestionReviewItem {
   explanation: string | null
   /** Kỹ năng câu hỏi kiểm tra; null nếu chưa phân loại. */
   skill: QuizDirection | null
+  questionType: JlptQuestionType | null
+  passageId: number | null
+  blankNo: number | null
+  /** Các điểm ngữ pháp câu này kiểm tra; rỗng với câu từ vựng. */
+  grammarPoints: { id: number; pattern: string; meaningVi: string }[]
+  /** Người học đang xem đã báo lỗi câu này. */
+  reported: boolean
+}
+
+/** Một điểm ngữ pháp người học hay làm sai trong các đề JLPT gần đây. */
+export interface WeakGrammarPoint {
+  id: number
+  pattern: string
+  meaningVi: string
+  /** Số câu làm sai / số câu đã trả lời (không tính câu bỏ trống). */
+  wrong: number
+  answered: number
+}
+
+/** Một câu luyện lại điểm ngữ pháp, kèm đáp án để chấm ngay. */
+export interface PracticeQuestion {
+  id: number
+  questionType: JlptQuestionType
+  questionText: string
+  sentence: string | null
+  highlight: string | null
+  optionA: string
+  optionB: string
+  optionC: string
+  optionD: string
+  correctOption: 'A' | 'B' | 'C' | 'D'
+  explanation: string | null
+  grammarPoints: { id: number; pattern: string; meaningVi: string }[]
 }
 
 export interface ExamReviewResponse {
@@ -317,6 +442,13 @@ export interface ExamReviewResponse {
   wrongWords: { kanjiId: number; character: string; reading: string | null; meaning: string }[]
   /** Từ của câu sai đã được đưa vào Ôn tập (bài thi trước khi có tính năng này thì chưa). */
   addedToReview: boolean
+  /** Buổi làm đề JLPT và phần của lượt thi này; null với thi nhanh. */
+  sittingId: number | null
+  section: ExamSectionName | null
+  /** Điểm theo từng 問題 của phần đề JLPT, theo thứ tự trong đề; rỗng với thi nhanh. */
+  mondai: { number: number; type: JlptQuestionType; correct: number; total: number }[]
+  /** Đoạn văn của các câu 文章の文法 trong bài. */
+  passages: ExamPassage[]
 }
 
 export interface LeaderboardEntryResponse {
@@ -324,6 +456,19 @@ export interface LeaderboardEntryResponse {
   userId: number
   username: string
   score: number
+}
+
+/** Một dòng của bảng xếp hạng đề JLPT (buổi thi làm đủ các phần tốt nhất của người học). */
+export interface JlptLeaderboardEntry {
+  /** null khi người học chưa có buổi thi trọn vẹn nào ở cấp độ này. */
+  rank: number | null
+  userId: number
+  username: string | null
+  /** Điểm ước tính thang 0-60. */
+  estimatedScore: number | null
+  correct: number | null
+  total: number | null
+  timeSpentSeconds: number | null
 }
 
 export interface MyRankResponse {
@@ -373,4 +518,141 @@ export interface QuizAnswerResponse {
   /** Từ có nằm trong lịch ôn không - từ làm sai luôn được đưa vào. */
   inReview: boolean
   nextReviewAt: string | null
+}
+
+/** Một điểm ngữ pháp (〜てから...) của một cấp độ. */
+export interface GrammarPoint {
+  id: number
+  jlptLevel: string
+  /** Bài trong giáo trình (N4-26...); null = không theo bài. */
+  lesson: string | null
+  pattern: string
+  /** Cách nối: Vて + から. */
+  connection: string | null
+  meaningVi: string
+  explanationVi: string | null
+  /** Số câu thi gắn với điểm này: đã duyệt và đang chờ duyệt. */
+  approvedQuestions: number
+  draftQuestions: number
+}
+
+export interface GrammarPointRequest {
+  jlptLevel: string
+  lesson: string
+  pattern: string
+  connection: string
+  meaningVi: string
+  explanationVi: string
+}
+
+/** Kết quả nhập CSV: số điểm mới / được cập nhật / giữ nguyên, và các dòng bị bỏ qua kèm lý do. */
+export interface GrammarImportResult {
+  created: number
+  updated: number
+  unchanged: number
+  errors: string[]
+}
+
+/** Trạng thái duyệt của câu thi: chỉ câu APPROVED được lấy vào đề. */
+export type ExamQuestionStatus = 'DRAFT' | 'APPROVED' | 'REJECTED' | 'RETIRED'
+
+/** Cảnh báo của bước kiểm tra tự động cho người duyệt. */
+export type ExamQuestionFlag = 'AMBIGUOUS' | 'WRONG_ANSWER' | 'ABOVE_LEVEL' | 'REPORTED' | 'STATS'
+
+/** Lý do người học báo lỗi một câu hỏi. */
+export type QuestionReportReason = 'WRONG_ANSWER' | 'AMBIGUOUS' | 'UNCLEAR' | 'OTHER'
+
+/** Một câu thi trên trang duyệt (có đáp án đúng). */
+export interface AdminExamQuestion {
+  id: number
+  jlptLevel: string
+  questionType: JlptQuestionType
+  skill: QuizDirection | null
+  status: ExamQuestionStatus
+  flag: ExamQuestionFlag | null
+  reviewNote: string | null
+  reviewedAt: string | null
+  source: 'MANUAL' | 'GENERATED' | 'AI'
+  questionText: string
+  sentence: string | null
+  highlight: string | null
+  optionA: string
+  optionB: string
+  optionC: string
+  optionD: string
+  correctOption: 'A' | 'B' | 'C' | 'D'
+  explanation: string | null
+  passageId: number | null
+  blankNo: number | null
+  words: { id: number; character: string; reading: string | null }[]
+  grammarPoints: { id: number; pattern: string }[]
+  /** Báo lỗi của người học đang chờ xem, cũ nhất trước. */
+  reports: { reason: QuestionReportReason; note: string | null; createdAt: string }[]
+  /** Thống kê từ kết quả thi thật (lần phân tích gần nhất); null nếu chưa đủ lượt làm. */
+  stats: { responses: number; correctRate: number; discrimination: number | null; computedAt: string } | null
+}
+
+export interface AdminExamQuestionRequest {
+  questionText: string
+  sentence: string
+  highlight: string
+  optionA: string
+  optionB: string
+  optionC: string
+  optionD: string
+  correctOption: 'A' | 'B' | 'C' | 'D'
+  explanation: string
+}
+
+/** Ngân hàng câu đề JLPT của một cấp độ theo từng dạng câu. */
+export interface QuestionBankStats {
+  jlptLevel: string
+  types: {
+    section: ExamSectionName
+    type: JlptQuestionType
+    perExam: number
+    approved: number
+    draft: number
+    rejected: number
+    retired: number
+    /** Số đề đủ câu đã duyệt. */
+    exams: number
+  }[]
+}
+
+/** Kết quả duyệt một lượt nhiều câu: số câu đã duyệt, và các câu bỏ qua kèm lý do. */
+export interface BulkApprovalResult {
+  approved: number
+  skipped: { id: number; reason: string }[]
+}
+
+/** Kết quả một lần nhờ AI viết nháp: số câu vào hàng chờ duyệt (trong đó có cảnh báo), bị loại, không đọc được. */
+export interface QuestionDraftResult {
+  drafted: number
+  flagged: number
+  rejected: number
+  unreadable: number
+}
+
+/** Kết quả nhờ AI viết một đoạn văn 文章の文法: chờ duyệt, hoặc bị loại vì sai cấu trúc (lý do ở ghi chú của đoạn). */
+export interface PassageDraftResult {
+  passageId: number
+  status: 'DRAFT' | 'REJECTED'
+  flag: ExamQuestionFlag | null
+  /** Số câu hỏi (chỗ trống) đọc được. */
+  questions: number
+}
+
+/** Một đoạn văn 文章の文法 trên trang duyệt, kèm các câu hỏi theo thứ tự chỗ trống. */
+export interface AdminExamPassage {
+  id: number
+  jlptLevel: string
+  title: string | null
+  content: string
+  status: ExamQuestionStatus
+  source: 'MANUAL' | 'GENERATED' | 'AI'
+  flag: ExamQuestionFlag | null
+  reviewNote: string | null
+  reviewedAt: string | null
+  questions: AdminExamQuestion[]
 }

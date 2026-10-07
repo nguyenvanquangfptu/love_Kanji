@@ -1,0 +1,94 @@
+package com.kanjimastery.backend.controller;
+
+import com.kanjimastery.backend.model.ReviewState;
+import com.kanjimastery.backend.model.JlptLevel;
+import com.kanjimastery.backend.AbstractIntegrationTest;
+import com.kanjimastery.backend.model.ExamPassage;
+import com.kanjimastery.backend.model.ExamQuestion;
+import com.kanjimastery.backend.model.ExamQuestionStatus;
+import com.kanjimastery.backend.model.JlptQuestionType;
+import com.kanjimastery.backend.repository.ExamPassageRepository;
+import com.kanjimastery.backend.repository.ExamQuestionRepository;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+/** API đoạn văn 文章の文法 qua HTTP: chỉ quản trị viên; xem kèm câu hỏi, sửa nội dung, duyệt cả đoạn, nhờ AI viết. */
+@AutoConfigureMockMvc
+@TestPropertySource(properties = "app.ai.gemini-api-key=")
+class AdminExamPassageControllerIT extends AbstractIntegrationTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+    @Autowired
+    private ExamPassageRepository passageRepository;
+    @Autowired
+    private ExamQuestionRepository questionRepository;
+
+    private ExamPassage passage;
+
+    @BeforeEach
+    void setUp() {
+        passage = passageRepository.save(ExamPassage.builder().jlptLevel(JlptLevel.N4).title("日記")
+                .content("きのうは雨でした。【1】、出かけませんでした。").build());
+        questionRepository.save(ExamQuestion.builder().jlptLevel(JlptLevel.N4).questionText("【1】")
+                .optionA("だから").optionB("でも").optionC("それに").optionD("または").correctOption("A")
+                .questionType(JlptQuestionType.TEXT_GRAMMAR).review(new ReviewState(ExamQuestionStatus.DRAFT))
+                .passageId(passage.getId()).blankNo(1).build());
+    }
+
+    @AfterEach
+    void tearDown() {
+        passageRepository.deleteById(passage.getId());
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void learners_shouldNotReachPassages() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/exam-passages").param("level", "N4")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/admin/exam-passages/drafts").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"level\": \"N4\"}")).andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void drafting_shouldExplainThatGeminiIsNotConfigured() throws Exception {
+        mockMvc.perform(post("/api/v1/admin/exam-passages/drafts").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"level\": \"N4\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(containsString("GEMINI_API_KEY")));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void admins_shouldSeePassagesWithTheirQuestions_editThem_andApproveThemWhole() throws Exception {
+        mockMvc.perform(get("/api/v1/admin/exam-passages").param("level", "N4").param("status", "DRAFT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(passage.getId()))
+                .andExpect(jsonPath("$.content[0].questions[0].blankNo").value(1));
+
+        mockMvc.perform(put("/api/v1/admin/exam-passages/{id}", passage.getId()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\": \"日記\", \"content\": \"chỗ trống bị xoá mất\"}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post("/api/v1/admin/exam-passages/{id}/status", passage.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"APPROVED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APPROVED"))
+                .andExpect(jsonPath("$.questions[0].status").value("APPROVED"));
+    }
+}

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.QuizDirection;
@@ -15,8 +16,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -48,6 +51,9 @@ class ExamDiagnosisServiceTest {
     @Mock
     private SrsService srsService;
 
+    @Spy
+    private Clock clock = Clock.systemDefaultZone();
+
     @InjectMocks
     private ExamDiagnosisService diagnosisService;
 
@@ -55,7 +61,7 @@ class ExamDiagnosisServiceTest {
     void diagnose_shouldRecordEveryAnsweredQuestionForItsWords_asAnExamAnswer() {
         when(attemptRepository.markDiagnosed(eq(ATTEMPT_ID), any())).thenReturn(1);
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
-                .userId(USER_ID).jlptLevel("N5").status(ExamAttemptStatus.COMPLETED)
+                .userId(USER_ID).jlptLevel(JlptLevel.N5).status(ExamAttemptStatus.COMPLETED)
                 .startedAt(LocalDateTime.now().minusMinutes(20)).build()));
         when(answerRepository.findByAttemptId(ATTEMPT_ID)).thenReturn(List.of(
                 answer(1L, "C", false), answer(2L, "A", true), answer(3L, null, false)));
@@ -93,8 +99,8 @@ class ExamDiagnosisServiceTest {
                 .isCorrect(correct).build();
     }
 
-    private static ExamQuestion question(Long id, String skill, Long... kanjiIds) {
-        return ExamQuestion.builder().id(id).jlptLevel("N5").questionText("Câu " + id).optionA("một").optionB("hai")
+    private static ExamQuestion question(Long id, QuizDirection skill, Long... kanjiIds) {
+        return ExamQuestion.builder().id(id).jlptLevel(JlptLevel.N5).questionText("Câu " + id).optionA("một").optionB("hai")
                 .optionC("ぎん").optionD("きん").correctOption(id == 1L ? "D" : "A").skill(skill)
                 .kanjiIds(Set.of(kanjiIds)).build();
     }

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.ReviewRating;
 import com.kanjimastery.backend.repository.ReviewLogRepository;
 import com.kanjimastery.backend.repository.ReviewLogRepository.ResponseTimeStats;
@@ -35,11 +36,11 @@ public class ResponseTimeRater {
     }
 
     /** Không có thời gian trả lời thì coi là "Nhớ". */
-    public int rateCorrectAnswer(Long userId, String direction, Integer responseMs) {
+    public ReviewRating rateCorrectAnswer(Long userId, QuizDirection direction, Integer responseMs) {
         if (responseMs == null) {
             return ReviewRating.GOOD;
         }
-        ResponseTimeStats stats = reviewLogRepository.correctQuizResponseTimes(userId, direction, RECENT_SAMPLES);
+        ResponseTimeStats stats = reviewLogRepository.correctQuizResponseTimes(userId, direction.name(), RECENT_SAMPLES);
         double easyUpTo = DEFAULT_EASY_MS;
         double hardAbove = DEFAULT_HARD_MS;
         if (stats != null && stats.getMedianMs() != null && stats.getSamples() >= MIN_SAMPLES) {

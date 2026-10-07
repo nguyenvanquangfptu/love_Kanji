@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.config;
 
+import com.kanjimastery.backend.model.UserExamAttempt;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -25,4 +26,15 @@ public class ExamProperties {
 
     /** Chu kỳ quét của Reconciliation Job (mili-giây). */
     private long reconciliationIntervalMs = 90_000;
+
+    /** Buổi làm đề JLPT còn dở sau chừng này giờ (không có phần nào đang làm) thì coi như bỏ dở. */
+    private int sittingMaxHours = 3;
+
+    /** Chu kỳ quét buổi làm đề JLPT bỏ dở (mili-giây). */
+    private long sittingCleanupIntervalMs = 600_000;
+
+    /** Thời gian làm bài của một lượt: riêng của lượt nếu có (các phần đề JLPT), không thì mặc định. */
+    public int durationOf(UserExamAttempt attempt) {
+        return attempt.getDurationSeconds() != null ? attempt.getDurationSeconds() : durationSeconds;
+    }
 }

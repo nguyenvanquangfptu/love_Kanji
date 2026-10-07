@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kanjimastery.backend.model.Kanji;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,8 +33,8 @@ class SentenceGenerationServiceTest {
     private HttpResponse<String> nextResponse;
     private SentenceGenerationService service;
 
-    private final Kanji dry = Kanji.builder().id(1L).character("乾く").meaning("khô").jlptLevel("N3").build();
-    private final Kanji thirsty = Kanji.builder().id(2L).character("渇く").meaning("khát").jlptLevel("N3").build();
+    private final Kanji dry = Kanji.builder().id(1L).character("乾く").meaning("khô").jlptLevel(JlptLevel.N3).build();
+    private final Kanji thirsty = Kanji.builder().id(2L).character("渇く").meaning("khát").jlptLevel(JlptLevel.N3).build();
 
     @BeforeEach
     void setUp() {

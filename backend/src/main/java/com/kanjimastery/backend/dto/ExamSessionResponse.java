@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.ExamSection;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -14,4 +15,7 @@ public class ExamSessionResponse {
     private Long attemptId;
     private long remainingSeconds;
     private Map<Long, String> answers;
+    /** Buổi làm đề JLPT và phần của lượt thi này; null với thi nhanh. */
+    private Long sittingId;
+    private ExamSection section;
 }

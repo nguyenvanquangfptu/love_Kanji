@@ -1,5 +1,7 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.JlptLevel;
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.CardState;
 import com.kanjimastery.backend.model.Kanji;
@@ -32,7 +34,7 @@ import static org.assertj.core.api.Assertions.within;
 /** Các truy vấn thống kê review_logs chạy trên PostgreSQL thật (percentile_cont, FILTER, mốc thời gian). */
 class ReviewLogRepositoryIT extends AbstractIntegrationTest {
 
-    private static final String DIRECTION = "KANJI_TO_READING";
+    private static final QuizDirection DIRECTION = QuizDirection.KANJI_TO_READING;
 
     @Autowired
     private ReviewLogRepository reviewLogRepository;
@@ -57,7 +59,7 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
                 .character("試" + suffix.substring(suffix.length() - 4))
                 .hanViet("THÍ")
                 .strokeCount(13)
-                .jlptLevel("N4")
+                .jlptLevel(JlptLevel.N4)
                 .meaning("Thử")
                 .build()).getId();
     }
@@ -71,8 +73,16 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void tableSize_shouldReportTheTableAndIndexSize_withoutScanning() {
+        ReviewLogRepository.TableSize size = reviewLogRepository.tableSize();
+
+        assertThat(size.getBytes()).isPositive();
+        assertThat(size.getRows()).isNotNegative();
+    }
+
+    @Test
     void correctQuizResponseTimes_shouldReturnNullMedianAndZeroSamples_whenNoAnswers() {
-        ResponseTimeStats stats = reviewLogRepository.correctQuizResponseTimes(userId, DIRECTION, 200);
+        ResponseTimeStats stats = reviewLogRepository.correctQuizResponseTimes(userId, DIRECTION.name(), 200);
 
         assertThat(stats.getMedianMs()).isNull();
         assertThat(stats.getSamples()).isZero();
@@ -89,10 +99,10 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
         // Không được tính: trả lời sai, không đo được thời gian, hướng khác, thẻ ôn tập.
         save(start.plusMinutes(4), ReviewSource.QUIZ, DIRECTION, false, 500);
         save(start.plusMinutes(5), ReviewSource.QUIZ, DIRECTION, true, null);
-        save(start.plusMinutes(6), ReviewSource.QUIZ, "MEANING", true, 500);
+        save(start.plusMinutes(6), ReviewSource.QUIZ, QuizDirection.MEANING, true, 500);
         save(start.plusMinutes(7), ReviewSource.FLASHCARD, null, true, 500);
 
-        ResponseTimeStats stats = reviewLogRepository.correctQuizResponseTimes(userId, DIRECTION, 3);
+        ResponseTimeStats stats = reviewLogRepository.correctQuizResponseTimes(userId, DIRECTION.name(), 3);
 
         assertThat(stats.getSamples()).isEqualTo(3);
         assertThat(stats.getMedianMs()).isEqualTo(2_000.0);
@@ -103,18 +113,18 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
         LocalDateTime now = LocalDateTime.now();
         save(now.minusDays(20), ReviewSource.QUIZ, DIRECTION, false, 1_000);
         save(now.minusDays(1), ReviewSource.QUIZ, DIRECTION, true, 1_000);
-        save(now.minusDays(1), ReviewSource.QUIZ, "READING_TO_KANJI", false, 1_000);
+        save(now.minusDays(1), ReviewSource.QUIZ, QuizDirection.READING_TO_KANJI, false, 1_000);
         save(now.minusHours(1), ReviewSource.FLASHCARD, null, false, null);
 
         Map<String, WordDirectionStats> byDirection = reviewLogRepository
                 .wordDirectionStats(userId, List.of(kanjiId), now.minusDays(14)).stream()
                 .collect(Collectors.toMap(row -> String.valueOf(row.getDirection()), Function.identity()));
 
-        assertThat(byDirection).containsOnlyKeys(DIRECTION, "READING_TO_KANJI", "null");
-        assertThat(byDirection.get(DIRECTION)).extracting(
+        assertThat(byDirection).containsOnlyKeys(DIRECTION.name(), QuizDirection.READING_TO_KANJI.name(), "null");
+        assertThat(byDirection.get(DIRECTION.name())).extracting(
                 WordDirectionStats::getAnswers, WordDirectionStats::getErrors, WordDirectionStats::getRecentErrors)
                 .containsExactly(2L, 1L, 0L);
-        assertThat(byDirection.get("READING_TO_KANJI").getRecentErrors()).isEqualTo(1);
+        assertThat(byDirection.get(QuizDirection.READING_TO_KANJI.name()).getRecentErrors()).isEqualTo(1);
         assertThat(byDirection.get("null").getRecentErrors()).isEqualTo(1);
         assertThat(byDirection.values()).allSatisfy(row -> assertThat(row.getKanjiId()).isEqualTo(kanjiId));
     }
@@ -142,7 +152,7 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
         saveAnswer(now.minusDays(5), DIRECTION, false, "しょるい");
         saveAnswer(now.minusDays(3), DIRECTION, false, "しゅへん");
         saveAnswer(now.minusDays(2), DIRECTION, false, "しゅへん");
-        saveAnswer(now.minusDays(1), "READING_TO_KANJI", false, "周辺");
+        saveAnswer(now.minusDays(1), QuizDirection.READING_TO_KANJI, false, "周辺");
         // Không tính: trả lời đúng.
         saveAnswer(now.minusHours(1), DIRECTION, true, "しゅうへん");
 
@@ -151,7 +161,7 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
         assertThat(mistakes).extracting(QuizMistake::getDirection, QuizMistake::getChosenAnswer, QuizMistake::getTimes)
                 .containsExactly(
                         tuple(DIRECTION, "しゅへん", 2L),
-                        tuple("READING_TO_KANJI", "周辺", 1L),
+                        tuple(QuizDirection.READING_TO_KANJI, "周辺", 1L),
                         tuple(DIRECTION, "しょるい", 1L));
     }
 
@@ -193,7 +203,7 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
         saveAnswer(now.minusDays(3), DIRECTION, false, "しゅへん");
         saveAnswer(now.minusDays(2), DIRECTION, false, "しゅへん");
         saveAnswer(now.minusDays(1), DIRECTION, false, "しょるい");
-        saveAnswer(now.minusHours(1), "MEANING", false, "Xung quanh");
+        saveAnswer(now.minusHours(1), QuizDirection.MEANING, false, "Xung quanh");
 
         List<QuizMistake> mistakes = reviewLogRepository.topQuizMistakes(userId, now.minusDays(90), 2);
 
@@ -235,7 +245,7 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
         assertThat(reviewLogRepository.firstReviewOutcomes(userId))
                 .extracting(FirstReviewOutcome::getRating, FirstReviewOutcome::getFirstAt, FirstReviewOutcome::getNextAt,
                         FirstReviewOutcome::getRecalled)
-                .containsExactly(tuple((short) ReviewRating.HARD, learned, learned.plusDays(2), false));
+                .containsExactly(tuple((short) ReviewRating.HARD.value(), learned, learned.plusDays(2), false));
     }
 
     @Test
@@ -271,25 +281,25 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
                 .character(character + suffix.substring(suffix.length() - 4))
                 .hanViet("THÍ")
                 .strokeCount(5)
-                .jlptLevel("N4")
+                .jlptLevel(JlptLevel.N4)
                 .meaning("Thử")
                 .build()).getId();
         otherKanjiIds.add(id);
         return id;
     }
 
-    private void saveReview(Long kanji, LocalDateTime at, String stateBefore, int rating, boolean scheduled) {
+    private void saveReview(Long kanji, LocalDateTime at, CardState stateBefore, ReviewRating rating, boolean scheduled) {
         saveReview(kanji, at, stateBefore, rating, scheduled, null);
     }
 
-    private void saveReview(Long kanji, LocalDateTime at, String stateBefore, int rating, boolean scheduled,
+    private void saveReview(Long kanji, LocalDateTime at, CardState stateBefore, ReviewRating rating, boolean scheduled,
                             Double retrievability) {
         reviewLogRepository.save(ReviewLog.builder()
                 .userId(userId)
                 .kanjiId(kanji)
                 .source(ReviewSource.FLASHCARD)
                 .correct(rating != ReviewRating.AGAIN)
-                .rating((short) rating)
+                .rating(rating)
                 .stateBefore(stateBefore)
                 .scheduled(scheduled)
                 .retrievability(retrievability)
@@ -297,28 +307,28 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
                 .build());
     }
 
-    private void saveReview(LocalDateTime at, String stateBefore, boolean scheduled) {
+    private void saveReview(LocalDateTime at, CardState stateBefore, boolean scheduled) {
         reviewLogRepository.save(ReviewLog.builder()
                 .userId(userId)
                 .kanjiId(kanjiId)
                 .source(ReviewSource.FLASHCARD)
                 .correct(true)
-                .rating((short) ReviewRating.GOOD)
+                .rating(ReviewRating.GOOD)
                 .stateBefore(stateBefore)
                 .scheduled(scheduled)
                 .reviewedAt(at)
                 .build());
     }
 
-    private void saveAnswer(LocalDateTime at, String direction, boolean correct, String chosenAnswer) {
+    private void saveAnswer(LocalDateTime at, QuizDirection direction, boolean correct, String chosenAnswer) {
         save(at, ReviewSource.QUIZ, direction, correct, 1_000, chosenAnswer);
     }
 
-    private void save(LocalDateTime at, String source, String direction, boolean correct, Integer responseMs) {
+    private void save(LocalDateTime at, ReviewSource source, QuizDirection direction, boolean correct, Integer responseMs) {
         save(at, source, direction, correct, responseMs, null);
     }
 
-    private void save(LocalDateTime at, String source, String direction, boolean correct, Integer responseMs,
+    private void save(LocalDateTime at, ReviewSource source, QuizDirection direction, boolean correct, Integer responseMs,
                       String chosenAnswer) {
         reviewLogRepository.save(ReviewLog.builder()
                 .userId(userId)
@@ -326,7 +336,7 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
                 .source(source)
                 .direction(direction)
                 .correct(correct)
-                .rating((short) (correct ? ReviewRating.GOOD : ReviewRating.AGAIN))
+                .rating(correct ? ReviewRating.GOOD : ReviewRating.AGAIN)
                 .responseMs(responseMs)
                 .chosenAnswer(chosenAnswer)
                 .stateBefore(CardState.NEW)

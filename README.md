@@ -11,6 +11,7 @@ Backend Spring Boot cho nền tảng học Kanji cá nhân hóa (lịch ôn Supe
 - [Thuật toán SuperMemo SM-2](#thuật-toán-supermemo-sm-2)
 - [Lịch ôn FSRS](#lịch-ôn-fsrs)
 - [Cá nhân hoá việc học](#cá-nhân-hoá-việc-học)
+- [Đề thi JLPT](#đề-thi-jlpt)
 - [Chấm điểm bài thi: Race Condition & Transaction Boundary](#chấm-điểm-bài-thi-race-condition--transaction-boundary)
 - [Tối ưu hiệu năng Database](#tối-ưu-hiệu-năng-database)
 - [Database Schema](#database-schema)
@@ -38,6 +39,9 @@ Backend Spring Boot cho nền tảng học Kanji cá nhân hóa (lịch ôn Supe
 9. **Cá nhân hoá từ lịch sử trả lời**: mọi lần trả lời được ghi vào `review_logs`; trắc nghiệm chọn từ theo điểm yếu (weighted sampling Efraimidis-Spirakis), đáp án nhiễu lấy từ chính những lần người học chọn nhầm, phiên ôn mỗi ngày vừa với thời gian người học có và kịp ngày thi — xem [Cá nhân hoá việc học](#cá-nhân-hoá-việc-học).
 10. **FSRS-6 tự cài bằng Java**, khớp từng con số với thư viện tham chiếu py-fsrs (golden test); tham số khởi đầu tối ưu riêng cho từng người theo bước pretrain của optimizer chính thức, và trang Tiến bộ so dự đoán của FSRS với trí nhớ thật — xem [Lịch ôn FSRS](#lịch-ôn-fsrs).
 11. **Đề thi chỉ ra điểm yếu**: câu thi kiểu đề JLPT sinh từ kho từ vựng bằng chính bộ dựng câu hỏi của trắc nghiệm; kết quả chấm theo kỹ năng, và từ của câu sai tự vào lịch ôn qua listener `AFTER_COMMIT` + transaction `REQUIRES_NEW`, chỉ một lần cho mỗi bài thi.
+12. **Đề JLPT theo cấu trúc đề thật**: cấu trúc đề N5-N3 để trong file cấu hình; mỗi phần (Từ vựng, Ngữ pháp) là một lượt thi có giờ riêng, dùng lại cơ chế đếm giờ + CAS sẵn có; ghép đề ưu tiên câu người học chưa gặp, 文章の文法 lấy trọn đoạn văn — xem [Đề thi JLPT](#đề-thi-jlpt).
+13. **Sinh câu hỏi bằng AI có kiểm soát**: Gemini viết nháp theo JSON → kiểm tra cấu trúc → tìm từ vượt cấp bằng phân tích hình thái tiếng Nhật (Kuromoji) + kho từ → AI tự giải lại để bắt câu sai đáp án hoặc có hai đáp án → người duyệt. Câu nháp không bao giờ tự vào đề.
+14. **Vòng chất lượng sau khi duyệt**: người học báo lỗi câu hỏi (câu bị 3 người báo tự rút khỏi đề), và phân tích câu hỏi (item analysis) hằng tuần từ kết quả thật: câu mà người làm tốt các câu khác lại hay sai (độ phân biệt âm) bị gắn cờ cho người duyệt.
 
 ---
 
@@ -126,6 +130,29 @@ Mọi lần người học trả lời một từ — lật thẻ ôn tập, là
 
 ---
 
+## Đề thi JLPT
+
+Thi thử theo đúng cấu trúc môn 言語知識 (Kiến thức ngôn ngữ) của đề JLPT N5-N3: phần **Từ vựng** (文字・語彙) và phần **Ngữ pháp** (文法); không có Đọc hiểu và Nghe. Kế hoạch và tiến độ chi tiết ở [ke_hoach_de_jlpt.md](ke_hoach_de_jlpt.md).
+
+| Phần | Cách làm |
+|---|---|
+| Cấu trúc đề | Số câu từng 問題 theo jlpt.jp (N3: Từ vựng 8-6-11-5-5 câu / 30 phút, Ngữ pháp 13-5-5 câu), để trong [`jlpt-blueprints.yml`](backend/src/main/resources/jlpt-blueprints.yml). Ngân hàng câu chưa đủ một dạng thì đề ngắn hơn đề thật và thời gian giảm theo tỉ lệ số câu. |
+| Buổi thi nhiều phần | Mỗi phần là một lượt thi có đồng hồ riêng (dùng lại Redis + CAS của thi nhanh); nộp phần trước mới sang phần sau, không quay lại; mỗi từ chỉ bị hỏi một lần trong cả buổi; bỏ dở quá 3 giờ thì job tự đóng buổi thi ([`JlptExamService`](backend/src/main/java/com/kanjimastery/backend/service/JlptExamService.java)). |
+| Ghép đề | Chỉ lấy câu đã duyệt; câu và đoạn văn người học **chưa gặp** đứng trước, hết thì tới câu gặp lâu nhất; 文章の文法 lấy trọn đoạn văn với mọi chỗ trống ([`JlptExamAssembler`](backend/src/main/java/com/kanjimastery/backend/service/JlptExamAssembler.java)). |
+| Giao diện như đề thật | Đầu mỗi 問題 có lời dẫn tiếng Nhật kèm dịch; câu 文の組み立て vẽ ô ＿＿＿ và ★; đoạn văn hiện phía trên câu hỏi, chỗ trống là ô số bấm được. |
+| Ngân hàng câu | Câu sinh tự động từ câu ví dụ của từ trong bài (漢字読み, 表記 kể cả katakana N5 với đáp án nhiễu sai một chỗ, 文脈規定 chỉ cho danh từ, động từ đủ ngữ cảnh), câu soạn tay, và nháp AI. Trạng thái `DRAFT` / `APPROVED` / `REJECTED` / `RETIRED`; trang quản trị lọc theo cấp độ / dạng / cảnh báo / điểm ngữ pháp / báo lỗi, sửa, duyệt từng câu hoặc cả trang, duyệt cả đoạn văn; bảng "đủ cho bao nhiêu đề". |
+| Ngữ pháp | Danh sách điểm ngữ pháp theo cấp độ và bài (bảng `grammar_points`, nhập/xuất CSV ở trang quản trị); câu thi gắn với điểm ngữ pháp nó kiểm tra. |
+| Nháp AI | Từ trang quản trị: câu 文法形式の判断 / 文の組み立て cho một điểm ngữ pháp, câu 言い換え / 用法 cho từ trong bài chưa có câu, đoạn văn 文章の文法 đủ số chỗ trống. Mỗi lần 2 request Gemini (viết + giải lại); sai cấu trúc thì loại luôn, có nghi vấn thì gắn cờ ([`DraftReviewer`](backend/src/main/java/com/kanjimastery/backend/service/DraftReviewer.java)). |
+| Kết quả | Điểm theo từng 問題, **điểm ước tính /60** (tỉ lệ đúng × 60, ghi rõ chỉ để tham khảo vì JLPT thật quy đổi điểm theo thống kê), điểm ngữ pháp của từng câu khi xem lại; từ của câu sai vào Ôn tập. |
+| Chẩn đoán ngữ pháp | Tối đa 8 điểm ngữ pháp sai nhiều nhất trong các đề 60 ngày qua, và trang luyện lại không tính giờ bằng câu đã duyệt của các điểm đó ([`GrammarPracticeService`](backend/src/main/java/com/kanjimastery/backend/service/GrammarPracticeService.java)). |
+| Bảng xếp hạng | Riêng cho đề JLPT từng cấp độ (Redis ZSET, tách với thi nhanh): chỉ buổi thi làm đủ các phần, mỗi người lấy buổi tốt nhất — tỉ lệ đúng trước, rồi thời gian. |
+| Báo lỗi câu hỏi | Người học báo lỗi câu đã làm từ trang xem lại; câu đã duyệt bị 3 người báo tự rút về chờ duyệt (câu của đoạn văn thì rút cả đoạn); người duyệt xử lý hoặc bỏ qua báo lỗi ([`QuestionReportService`](backend/src/main/java/com/kanjimastery/backend/service/QuestionReportService.java)). |
+| Phân tích câu hỏi | Mỗi thứ Hai (hoặc bấm "Phân tích câu hỏi"): số lượt, tỉ lệ đúng và **độ phân biệt** — tỉ lệ đúng của 27% lượt làm tốt nhất các câu khác trừ 27% lượt kém nhất — trên các lượt làm từ lần duyệt gần nhất. Câu đã duyệt có từ 30 lượt mà độ phân biệt âm bị gắn cờ "Thống kê đáng ngờ" ([`ItemAnalysisService`](backend/src/main/java/com/kanjimastery/backend/service/ItemAnalysisService.java)). |
+
+Đề JLPT thật có bản quyền của Japan Foundation/JEES nên ngân hàng câu **không chép câu nào từ đề thật**; đề thật chỉ dùng để đối chiếu cấu trúc và độ khó.
+
+---
+
 ## Chấm điểm bài thi: Race Condition & Transaction Boundary
 
 ### Vấn đề
@@ -204,10 +231,15 @@ Các bảng chính (PostgreSQL, quản lý bằng Flyway — xem [`db/migration`
 | `review_logs` | Mỗi lần trả lời một từ (thẻ ôn tập, trắc nghiệm, bài thi) kèm xác suất nhớ FSRS dự đoán — nguồn dữ liệu cá nhân hoá |
 | `user_learning_profiles` | Mục tiêu học: cấp độ, ngày thi, số phút mỗi ngày, thuật toán lịch ôn, tỉ lệ nhớ mong muốn |
 | `user_fsrs_parameters` | Tham số FSRS tối ưu riêng từng người (JSONB, kèm phiên bản FSRS) |
-| `exam_questions` | Ngân hàng câu hỏi JLPT: kỹ năng, nguồn (soạn tay / sinh từ kho từ vựng), câu ví dụ và phần gạch chân |
+| `exam_questions` | Ngân hàng câu hỏi JLPT: dạng câu (問題), kỹ năng, nguồn (soạn tay / sinh từ kho từ vựng / AI), trạng thái duyệt, cờ cảnh báo, câu ví dụ và phần gạch chân, đoạn văn và chỗ trống |
 | `exam_question_kanji` | Từ vựng mỗi câu thi kiểm tra |
-| `user_exam_attempts` | Mỗi lượt thi (status: `IN_PROGRESS` / `COMPLETED` / `TIMEOUT`) |
-| `user_exam_answers` | Chi tiết từng câu trả lời — phục vụ tính năng xem lại bài làm |
+| `grammar_points` · `exam_question_grammar` | Điểm ngữ pháp N5-N3 theo bài, và điểm ngữ pháp mỗi câu thi kiểm tra |
+| `exam_passages` | Đoạn văn 文章の文法 với chỗ trống 【1】【2】..., duyệt cả đoạn |
+| `exam_sittings` | Buổi làm đề JLPT gồm nhiều phần, mỗi phần là một lượt thi |
+| `user_exam_attempts` | Mỗi lượt thi (status: `IN_PROGRESS` / `COMPLETED` / `TIMEOUT`), phần thi và thời gian riêng nếu thuộc một buổi thi |
+| `user_exam_answers` | Chi tiết từng câu trả lời — phục vụ tính năng xem lại bài làm, chẩn đoán ngữ pháp, phân tích câu |
+| `exam_question_reports` | Người học báo lỗi câu hỏi (lý do, ghi chú, trạng thái xử lý) |
+| `exam_question_stats` | Thống kê từng câu từ kết quả thật: số lượt, tỉ lệ đúng, độ phân biệt |
 
 ---
 
@@ -224,6 +256,8 @@ Tài liệu API đầy đủ, tương tác được (có nút **Authorize** đ�
 | Mục tiêu & tiến bộ | `GET` `PUT /api/v1/profile/learning` `POST /learning/fsrs/optimize` · `GET /api/v1/progress` | Cấp độ, ngày thi, số phút mỗi ngày, SM-2/FSRS và tỉ lệ nhớ; tối ưu FSRS theo lịch sử ôn; tỉ lệ nhớ theo tuần, hoạt động 14 ngày, chỗ hay nhầm, FSRS dự đoán so với thực tế |
 | Exam | `POST /api/v1/exams/start` `PUT .../answers` `GET .../session` `POST .../submit` `GET .../review` · `POST /questions/generate` (ADMIN) | Thi thử, auto-save, resume, nộp bài, xem lại kèm điểm theo kỹ năng và từ cần ôn; sinh câu thi từ kho từ vựng |
 | Leaderboard | `GET /api/v1/exams/leaderboard` `/my-rank` | Bảng xếp hạng real-time (Redis ZSET) |
+| Đề JLPT | `GET /api/v1/exams/jlpt/levels` `POST /sittings` `POST /sittings/{id}/next` `GET /sittings/{id}` `GET /weak-grammar` `/grammar-practice` `/leaderboard` `/leaderboard/me` · `POST /api/v1/exams/questions/{id}/reports` | Cấu trúc đề, buổi thi nhiều phần, điểm ngữ pháp hay sai và câu luyện lại, bảng xếp hạng đề JLPT, báo lỗi câu hỏi |
+| Quản trị (ADMIN) | `/api/v1/admin/exam-questions` (lọc, sửa, `/{id}/status`, `/approve`, `/stats`, `/drafts`, `/vocabulary-drafts`, `/analysis`, `/{id}/reports/dismiss`) · `/api/v1/admin/exam-passages` (+ `/drafts`) · `/api/v1/admin/grammar-points` (+ `/import` `/export` CSV) | Duyệt câu và đoạn văn, nhờ AI viết nháp, phân tích câu hỏi, quản lý điểm ngữ pháp |
 
 ---
 
@@ -236,7 +270,9 @@ Các màn hình chính:
 1. **Ôn tập (Flashcard SRS)** — [`FlashcardPage`](frontend/src/pages/FlashcardPage.tsx): thẻ lật 3D (CSS `transform-style: preserve-3d`), phím tắt Space để lật / 1-4 để chấm (Quên / Khó / Nhớ / Dễ), gọi `POST /srs/review` và chuyển thẻ tiếp theo bằng **Optimistic Update** của TanStack Query (`onMutate` xoá thẻ khỏi cache ngay, rollback nếu lỗi) để tránh giật/nhấp nháy khi chờ round-trip mạng. Đầu trang là kế hoạch hôm nay và tiến độ so với mục tiêu; từ khó có mẹo nhớ ngay trên thẻ; mỗi nút chấm hiện số ngày tới lần ôn sau.
 2. **Thi thử (Exam Workspace)** — [`ExamWorkspacePage`](frontend/src/pages/ExamWorkspacePage.tsx): Question Palette theo trạng thái đã làm/chưa làm, đếm ngược dựa hoàn toàn vào `remainingSeconds` Backend trả về (không so sánh `new Date()` để tránh clock drift), auto-save debounce 300ms mỗi lần chọn đáp án, tự động nộp bài khi hết giờ, khôi phục đáp án đã tick khi F5 qua `GET .../session`. Câu kiểu đề JLPT hiện câu ví dụ với phần được hỏi gạch chân.
 3. **Kết quả & Xem lại** — [`ExamResultPage`](frontend/src/pages/ExamResultPage.tsx): điểm số, tỉ lệ đúng, thời gian làm bài; điểm theo kỹ năng; các từ của câu sai (đã vào Ôn tập) và nút luyện lại đúng các từ đó; danh sách so sánh đáp án đã chọn vs đáp án đúng kèm giải thích; tab Bảng xếp hạng (Redis ZSET) highlight hàng của user hiện tại.
-4. **Tiến bộ** — [`ProgressPage`](frontend/src/pages/ProgressPage.tsx): biểu đồ cột dựng bằng HTML ([`ColumnChart`](frontend/src/components/ColumnChart.tsx)), chú thích khi rê chuột hoặc focus bằng bàn phím, bảng số liệu dưới mỗi biểu đồ; màu lấy từ token của app và đã kiểm tra độ tương phản, khả năng phân biệt khi mù màu. Có thẻ so dự đoán của FSRS với tỉ lệ nhớ thật.
+4. **Đề JLPT** — [`ExamSetupPage`](frontend/src/pages/ExamSetupPage.tsx), [`ExamSittingPage`](frontend/src/pages/ExamSittingPage.tsx): chọn cấp độ và phần thi, xem cấu trúc đề (số câu lấy được / đề thật) và bảng xếp hạng đề JLPT; giữa hai phần là màn nghỉ; sau buổi thi có điểm ước tính /60, điểm ngữ pháp cần ôn và trang luyện lại ([`GrammarPracticePage`](frontend/src/pages/GrammarPracticePage.tsx)); trang xem lại có nút báo lỗi từng câu.
+5. **Quản trị câu hỏi** — [`AdminQuestionsPage`](frontend/src/pages/AdminQuestionsPage.tsx), [`AdminGrammarPage`](frontend/src/pages/AdminGrammarPage.tsx): duyệt câu như trong đề, duyệt cả trang, duyệt cả đoạn văn; nhờ AI viết nháp; xem báo lỗi và thống kê từng câu.
+6. **Tiến bộ** — [`ProgressPage`](frontend/src/pages/ProgressPage.tsx): biểu đồ cột dựng bằng HTML ([`ColumnChart`](frontend/src/components/ColumnChart.tsx)), chú thích khi rê chuột hoặc focus bằng bàn phím, bảng số liệu dưới mỗi biểu đồ; màu lấy từ token của app và đã kiểm tra độ tương phản, khả năng phân biệt khi mù màu. Có thẻ so dự đoán của FSRS với tỉ lệ nhớ thật.
 
 Điểm kỹ thuật đáng chú ý — [`api/client.ts`](frontend/src/api/client.ts): **Axios Interceptor tự động refresh JWT có mutex**. Backend làm Refresh Token Rotation (token cũ bị revoke ngay khi dùng), nên nhiều request `401` xảy ra gần như đồng thời chỉ được phép gọi `/auth/refresh-token` **đúng một lần** — dùng chung một Promise cấp-module, các request khác xếp hàng chờ rồi tự retry với token mới, tránh trường hợp request refresh chạy song song khiến người dùng bị văng logout oan.
 
@@ -308,6 +344,7 @@ Lệnh thứ 4 xoá cache từ vựng cũ trong Redis. Chuyển sang máy mới:
 | Gửi kết quả trắc nghiệm, theo tài khoản | 120 câu/phút | `app.rate-limit.quiz-answer` |
 | Nhờ AI sinh mẹo nhớ, theo tài khoản | 20 lần/giờ (mẹo nhớ đã có thì không tính) | `app.rate-limit.mnemonic` |
 | Request Gemini, cả hệ thống | 100 request/ngày (UTC) | `GEMINI_DAILY_LIMIT` trong `.env` |
+| Nhờ AI viết nháp câu thi / đoạn văn (quản trị) | Tối đa 8 câu hoặc 1 đoạn mỗi lần, mỗi lần 2 request (viết + giải lại) | `QuestionDraftService`, `PassageDraftService` |
 | Từ sinh câu ví dụ thất bại | Thất bại 2 lần thì bỏ qua từ đó 24 giờ | `QuizService` |
 
 - **IP người dùng do nginx xác định.** nginx ghi đè header `X-Forwarded-For`, Spring (`server.forward-headers-strategy: native`) chỉ tin header này khi request đến từ mạng nội bộ, và backend chỉ mở cổng trên `127.0.0.1`. Vì vậy client không thể tự đặt IP giả để vượt giới hạn đăng nhập.
@@ -348,6 +385,7 @@ cd backend
 ```
 
 - **Unit test** (không cần Docker): `SrsCalculatorServiceTest`, `JwtServiceTest`, `UserServiceTest`, và phần cá nhân hoá: `AdaptiveQuizPlannerTest` (chọn từ, hướng hỏi), `StudyPlanServiceTest` (kế hoạch hôm nay, mục tiêu), `DailySessionOrderTest`, `StudyCalendarTest` (ngày học theo giờ Việt Nam), `FsrsTest` (golden test với py-fsrs), `FsrsOptimizerTest`, `FsrsParametersServiceTest`, `ExamDiagnosisServiceTest`, `ExamQuestionGeneratorTest`...
+- **Đề JLPT** — unit: `JlptExamAssemblerTest`, `JlptExamServiceTest`, `QuestionDraftServiceTest` / `PassageDraftServiceTest` (Gemini giả lập), `VocabularyLevelCheckerTest`, `KatakanaSpellingTest`, `GrammarPracticeServiceTest`, `LeaderboardServiceTest`; integration: `JlptExamSittingIT` (buổi thi hai phần, không gặp lại câu cũ, bảng xếp hạng), `ExamPassageIT`, `ExamQuestionReviewIT`, `GrammarPracticeIT`, `QuestionReportIT`, `ItemAnalysisIT` (40 lượt thi dựng sẵn), `Admin*ControllerIT` (phân quyền ADMIN).
 - **Integration test** (Testcontainers - tự khởi chạy Postgres + Redis trong container tạm, không phụ thuộc môi trường local): `ExamFinalizationConcurrencyIT` (race condition + rollback), `ExamSessionStoreIT` (TTL buffer), `KanjiMasteryApplicationTests` (context loads), `ReviewLogRepositoryIT` / `TagRepositoryIT` / `UserKanjiSrsRepositoryIT` (các truy vấn native: `percentile_cont`, `FILTER`, `LAG`, `LEAD`, `split_part`), `FsrsParametersRepositoryIT` (JSONB), `ExamQuestionRepositoryIT` (gắn kỹ năng, từ vựng cho câu mẫu), `ExamDiagnosisIT` (nộp bài → từ sai vào lịch ôn, chỉ một lần), `ExamQuestionGeneratorIT`, `FsrsSimulationIT` (mô phỏng 120 ngày, ~90 giây; đổi hạt giống bằng `-Dsimulation.seed=1`, báo cáo và lịch sử ôn ghi ra `backend/target/fsrs-simulation/`).
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) chạy toàn bộ test suite tự động trên mỗi push/PR vào `main`.

@@ -25,8 +25,9 @@ public class UserExamAttempt {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "jlpt_level", nullable = false, length = 5)
-    private String jlptLevel;
+    private JlptLevel jlptLevel;
 
     @Column(name = "total_score")
     @Builder.Default
@@ -36,15 +37,29 @@ public class UserExamAttempt {
     @Builder.Default
     private Integer timeSpentSeconds = 0;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default
-    private String status = ExamAttemptStatus.IN_PROGRESS;
+    private ExamAttemptStatus status = ExamAttemptStatus.IN_PROGRESS;
 
     @Column(name = "started_at", nullable = false)
     private LocalDateTime startedAt;
 
     @Column(name = "submitted_at")
     private LocalDateTime submittedAt;
+
+    /** Buổi làm đề JLPT chứa lượt thi này; null = thi nhanh. */
+    @Column(name = "sitting_id")
+    private Long sittingId;
+
+    /** Phần của đề JLPT; null = thi nhanh. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 12)
+    private ExamSection section;
+
+    /** Thời gian làm bài của lượt (giây); null = mặc định {@code app.exam.duration-seconds}. */
+    @Column(name = "duration_seconds")
+    private Integer durationSeconds;
 
     /** Lúc kết quả bài thi được đưa vào ôn tập; null = chưa (bài đang làm, hoặc thi trước khi có tính năng này). */
     @Column(name = "diagnosed_at")

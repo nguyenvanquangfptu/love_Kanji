@@ -1,5 +1,7 @@
 package com.kanjimastery.backend.exception;
 
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.kanjimastery.backend.dto.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -7,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.ErrorResponse;
@@ -16,7 +19,10 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -69,7 +75,40 @@ public class GlobalExceptionHandler {
     /** Tham số sai kiểu (vd. ?tagId=abc) hoặc body không phải JSON hợp lệ - lỗi của request, không phải của server. */
     @ExceptionHandler({MethodArgumentTypeMismatchException.class, HttpMessageNotReadableException.class})
     public ResponseEntity<ApiErrorResponse> handleUnreadableInput(Exception ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "Dữ liệu đầu vào không hợp lệ", request, null);
+        return build(HttpStatus.BAD_REQUEST, "Dữ liệu đầu vào không hợp lệ", request, enumFieldError(ex));
+    }
+
+    /**
+     * Giá trị không thuộc một enum (vd. {@code "scheduler": "ABC"}, {@code ?status=ABC}): báo trường nào sai và các giá
+     * trị hợp lệ, như các trường kiểm tra bằng {@code @Pattern} trước đây; lỗi khác thì không có chi tiết.
+     */
+    private static List<String> enumFieldError(Exception ex) {
+        if (ex instanceof MethodArgumentTypeMismatchException mismatch && mismatch.getRequiredType() != null
+                && mismatch.getRequiredType().isEnum()) {
+            return List.of(mismatch.getName() + ": " + allowedValues(mismatch.getRequiredType()));
+        }
+        if (ex.getCause() instanceof InvalidFormatException invalid && invalid.getTargetType() != null
+                && invalid.getTargetType().isEnum()) {
+            String field = invalid.getPath().stream()
+                    .map(JsonMappingException.Reference::getFieldName)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.joining("."));
+            return List.of(field + ": " + allowedValues(invalid.getTargetType()));
+        }
+        return null;
+    }
+
+    private static String allowedValues(Class<?> enumType) {
+        return "phải là một trong " + Arrays.stream(enumType.getEnumConstants())
+                .map(constant -> ((Enum<?>) constant).name())
+                .collect(Collectors.joining(", "));
+    }
+
+    /** Hai yêu cầu cùng sửa một bản ghi (vd. chấm một thẻ ở hai tab): yêu cầu sau thua, người dùng tải lại là xong. */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleConcurrentUpdate(ObjectOptimisticLockingFailureException ex,
+                                                                   HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "Dữ liệu vừa được cập nhật ở nơi khác - hãy tải lại rồi thử lại", request, null);
     }
 
     @ExceptionHandler(Exception.class)

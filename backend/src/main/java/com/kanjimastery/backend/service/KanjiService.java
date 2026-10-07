@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.ResourceNotFoundException;
 import com.kanjimastery.backend.dto.KanjiRequest;
@@ -19,6 +20,8 @@ import com.kanjimastery.backend.model.Tag;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.repository.TagRepository;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -28,10 +31,11 @@ public class KanjiService {
 
     private final KanjiRepository kanjiRepository;
     private final TagRepository tagRepository;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public Page<KanjiResponse> search(String level, String keyword, Long tagId, Pageable pageable) {
-        String normalizedLevel = StringUtils.hasText(level) ? level.toUpperCase() : null;
+        JlptLevel normalizedLevel = Levels.optional(level);
         String pattern = StringUtils.hasText(keyword) ? "%" + keyword.trim().toLowerCase() + "%" : null;
         return kanjiRepository.search(normalizedLevel, pattern, tagId, pageable)
                 .map(this::toResponseWithTags);
@@ -49,6 +53,7 @@ public class KanjiService {
     public KanjiResponse create(KanjiRequest request) {
         ensureNotDuplicatedInSameLesson(request, null);
         Kanji kanji = new Kanji();
+        kanji.setCreatedAt(LocalDateTime.now(clock));
         applyRequest(kanji, request);
         return toResponseWithTags(kanjiRepository.save(kanji));
     }
@@ -98,7 +103,7 @@ public class KanjiService {
         kanji.setHanViet(StringUtils.hasText(request.getHanViet()) ? request.getHanViet() : "");
         kanji.setReading(StringUtils.hasText(request.getReading()) ? request.getReading().trim() : null);
         kanji.setStrokeCount(request.getStrokeCount());
-        kanji.setJlptLevel(request.getJlptLevel().toUpperCase());
+        kanji.setJlptLevel(Levels.require(request.getJlptLevel()));
         kanji.setMeaning(request.getMeaning());
         kanji.setExampleSentence(StringUtils.hasText(request.getExampleSentence()) ? request.getExampleSentence().trim() : null);
         if (!CollectionUtils.isEmpty(request.getTagIds())) {

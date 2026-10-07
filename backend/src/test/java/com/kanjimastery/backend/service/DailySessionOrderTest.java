@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.Sm2State;
 import com.kanjimastery.backend.model.UserKanjiSrs;
 import org.junit.jupiter.api.Test;
 
@@ -58,13 +59,13 @@ class DailySessionOrderTest {
     }
 
     private static UserKanjiSrs review(long kanjiId, LocalDateTime nextReviewAt, int intervalDays) {
-        return UserKanjiSrs.builder().kanjiId(kanjiId).repetitionCount(2).easinessFactor(new BigDecimal("2.50"))
+        return UserKanjiSrs.builder().kanjiId(kanjiId).sm2(new Sm2State(2, new BigDecimal("2.50")))
                 .reviewIntervalDays(intervalDays).nextReviewAt(nextReviewAt)
                 .lastReviewedAt(nextReviewAt.minusDays(intervalDays)).build();
     }
 
     private static UserKanjiSrs newWord(long kanjiId, LocalDateTime addedAt) {
-        return UserKanjiSrs.builder().kanjiId(kanjiId).repetitionCount(0).easinessFactor(new BigDecimal("2.50"))
+        return UserKanjiSrs.builder().kanjiId(kanjiId).sm2(new Sm2State(0, new BigDecimal("2.50")))
                 .reviewIntervalDays(0).nextReviewAt(addedAt).build();
     }
 }

@@ -26,8 +26,9 @@ public class LearningProfile {
     private Long userId;
 
     /** N5..N1; null = chưa chọn. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "target_level", length = 5)
-    private String targetLevel;
+    private JlptLevel targetLevel;
 
     @Column(name = "exam_date")
     private LocalDate examDate;
@@ -39,10 +40,10 @@ public class LearningProfile {
     @Column(name = "new_words_per_day")
     private Integer newWordsPerDay;
 
-    /** {@link SchedulerType} */
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     @Builder.Default
-    private String scheduler = SchedulerType.SM2;
+    private SchedulerType scheduler = SchedulerType.SM2;
 
     /** Tỉ lệ nhớ mong muốn khi xếp lịch bằng FSRS. */
     @Column(name = "desired_retention", nullable = false, precision = 3, scale = 2)
