@@ -14,6 +14,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
@@ -44,7 +45,7 @@ class FsrsParametersServiceTest {
     void setUp() {
         SrsProperties properties = new SrsProperties();
         service = new FsrsParametersService(parametersRepository, reviewLogRepository, properties,
-                new StudyCalendar(properties));
+                new StudyCalendar(properties, Clock.systemDefaultZone()));
     }
 
     @Test

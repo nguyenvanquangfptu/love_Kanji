@@ -31,6 +31,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -74,7 +75,7 @@ class SrsServiceTest {
     private StudyPlanService studyPlanService;
 
     @Spy
-    private StudyCalendar calendar = new StudyCalendar(new SrsProperties());
+    private StudyCalendar calendar = new StudyCalendar(new SrsProperties(), Clock.systemDefaultZone());
 
     @Mock
     private LearningProfileService learningProfileService;

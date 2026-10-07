@@ -1,7 +1,6 @@
 package com.kanjimastery.backend.service;
 
 import com.kanjimastery.backend.config.SrsProperties;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -22,12 +21,7 @@ public class StudyCalendar {
     private final ZoneId dayZone;
     private final int dayStartHour;
 
-    @Autowired
-    public StudyCalendar(SrsProperties properties) {
-        this(properties, Clock.systemDefaultZone());
-    }
-
-    StudyCalendar(SrsProperties properties, Clock clock) {
+    public StudyCalendar(SrsProperties properties, Clock clock) {
         this.clock = clock;
         this.dayZone = ZoneId.of(properties.getDayZone());
         this.dayStartHour = properties.getDayStartHour();
