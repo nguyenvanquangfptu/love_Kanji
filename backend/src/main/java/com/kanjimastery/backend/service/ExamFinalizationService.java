@@ -48,7 +48,7 @@ public class ExamFinalizationService {
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public void finalize(Long attemptId, String resultingStatus) {
+    public void finalize(Long attemptId, ExamAttemptStatus resultingStatus) {
         UserExamAttempt attempt = attemptRepository.findById(attemptId).orElse(null);
         if (attempt == null || !ExamAttemptStatus.IN_PROGRESS.equals(attempt.getStatus())) {
             // Không tồn tại, hoặc đã có luồng khác chốt điểm trước đó - dừng ngay, không làm gì thêm.

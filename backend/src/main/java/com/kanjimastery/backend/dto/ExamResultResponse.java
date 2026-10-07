@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.ExamAttemptStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -11,7 +12,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class ExamResultResponse {
     private Long attemptId;
-    private String status;
+    private ExamAttemptStatus status;
     private Integer totalScore;
     private Integer timeSpentSeconds;
     private LocalDateTime submittedAt;

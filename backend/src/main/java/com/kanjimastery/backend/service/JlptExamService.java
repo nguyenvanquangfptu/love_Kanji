@@ -104,8 +104,15 @@ public class JlptExamService {
         if (blueprint == null) {
             throw new BadRequestException("Chưa có cấu trúc đề JLPT cho cấp độ: " + level);
         }
-        Set<String> chosen = request.getSections().stream().map(String::toUpperCase).collect(Collectors.toSet());
-        List<String> sections = blueprint.getSections().stream()
+        Set<ExamSection> chosen = new HashSet<>();
+        for (String name : request.getSections()) {
+            try {
+                chosen.add(ExamSection.valueOf(name.toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                throw new BadRequestException("Phần thi không hợp lệ: " + request.getSections());
+            }
+        }
+        List<ExamSection> sections = blueprint.getSections().stream()
                 .map(JlptBlueprintProperties.Section::getName)
                 .filter(chosen::contains)
                 .toList();
@@ -118,14 +125,14 @@ public class JlptExamService {
             if (sections.contains(section.getName())
                     && section.types().stream().noneMatch(type -> available.getOrDefault(type, 0L) > 0)) {
                 throw new BadRequestException(
-                        "Phần " + ExamSection.vietnameseName(section.getName()) + " của đề " + level + " chưa có câu hỏi");
+                        "Phần " + section.getName().vietnameseName() + " của đề " + level + " chưa có câu hỏi");
             }
         }
 
         ExamSitting sitting = sittingRepository.save(ExamSitting.builder()
                 .userId(userId)
                 .jlptLevel(level)
-                .sections(String.join(",", sections))
+                .sections(sections.stream().map(ExamSection::name).collect(Collectors.joining(",")))
                 .startedAt(LocalDateTime.now())
                 .build());
         return startSection(sitting, sections.get(0), new HashSet<>());
@@ -144,14 +151,14 @@ public class JlptExamService {
         if (attempts.stream().anyMatch(JlptExamService::inProgress)) {
             throw new BadRequestException("Phần thi đang làm chưa kết thúc");
         }
-        String next = nextSection(sitting, attempts);
+        ExamSection next = nextSection(sitting, attempts);
         if (next == null) {
             throw new BadRequestException("Đã làm hết các phần của buổi thi");
         }
         return startSection(sitting, next, wordsAsked(attempts));
     }
 
-    private StartExamResponse startSection(ExamSitting sitting, String sectionName, Set<Long> wordsAsked) {
+    private StartExamResponse startSection(ExamSitting sitting, ExamSection sectionName, Set<Long> wordsAsked) {
         JlptBlueprintProperties.Section section = blueprints.section(sitting.getJlptLevel(), sectionName)
                 .orElseThrow(() -> new BadRequestException("Không còn cấu trúc đề cho phần thi: " + sectionName));
         List<JlptExamAssembler.Mondai> mondai = assembler.assemble(sitting.getUserId(), sitting.getJlptLevel(), section, wordsAsked).stream()
@@ -159,7 +166,7 @@ public class JlptExamService {
                 .toList();
         List<ExamQuestion> questions = mondai.stream().flatMap(part -> part.questions().stream()).toList();
         if (questions.isEmpty()) {
-            throw new BadRequestException("Phần " + ExamSection.vietnameseName(sectionName) + " của đề "
+            throw new BadRequestException("Phần " + sectionName.vietnameseName() + " của đề "
                     + sitting.getJlptLevel() + " chưa có câu hỏi");
         }
 
@@ -196,7 +203,7 @@ public class JlptExamService {
                 .filter(found -> found.getUserId().equals(userId))
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy buổi thi: " + sittingId));
         List<UserExamAttempt> attempts = attemptRepository.findBySittingIdOrderByIdAsc(sittingId);
-        Map<String, UserExamAttempt> bySection = attempts.stream()
+        Map<ExamSection, UserExamAttempt> bySection = attempts.stream()
                 .collect(Collectors.toMap(UserExamAttempt::getSection, Function.identity()));
 
         List<ExamSittingResponse.Section> sections = sitting.sectionList().stream()
@@ -283,7 +290,7 @@ public class JlptExamService {
     /** Kết quả cả buổi thi, chỉ khi buổi thi gồm mọi phần trong cấu trúc đề của cấp độ (đề trọn vẹn). */
     private Optional<CompletedSitting> completedSitting(ExamSitting sitting, List<UserExamAttempt> attempts) {
         JlptBlueprintProperties.Level blueprint = blueprints.getLevels().get(sitting.getJlptLevel());
-        List<String> allSections = blueprint == null
+        List<ExamSection> allSections = blueprint == null
                 ? List.of()
                 : blueprint.getSections().stream().map(JlptBlueprintProperties.Section::getName).toList();
         if (allSections.isEmpty() || !sitting.sectionList().containsAll(allSections)) {
@@ -331,8 +338,8 @@ public class JlptExamService {
     }
 
     /** Phần đầu tiên (theo thứ tự làm bài) chưa bắt đầu; null nếu đã bắt đầu hết. */
-    private static String nextSection(ExamSitting sitting, List<UserExamAttempt> attempts) {
-        Set<String> started = attempts.stream().map(UserExamAttempt::getSection).collect(Collectors.toSet());
+    private static ExamSection nextSection(ExamSitting sitting, List<UserExamAttempt> attempts) {
+        Set<ExamSection> started = attempts.stream().map(UserExamAttempt::getSection).collect(Collectors.toSet());
         return sitting.sectionList().stream().filter(name -> !started.contains(name)).findFirst().orElse(null);
     }
 
@@ -341,6 +348,6 @@ public class JlptExamService {
     }
 
     private static boolean inProgress(UserExamAttempt attempt) {
-        return ExamAttemptStatus.IN_PROGRESS.equals(attempt.getStatus());
+        return attempt.getStatus() == ExamAttemptStatus.IN_PROGRESS;
     }
 }

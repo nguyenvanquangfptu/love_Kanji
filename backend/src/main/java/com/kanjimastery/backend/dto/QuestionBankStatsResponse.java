@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.ExamSection;
 import java.util.List;
 
 /**
@@ -16,7 +17,7 @@ public record QuestionBankStatsResponse(String jlptLevel, List<TypeStats> types)
      * @param perExam   số câu của dạng này trong một đề thật
      * @param exams     số đề đủ câu đã duyệt (approved / perExam)
      */
-    public record TypeStats(String section, String type, int perExam, long approved, long draft, long rejected,
+    public record TypeStats(ExamSection section, String type, int perExam, long approved, long draft, long rejected,
                             long retired, long exams) {
     }
 }

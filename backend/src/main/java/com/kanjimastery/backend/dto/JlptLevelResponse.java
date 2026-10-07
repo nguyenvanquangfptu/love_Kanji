@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.ExamSection;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -20,7 +21,7 @@ public class JlptLevelResponse {
     @AllArgsConstructor
     public static class Section {
         /** {@link com.kanjimastery.backend.model.ExamSection} */
-        private String name;
+        private ExamSection name;
         /** Số câu và thời gian của đề thật. */
         private int plannedQuestions;
         private int plannedMinutes;

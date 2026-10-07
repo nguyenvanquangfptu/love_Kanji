@@ -145,7 +145,7 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
     @Test
     void aTwoSectionSitting_shouldTimeEachSectionOnItsOwn_andCompleteOnlyAfterTheLastSection() {
         StartExamResponse vocabulary = jlptExamService.startSitting(userId,
-                request(ExamSection.GRAMMAR, ExamSection.VOCABULARY));
+                request("GRAMMAR", "VOCABULARY"));
         Long sittingId = vocabulary.getSittingId();
 
         // Làm theo thứ tự đề thật dù chọn ngược. 2 câu đọc hỏi 2 trong 3 từ, câu điền từ chỉ còn 1 từ chưa hỏi:
@@ -223,14 +223,14 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
 
     @Test
     void aNewSitting_shouldFirstAskQuestionsTheLearnerHasNotMetYet() {
-        StartExamResponse first = jlptExamService.startSitting(userId, request(ExamSection.GRAMMAR));
+        StartExamResponse first = jlptExamService.startSitting(userId, request("GRAMMAR"));
         examService.submit(userId, first.getAttemptId());
         List<Long> asked = first.getQuestions().stream().map(ExamQuestionPublicResponse::getId).toList();
         Long notAsked = Stream.of(grammarOnFirstWord, grammarOnFourthWord, grammarOnFifthWord).map(ExamQuestion::getId)
                 .filter(id -> !asked.contains(id))
                 .findFirst().orElseThrow();
 
-        StartExamResponse second = jlptExamService.startSitting(userId, request(ExamSection.GRAMMAR));
+        StartExamResponse second = jlptExamService.startSitting(userId, request("GRAMMAR"));
 
         // 3 câu ngữ pháp, đề lấy 2: lần đầu gặp 2 câu, lần sau phải có câu còn lại.
         assertThat(asked).hasSize(2);
@@ -241,7 +241,7 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
     void reconciliationJob_shouldTimeOutEachAttemptByItsOwnDuration() {
         LocalDateTime twoMinutesAgo = LocalDateTime.now().minusMinutes(2);
         ExamSitting sitting = sittingRepository.save(ExamSitting.builder().userId(userId).jlptLevel(LEVEL)
-                .sections(ExamSection.VOCABULARY).startedAt(twoMinutesAgo).build());
+                .sections("VOCABULARY").startedAt(twoMinutesAgo).build());
         UserExamAttempt oneMinuteSection = attemptRepository.save(UserExamAttempt.builder().userId(userId)
                 .jlptLevel(LEVEL).sittingId(sitting.getId()).section(ExamSection.VOCABULARY).durationSeconds(60)
                 .startedAt(twoMinutesAgo).build());
@@ -290,7 +290,7 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
                 .skill(skill).questionType(type).kanjiIds(Set.of(wordId)).build());
     }
 
-    private static JlptBlueprintProperties.Section section(String name, int minutes) {
+    private static JlptBlueprintProperties.Section section(ExamSection name, int minutes) {
         JlptBlueprintProperties.Section section = new JlptBlueprintProperties.Section();
         section.setName(name);
         section.setMinutes(minutes);

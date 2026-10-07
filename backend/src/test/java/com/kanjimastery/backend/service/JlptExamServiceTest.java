@@ -274,7 +274,7 @@ class JlptExamServiceTest {
         when(answerRepository.countByAttemptId(31L)).thenReturn(21L);
 
         assertThat(jlptExamService.onSectionFinished(SITTING_ID)).isEmpty();
-        verify(sittingRepository, never()).finishIfInProgress(anyLong(), anyString(), any());
+        verify(sittingRepository, never()).finishIfInProgress(anyLong(), any(), any());
 
         // Phần Từ vựng tự nộp trễ 10 giây sau khi hết giờ: chỉ tính đủ 25 phút.
         assertThat(jlptExamService.onSectionFinished(SITTING_ID))
@@ -284,7 +284,7 @@ class JlptExamServiceTest {
     @Test
     void onSectionFinished_shouldNotReportSittingsWithoutEverySectionOfTheLevel() {
         ExamSitting grammarOnly = sitting(ExamSittingStatus.IN_PROGRESS);
-        grammarOnly.setSections(ExamSection.GRAMMAR);
+        grammarOnly.setSections("GRAMMAR");
         when(sittingRepository.findById(SITTING_ID)).thenReturn(Optional.of(grammarOnly));
         when(attemptRepository.findBySittingIdOrderByIdAsc(SITTING_ID))
                 .thenReturn(List.of(attempt(31L, ExamSection.GRAMMAR, ExamAttemptStatus.COMPLETED)));
@@ -307,7 +307,7 @@ class JlptExamServiceTest {
                         attempt(31L, ExamSection.GRAMMAR, ExamAttemptStatus.TIMEOUT)));
 
         jlptExamService.closeStale(SITTING_ID);
-        verify(sittingRepository, never()).finishIfInProgress(anyLong(), anyString(), any());
+        verify(sittingRepository, never()).finishIfInProgress(anyLong(), any(), any());
 
         jlptExamService.closeStale(SITTING_ID);
         verify(sittingRepository).finishIfInProgress(eq(SITTING_ID), eq(ExamSittingStatus.ABANDONED), any());
@@ -319,7 +319,7 @@ class JlptExamServiceTest {
     private record Count(String getType, Long getCount) implements ExamQuestionRepository.TypeCount {
     }
 
-    private static JlptBlueprintProperties.Section section(String name, int minutes) {
+    private static JlptBlueprintProperties.Section section(ExamSection name, int minutes) {
         JlptBlueprintProperties.Section section = new JlptBlueprintProperties.Section();
         section.setName(name);
         section.setMinutes(minutes);
@@ -334,12 +334,12 @@ class JlptExamServiceTest {
         return request;
     }
 
-    private static ExamSitting sitting(String status) {
+    private static ExamSitting sitting(ExamSittingStatus status) {
         return ExamSitting.builder().id(SITTING_ID).userId(USER_ID).jlptLevel("N4").sections("VOCABULARY,GRAMMAR")
                 .status(status).startedAt(LocalDateTime.now().minusMinutes(40)).build();
     }
 
-    private static UserExamAttempt attempt(Long id, String section, String status) {
+    private static UserExamAttempt attempt(Long id, ExamSection section, ExamAttemptStatus status) {
         return UserExamAttempt.builder().id(id).userId(USER_ID).jlptLevel("N4").sittingId(SITTING_ID).section(section)
                 .status(status).startedAt(LocalDateTime.now().minusMinutes(30)).build();
     }

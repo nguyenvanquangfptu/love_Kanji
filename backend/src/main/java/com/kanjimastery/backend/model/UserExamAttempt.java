@@ -36,9 +36,10 @@ public class UserExamAttempt {
     @Builder.Default
     private Integer timeSpentSeconds = 0;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default
-    private String status = ExamAttemptStatus.IN_PROGRESS;
+    private ExamAttemptStatus status = ExamAttemptStatus.IN_PROGRESS;
 
     @Column(name = "started_at", nullable = false)
     private LocalDateTime startedAt;
@@ -50,9 +51,10 @@ public class UserExamAttempt {
     @Column(name = "sitting_id")
     private Long sittingId;
 
-    /** Phần của đề JLPT ({@link ExamSection}); null = thi nhanh. */
+    /** Phần của đề JLPT; null = thi nhanh. */
+    @Enumerated(EnumType.STRING)
     @Column(length = 12)
-    private String section;
+    private ExamSection section;
 
     /** Thời gian làm bài của lượt (giây); null = mặc định {@code app.exam.duration-seconds}. */
     @Column(name = "duration_seconds")

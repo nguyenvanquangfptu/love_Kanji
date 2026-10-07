@@ -155,7 +155,7 @@ class ExamPassageIT extends AbstractIntegrationTest {
     private static StartJlptExamRequest request() {
         StartJlptExamRequest request = new StartJlptExamRequest();
         request.setJlptLevel(LEVEL);
-        request.setSections(List.of(ExamSection.GRAMMAR));
+        request.setSections(List.of("GRAMMAR"));
         return request;
     }
 }

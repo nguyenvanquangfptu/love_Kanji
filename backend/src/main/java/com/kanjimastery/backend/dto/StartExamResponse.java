@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.ExamSection;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -19,7 +20,7 @@ public class StartExamResponse {
     private LocalDateTime startedAt;
     /** Buổi làm đề JLPT và phần đang làm ({@link com.kanjimastery.backend.model.ExamSection}); null với thi nhanh. */
     private Long sittingId;
-    private String section;
+    private ExamSection section;
     /** Các 問題 của phần đề JLPT - câu hỏi xếp liền nhau theo thứ tự này; null với thi nhanh. */
     private List<ExamMondaiResponse> mondai;
     /** Đoạn văn của các câu 文章の文法 trong bài; rỗng nếu không có. */

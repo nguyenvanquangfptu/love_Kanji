@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.config;
 
+import com.kanjimastery.backend.model.ExamSection;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -22,11 +23,11 @@ public class JlptBlueprintProperties {
     private Map<String, Level> levels = new LinkedHashMap<>();
 
     /** Một phần thi của một cấp độ; rỗng nếu cấp độ hoặc phần đó không có trong cấu trúc đề. */
-    public Optional<Section> section(String level, String name) {
+    public Optional<Section> section(String level, ExamSection name) {
         Level blueprint = levels.get(level);
         return blueprint == null
                 ? Optional.empty()
-                : blueprint.getSections().stream().filter(section -> section.getName().equals(name)).findFirst();
+                : blueprint.getSections().stream().filter(section -> section.getName() == name).findFirst();
     }
 
     @Getter
@@ -39,8 +40,7 @@ public class JlptBlueprintProperties {
     @Getter
     @Setter
     public static class Section {
-        /** {@link com.kanjimastery.backend.model.ExamSection} */
-        private String name;
+        private ExamSection name;
         private int minutes;
         /** Dạng câu ({@link com.kanjimastery.backend.model.JlptQuestionType}) -> số câu, theo thứ tự 問題1, 問題2... */
         private Map<String, Integer> questions = new LinkedHashMap<>();

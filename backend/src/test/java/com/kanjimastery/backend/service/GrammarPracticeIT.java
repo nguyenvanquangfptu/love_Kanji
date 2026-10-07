@@ -147,7 +147,7 @@ class GrammarPracticeIT extends AbstractIntegrationTest {
         return question;
     }
 
-    private Long attempt(String status, LocalDateTime startedAt) {
+    private Long attempt(ExamAttemptStatus status, LocalDateTime startedAt) {
         return attemptRepository.save(UserExamAttempt.builder().userId(userId).jlptLevel(LEVEL).status(status)
                 .startedAt(startedAt).build()).getId();
     }

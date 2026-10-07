@@ -1,5 +1,7 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.ExamSection;
+import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.QuizDirection;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,7 +15,7 @@ import java.util.List;
 public class ExamReviewResponse {
     private Long attemptId;
     private String jlptLevel;
-    private String status;
+    private ExamAttemptStatus status;
     private Integer totalScore;
     private Integer totalQuestions;
     private Integer timeSpentSeconds;
@@ -26,7 +28,7 @@ public class ExamReviewResponse {
     private boolean addedToReview;
     /** Buổi làm đề JLPT và phần của lượt thi này; null với thi nhanh. */
     private Long sittingId;
-    private String section;
+    private ExamSection section;
     /** Điểm theo từng 問題 của phần đề JLPT, theo thứ tự trong đề; rỗng với thi nhanh. */
     private List<MondaiScore> mondai;
     /** Đoạn văn của các câu 文章の文法 trong bài; rỗng nếu không có. */

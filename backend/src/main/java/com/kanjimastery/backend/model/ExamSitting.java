@@ -2,6 +2,8 @@ package com.kanjimastery.backend.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -40,10 +42,10 @@ public class ExamSitting {
     @Column(nullable = false, length = 40)
     private String sections;
 
-    /** {@link ExamSittingStatus} */
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default
-    private String status = ExamSittingStatus.IN_PROGRESS;
+    private ExamSittingStatus status = ExamSittingStatus.IN_PROGRESS;
 
     @Column(name = "started_at", nullable = false)
     private LocalDateTime startedAt;
@@ -51,7 +53,7 @@ public class ExamSitting {
     @Column(name = "finished_at")
     private LocalDateTime finishedAt;
 
-    public List<String> sectionList() {
-        return Arrays.asList(sections.split(","));
+    public List<ExamSection> sectionList() {
+        return Arrays.stream(sections.split(",")).map(ExamSection::valueOf).toList();
     }
 }

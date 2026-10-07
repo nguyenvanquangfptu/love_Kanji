@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.ExamSittingStatus;
 import com.kanjimastery.backend.model.ExamSitting;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,7 +15,7 @@ import java.util.Optional;
 
 public interface ExamSittingRepository extends JpaRepository<ExamSitting, Long> {
 
-    List<ExamSitting> findByStatusAndStartedAtBefore(String status, LocalDateTime startedBefore);
+    List<ExamSitting> findByStatusAndStartedAtBefore(ExamSittingStatus status, LocalDateTime startedBefore);
 
     /** Đọc và khoá buổi thi tới hết transaction - hai yêu cầu cùng lúc không bắt đầu một phần hai lần. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
@@ -25,8 +26,8 @@ public interface ExamSittingRepository extends JpaRepository<ExamSitting, Long> 
     @Modifying
     @Query("""
             UPDATE ExamSitting s SET s.status = :status, s.finishedAt = :finishedAt
-            WHERE s.id = :id AND s.status = 'IN_PROGRESS'
+            WHERE s.id = :id AND s.status = com.kanjimastery.backend.model.ExamSittingStatus.IN_PROGRESS
             """)
-    int finishIfInProgress(@Param("id") Long id, @Param("status") String status,
+    int finishIfInProgress(@Param("id") Long id, @Param("status") ExamSittingStatus status,
                            @Param("finishedAt") LocalDateTime finishedAt);
 }
