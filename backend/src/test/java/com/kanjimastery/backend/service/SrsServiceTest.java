@@ -134,6 +134,7 @@ class SrsServiceTest {
         UserKanjiSrs saved = savedCard();
         assertThat(saved.getRepetitionCount()).isEqualTo(1);
         assertThat(saved.getReviewIntervalDays()).isEqualTo(1);
+        assertThat(saved.getLapseCount()).isZero();
 
         ReviewLog log = savedLog();
         assertThat(log.getSource()).isEqualTo(ReviewSource.FLASHCARD);
