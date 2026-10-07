@@ -9,6 +9,8 @@ import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.QuizDirection;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -17,6 +19,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
 
 /** Câu thi mẫu được gắn kỹ năng và từ vựng (V18) trên PostgreSQL thật. */
@@ -26,6 +29,23 @@ class ExamQuestionRepositoryIT extends AbstractIntegrationTest {
     private ExamQuestionRepository questionRepository;
     @Autowired
     private KanjiRepository kanjiRepository;
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    /** Không chạy trong transaction: câu lệnh lỗi đầu tiên sẽ làm hỏng cả transaction. Không dòng nào được ghi. */
+    @Test
+    void database_shouldRejectStatusesAndLevelsNoEnumKnows() {
+        String insert = """
+                INSERT INTO exam_questions (jlpt_level, question_text, option_a, option_b, option_c, option_d,
+                                            correct_option, status, source)
+                VALUES (?, 'Câu', '1', '2', '3', '4', 'A', ?, 'MANUAL')
+                """;
+
+        assertThatThrownBy(() -> jdbc.update(insert, "N1", "APPROVD"))
+                .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("ck_exam_questions_status");
+        assertThatThrownBy(() -> jdbc.update(insert, "N6", "APPROVED"))
+                .isInstanceOf(DataIntegrityViolationException.class).hasMessageContaining("ck_exam_questions_jlpt_level");
+    }
 
     @Test
     @Transactional
