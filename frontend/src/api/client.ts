@@ -68,6 +68,11 @@ apiClient.interceptors.response.use(
   },
 )
 
+/** Server từ chối vì dữ liệu vừa bị sửa ở nơi khác (vd. thẻ đã được chấm ở tab khác). */
+export function isConflict(error: unknown): boolean {
+  return axios.isAxiosError(error) && error.response?.status === 409
+}
+
 export function extractErrorMessage(error: unknown): string {
   if (axios.isAxiosError<ApiErrorResponse>(error) && error.response?.data) {
     const { message, fieldErrors } = error.response.data

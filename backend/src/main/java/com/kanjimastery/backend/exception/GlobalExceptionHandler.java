@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.ErrorResponse;
@@ -101,6 +102,13 @@ public class GlobalExceptionHandler {
         return "phải là một trong " + Arrays.stream(enumType.getEnumConstants())
                 .map(constant -> ((Enum<?>) constant).name())
                 .collect(Collectors.joining(", "));
+    }
+
+    /** Hai yêu cầu cùng sửa một bản ghi (vd. chấm một thẻ ở hai tab): yêu cầu sau thua, người dùng tải lại là xong. */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleConcurrentUpdate(ObjectOptimisticLockingFailureException ex,
+                                                                   HttpServletRequest request) {
+        return build(HttpStatus.CONFLICT, "Dữ liệu vừa được cập nhật ở nơi khác - hãy tải lại rồi thử lại", request, null);
     }
 
     @ExceptionHandler(Exception.class)

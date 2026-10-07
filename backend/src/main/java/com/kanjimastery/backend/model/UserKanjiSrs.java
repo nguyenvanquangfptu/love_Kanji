@@ -53,6 +53,11 @@ public class UserKanjiSrs {
     @Embedded
     private FsrsState fsrs;
 
+    /** Khoá lạc quan: hai lần chấm cùng lúc thì lần sau thất bại (409) thay vì ghi đè lần trước. */
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     /** Cách nhớ riêng người học tự ghi cho từ này. */
     @Column(name = "personal_note", columnDefinition = "TEXT")
     private String personalNote;

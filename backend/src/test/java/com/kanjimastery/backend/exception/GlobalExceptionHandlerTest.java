@@ -3,6 +3,7 @@ package com.kanjimastery.backend.exception;
 import com.kanjimastery.backend.model.SchedulerType;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -68,6 +69,13 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void concurrentUpdate_shouldAnswer409() throws Exception {
+        mockMvc.perform(post("/cards/1/review"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
+    }
+
+    @Test
     void unexpectedFailure_shouldStillAnswer500() throws Exception {
         mockMvc.perform(get("/boom"))
                 .andExpect(status().isInternalServerError())
@@ -98,6 +106,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/schedules")
         SchedulerType schedules(@RequestParam SchedulerType scheduler) {
             return scheduler;
+        }
+
+        @PostMapping("/cards/{id}/review")
+        String review(@PathVariable Long id) {
+            throw new ObjectOptimisticLockingFailureException("UserKanjiSrs", id);
         }
 
         @GetMapping("/boom")

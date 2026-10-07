@@ -16,7 +16,7 @@ import {
 } from 'lucide-react'
 import { srsApi } from '@/api/srs'
 import type { DailyCardResponse, DailyPlanResponse, Page, ReviewRating, ReviewRequest } from '@/api/types'
-import { extractErrorMessage } from '@/api/client'
+import { extractErrorMessage, isConflict } from '@/api/client'
 import { cn, wordSizeClass } from '@/lib/utils'
 import { addDays, formatDay, formatInterval } from '@/lib/dates'
 import { lessonQuery } from '@/lib/lesson'
@@ -95,8 +95,10 @@ export function FlashcardPage() {
       setFlipped(false)
       return { previous }
     },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(cardsKey, context.previous)
+    onError: (err, _vars, context) => {
+      // Thẻ vừa được chấm ở tab khác: tải lại phiên ôn thay vì đưa thẻ cũ trở lại.
+      if (isConflict(err)) queryClient.invalidateQueries({ queryKey: cardsKey })
+      else if (context?.previous) queryClient.setQueryData(cardsKey, context.previous)
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: STATS_KEY })

@@ -9,12 +9,15 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** Các truy vấn native của user_kanji_srs chạy trên PostgreSQL thật. */
 class UserKanjiSrsRepositoryIT extends AbstractIntegrationTest {
@@ -25,6 +28,8 @@ class UserKanjiSrsRepositoryIT extends AbstractIntegrationTest {
     private UserRepository userRepository;
     @Autowired
     private KanjiRepository kanjiRepository;
+    @Autowired
+    private TransactionTemplate transaction;
 
     private Long userId;
     private Long kanjiId;
@@ -50,6 +55,26 @@ class UserKanjiSrsRepositoryIT extends AbstractIntegrationTest {
     void tearDown() {
         userRepository.deleteById(userId);
         kanjiRepository.deleteById(kanjiId);
+    }
+
+    /** Hai lần chấm cùng đọc thẻ ở phiên bản cũ: lần ghi sau thất bại thay vì ghi đè lần trước. */
+    @Test
+    void save_shouldRejectAWriteBasedOnAStaleCard() {
+        transaction.executeWithoutResult(status ->
+                srsRepository.insertSeenCardIfAbsent(userId, kanjiId, LocalDateTime.now()));
+        UserKanjiSrs firstTab = srsRepository.findByUserIdAndKanjiId(userId, kanjiId).orElseThrow();
+        UserKanjiSrs secondTab = srsRepository.findByUserIdAndKanjiId(userId, kanjiId).orElseThrow();
+        assertThat(firstTab.getVersion()).isZero();
+
+        firstTab.setReviewIntervalDays(3);
+        srsRepository.save(firstTab);
+        secondTab.setReviewIntervalDays(1);
+
+        assertThatThrownBy(() -> srsRepository.save(secondTab))
+                .isInstanceOf(ObjectOptimisticLockingFailureException.class);
+        assertThat(srsRepository.findByUserIdAndKanjiId(userId, kanjiId).orElseThrow())
+                .extracting(UserKanjiSrs::getReviewIntervalDays, UserKanjiSrs::getVersion).containsExactly(3, 1L);
+        srsRepository.delete(srsRepository.findByUserIdAndKanjiId(userId, kanjiId).orElseThrow());
     }
 
     @Test
