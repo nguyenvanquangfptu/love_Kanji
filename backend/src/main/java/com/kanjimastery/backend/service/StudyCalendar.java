@@ -11,8 +11,8 @@ import java.time.ZonedDateTime;
 
 /**
  * "Ngày học" của người học: tính theo {@code app.srs.day-zone} và bắt đầu lúc {@code app.srs.day-start-hour} giờ, không
- * theo giờ máy chủ (container chạy UTC, nên nửa đêm UTC là 7 giờ sáng ở Việt Nam). Các mốc thời gian trả về đã quy về
- * giờ của JVM, giống {@link LocalDateTime#now()} mà code ở chỗ khác dùng để ghi và so các cột thời gian.
+ * theo giờ máy chủ. Các mốc thời gian trả về đã quy về giờ của JVM, giống {@code LocalDateTime.now(clock)} mà code ở
+ * chỗ khác dùng để ghi và so các cột thời gian.
  */
 @Component
 public class StudyCalendar {

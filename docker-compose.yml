@@ -41,6 +41,10 @@ services:
       - "127.0.0.1:8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      # Cùng múi giờ với khi chạy ./mvnw trên máy: JSON trả thời gian không kèm múi giờ nên trình duyệt hiểu là giờ máy.
+      # DB không bị ảnh hưởng - Hibernate luôn ghi giờ UTC (hibernate.jdbc.time_zone).
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       JWT_SECRET: ${JWT_SECRET:?Cần đặt JWT_SECRET - xem .env.example}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_DAILY_LIMIT: ${GEMINI_DAILY_LIMIT:-100}
