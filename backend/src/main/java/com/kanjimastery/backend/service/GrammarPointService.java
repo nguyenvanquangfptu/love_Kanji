@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.dto.GrammarImportResult;
 import com.kanjimastery.backend.dto.GrammarPointRequest;
 import com.kanjimastery.backend.dto.GrammarPointResponse;
@@ -39,7 +40,7 @@ public class GrammarPointService {
     @Transactional(readOnly = true)
     public List<GrammarPointResponse> list(String level) {
         List<GrammarPoint> points = StringUtils.hasText(level)
-                ? repository.findByJlptLevelOrderByLessonAscIdAsc(level.toUpperCase())
+                ? repository.findByJlptLevelOrderByLessonAscIdAsc(Levels.require(level))
                 : repository.findAllByOrderByJlptLevelDescLessonAscIdAsc();
         Map<Long, Map<ExamQuestionStatus, Long>> counts = new HashMap<>();
         if (!points.isEmpty()) {
@@ -54,7 +55,7 @@ public class GrammarPointService {
 
     @Transactional
     public GrammarPointResponse create(GrammarPointRequest request) {
-        String level = request.getJlptLevel().toUpperCase();
+        JlptLevel level = Levels.require(request.getJlptLevel());
         String pattern = normalizePattern(request.getPattern());
         if (repository.findByJlptLevelAndPattern(level, pattern).isPresent()) {
             throw new BadRequestException("Đã có mẫu " + pattern + " ở cấp độ " + level);
@@ -69,7 +70,7 @@ public class GrammarPointService {
     public GrammarPointResponse update(Long id, GrammarPointRequest request) {
         GrammarPoint point = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy điểm ngữ pháp: " + id));
-        String level = request.getJlptLevel().toUpperCase();
+        JlptLevel level = Levels.require(request.getJlptLevel());
         String pattern = normalizePattern(request.getPattern());
         repository.findByJlptLevelAndPattern(level, pattern)
                 .filter(other -> !other.getId().equals(id))
@@ -78,7 +79,7 @@ public class GrammarPointService {
                 });
         apply(point, level, request.getLesson(), pattern, request.getConnection(), request.getMeaningVi(),
                 request.getExplanationVi());
-        return list(level).stream().filter(response -> response.getId().equals(id)).findFirst().orElseThrow();
+        return list(level.name()).stream().filter(response -> response.getId().equals(id)).findFirst().orElseThrow();
     }
 
     /** Xoá cả liên kết với câu thi (câu thi vẫn giữ). */
@@ -99,15 +100,16 @@ public class GrammarPointService {
         List<String> errors = new ArrayList<>();
         for (int index = 0; index < rows.size(); index++) {
             List<String> row = rows.get(index).stream().map(String::strip).toList();
-            String level = row.get(0).toUpperCase();
-            if (index == 0 && !LEVEL.matcher(level).matches()) {
+            String levelText = row.get(0).toUpperCase();
+            if (index == 0 && !LEVEL.matcher(levelText).matches()) {
                 continue;
             }
-            String error = validate(row, level);
+            String error = validate(row, levelText);
             if (error != null) {
                 errors.add("Dòng " + (index + 1) + ": " + error);
                 continue;
             }
+            JlptLevel level = JlptLevel.valueOf(levelText);
             String lesson = column(row, 1);
             String pattern = normalizePattern(row.get(2));
             String meaning = row.get(3);
@@ -135,11 +137,11 @@ public class GrammarPointService {
     @Transactional(readOnly = true)
     public String exportCsv(String level) {
         List<GrammarPoint> points = StringUtils.hasText(level)
-                ? repository.findByJlptLevelOrderByLessonAscIdAsc(level.toUpperCase())
+                ? repository.findByJlptLevelOrderByLessonAscIdAsc(Levels.require(level))
                 : repository.findAllByOrderByJlptLevelDescLessonAscIdAsc();
         StringBuilder csv = new StringBuilder(Csv.line(CSV_COLUMNS)).append("\r\n");
         for (GrammarPoint point : points) {
-            csv.append(Csv.line(Arrays.asList(point.getJlptLevel(), point.getLesson(), point.getPattern(),
+            csv.append(Csv.line(Arrays.asList(point.getJlptLevel().name(), point.getLesson(), point.getPattern(),
                     point.getMeaningVi(), point.getConnection(), point.getExplanationVi()))).append("\r\n");
         }
         return csv.toString();
@@ -173,7 +175,7 @@ public class GrammarPointService {
         return pattern.strip().replace('~', '〜').replace('～', '〜');
     }
 
-    private static void apply(GrammarPoint point, String level, String lesson, String pattern, String connection,
+    private static void apply(GrammarPoint point, JlptLevel level, String lesson, String pattern, String connection,
                               String meaning, String explanation) {
         point.setJlptLevel(level);
         point.setLesson(StringUtils.hasText(lesson) ? lesson.strip() : null);

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.exception.BadRequestException;
@@ -31,6 +32,7 @@ import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
@@ -41,7 +43,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class QuestionDraftServiceTest {
 
-    private static final GrammarPoint AFTER = GrammarPoint.builder().id(3L).jlptLevel("N5").lesson("N5-16")
+    private static final GrammarPoint AFTER = GrammarPoint.builder().id(3L).jlptLevel(JlptLevel.N5).lesson("N5-16")
             .pattern("Vてから").meaningVi("Sau khi làm V1 rồi mới V2").connection("V1て + から、V2").build();
     private static final Kanji LEAVE = Kanji.builder().id(11L).character("預ける").reading("あずける")
             .meaning("Gửi, nhờ giữ hộ").build();
@@ -81,7 +83,7 @@ class QuestionDraftServiceTest {
         when(grammarPointRepository.findById(3L)).thenReturn(Optional.of(AFTER));
         when(questionRepository.findSentencesByGrammarPoint(3L)).thenReturn(List.of());
         // Kho từ nhỏ: 運転 là từ N3, dùng trong câu N5 thì vượt cấp.
-        when(levelChecker.open("N5")).thenReturn(new VocabularyLevelChecker.Session(5, Map.of(
+        when(levelChecker.open(JlptLevel.N5)).thenReturn(new VocabularyLevelChecker.Session(5, Map.of(
                 "ご飯", 5, "食べる", 5, "歯", 5, "磨く", 5, "手", 5, "洗う", 5, "運転", 3, "練習", 5, "テレビ", 5,
                 "見る", 5)));
         String drafts = """
@@ -115,7 +117,7 @@ class QuestionDraftServiceTest {
         List<ExamQuestion> saved = saved();
         assertThat(saved).hasSize(4).allSatisfy(question -> {
             assertThat(question.getSource()).isEqualTo(ExamQuestionSource.AI);
-            assertThat(question.getJlptLevel()).isEqualTo("N5");
+            assertThat(question.getJlptLevel()).isEqualTo(JlptLevel.N5);
             assertThat(question.getQuestionType()).isEqualTo(JlptQuestionType.GRAMMAR_FORM);
             assertThat(question.getGrammarPointIds()).containsExactly(3L);
         });
@@ -139,7 +141,7 @@ class QuestionDraftServiceTest {
         when(geminiClient.isEnabled()).thenReturn(true);
         when(grammarPointRepository.findById(3L)).thenReturn(Optional.of(AFTER));
         when(questionRepository.findSentencesByGrammarPoint(3L)).thenReturn(List.of("既にある文。"));
-        when(levelChecker.open("N5")).thenReturn(new VocabularyLevelChecker.Session(5, Map.of(
+        when(levelChecker.open(JlptLevel.N5)).thenReturn(new VocabularyLevelChecker.Session(5, Map.of(
                 "ご飯", 5, "食べる", 5, "歯", 5, "磨く", 5, "毎晩", 5)));
         when(geminiClient.generateJson(anyString())).thenReturn(Optional.of("""
                 [{"before": "毎晩", "parts": ["ご飯を", "食べて", "から", "歯を"], "after": "磨きます。", "star": 3,
@@ -176,7 +178,7 @@ class QuestionDraftServiceTest {
         // 届ける đã có câu 用法; でも là liên từ - không hỏi.
         when(questionRepository.findWordIdsWithQuestion("N4", JlptQuestionType.USAGE.name())).thenReturn(List.of(13L));
         when(kanjiRepository.findAllByTagNamePrefix("N4-%")).thenReturn(List.of(LEAVE, REFUSE, DELIVER, BUT));
-        when(levelChecker.open("N4")).thenReturn(new VocabularyLevelChecker.Session(4, Map.of()));
+        when(levelChecker.open(JlptLevel.N4)).thenReturn(new VocabularyLevelChecker.Session(4, Map.of()));
         List<String> prompts = new ArrayList<>();
         when(geminiClient.generateJson(anyString())).thenAnswer(invocation -> {
             String prompt = invocation.getArgument(0);
@@ -200,7 +202,7 @@ class QuestionDraftServiceTest {
         List<ExamQuestion> saved = saved();
         assertThat(saved).hasSize(2).allSatisfy(question -> {
             assertThat(question.getQuestionType()).isEqualTo(JlptQuestionType.USAGE);
-            assertThat(question.getJlptLevel()).isEqualTo("N4");
+            assertThat(question.getJlptLevel()).isEqualTo(JlptLevel.N4);
             assertThat(question.getSource()).isEqualTo(ExamQuestionSource.AI);
             assertThat(question.getSentence()).isNull();
         });
@@ -222,7 +224,7 @@ class QuestionDraftServiceTest {
         when(questionRepository.findWordIdsWithQuestion(anyString(), anyString())).thenReturn(List.of());
         when(kanjiRepository.findAllByTagNamePrefix("N3-%")).thenReturn(List.of(PASS, ENDURE));
         when(kanjiRepository.findAllByTagNamePrefix("N4-%")).thenReturn(List.of(PASS));
-        when(levelChecker.open(anyString())).thenAnswer(invocation ->
+        when(levelChecker.open(any())).thenAnswer(invocation ->
                 new VocabularyLevelChecker.Session(VocabularyLevelChecker.rank(invocation.getArgument(0)), Map.of()));
         List<String> prompts = new ArrayList<>();
         when(geminiClient.generateJson(anyString())).thenAnswer(invocation -> {
@@ -310,12 +312,12 @@ class QuestionDraftServiceTest {
     /** Cấu trúc phần Từ vựng như jlpt-blueprints.yml: N5 không có 用法. */
     static JlptBlueprintProperties blueprints() {
         JlptBlueprintProperties blueprints = new JlptBlueprintProperties();
-        for (String level : List.of("N5", "N4", "N3")) {
+        for (JlptLevel level : List.of(JlptLevel.N5, JlptLevel.N4, JlptLevel.N3)) {
             JlptBlueprintProperties.Section vocabulary = new JlptBlueprintProperties.Section();
             vocabulary.setName(ExamSection.VOCABULARY);
             Map<JlptQuestionType, Integer> questions = new LinkedHashMap<>(Map.of(JlptQuestionType.KANJI_READING, 7,
                     JlptQuestionType.CONTEXT, 6, JlptQuestionType.PARAPHRASE, 3));
-            if (!level.equals("N5")) {
+            if (level != JlptLevel.N5) {
                 questions.put(JlptQuestionType.USAGE, 4);
             }
             vocabulary.setQuestions(questions);

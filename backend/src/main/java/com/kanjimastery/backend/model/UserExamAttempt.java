@@ -25,8 +25,9 @@ public class UserExamAttempt {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "jlpt_level", nullable = false, length = 5)
-    private String jlptLevel;
+    private JlptLevel jlptLevel;
 
     @Column(name = "total_score")
     @Builder.Default

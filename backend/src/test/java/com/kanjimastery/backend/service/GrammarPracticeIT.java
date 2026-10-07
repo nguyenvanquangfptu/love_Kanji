@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.dto.PracticeQuestionResponse;
 import com.kanjimastery.backend.dto.QuestionReviewItem;
@@ -40,7 +41,7 @@ import static org.assertj.core.api.Assertions.tuple;
 class GrammarPracticeIT extends AbstractIntegrationTest {
 
     /** Cấp độ giả, để không đụng tới dữ liệu N5-N3. */
-    private static final String LEVEL = "N8";
+    private static final JlptLevel LEVEL = JlptLevel.N1;
 
     @Autowired
     private GrammarPracticeService practiceService;
@@ -107,11 +108,11 @@ class GrammarPracticeIT extends AbstractIntegrationTest {
         Long running = attempt(ExamAttemptStatus.IN_PROGRESS, LocalDateTime.now());
         answer(running, afterOne, "B", false);
 
-        List<WeakGrammarResponse> weak = practiceService.weakPoints(userId, "n8");
+        List<WeakGrammarResponse> weak = practiceService.weakPoints(userId, "n1");
 
         assertThat(weak).extracting(WeakGrammarResponse::id, WeakGrammarResponse::wrong, WeakGrammarResponse::answered)
                 .containsExactly(tuple(because.getId(), 2, 2), tuple(after.getId(), 1, 2));
-        assertThat(practiceService.weakPoints(userId, "N7")).isEmpty();
+        assertThat(practiceService.weakPoints(userId, "N2")).isEmpty();
     }
 
     @Test
@@ -124,7 +125,7 @@ class GrammarPracticeIT extends AbstractIntegrationTest {
         questionRepository.save(blank);
         question(ExamQuestionStatus.APPROVED, after);
 
-        List<PracticeQuestionResponse> practice = practiceService.practice("N8", List.of(because.getId()));
+        List<PracticeQuestionResponse> practice = practiceService.practice("N1", List.of(because.getId()));
 
         assertThat(practice).singleElement().satisfies(question -> {
             assertThat(question.id()).isEqualTo(approved.getId());

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.Kanji;
 import org.junit.jupiter.api.Test;
@@ -64,6 +65,6 @@ class QuestionBuilderTest {
 
     private static Kanji word(Long id, String character, String reading, String meaning) {
         return Kanji.builder().id(id).character(character).reading(reading).meaning(meaning).hanViet("")
-                .jlptLevel("N5").strokeCount(5).build();
+                .jlptLevel(JlptLevel.N5).strokeCount(5).build();
     }
 }

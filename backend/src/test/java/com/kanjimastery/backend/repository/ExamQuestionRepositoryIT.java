@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionSource;
@@ -58,12 +59,12 @@ class ExamQuestionRepositoryIT extends AbstractIntegrationTest {
         questionRepository.save(question("Câu ngữ pháp", JlptQuestionType.GRAMMAR_FORM));
 
         // Thi nhanh chỉ hỏi từ vựng: câu ngữ pháp (không kỹ năng, có dạng câu) chỉ vào đề JLPT.
-        assertThat(questionRepository.findRandomUnclassifiedByLevel("N8", 10)).extracting(ExamQuestion::getId)
+        assertThat(questionRepository.findRandomUnclassifiedByLevel("N1", 10)).extracting(ExamQuestion::getId)
                 .containsExactly(untyped.getId());
     }
 
     private static ExamQuestion question(String text, JlptQuestionType questionType) {
-        return ExamQuestion.builder().jlptLevel("N8").questionText(text).optionA("1").optionB("2").optionC("3")
+        return ExamQuestion.builder().jlptLevel(JlptLevel.N1).questionText(text).optionA("1").optionB("2").optionC("3")
                 .optionD("4").correctOption("A").questionType(questionType).build();
     }
 

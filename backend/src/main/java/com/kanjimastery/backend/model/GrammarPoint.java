@@ -2,6 +2,8 @@ package com.kanjimastery.backend.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -26,8 +28,9 @@ public class GrammarPoint {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "jlpt_level", nullable = false, length = 5)
-    private String jlptLevel;
+    private JlptLevel jlptLevel;
 
     /** Bài trong giáo trình (N4-26...); null = không theo bài. */
     @Column(length = 20)

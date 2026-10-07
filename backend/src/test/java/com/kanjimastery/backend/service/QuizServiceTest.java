@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.config.RateLimitProperties;
 import com.kanjimastery.backend.dto.QuizQuestionResponse;
@@ -392,7 +393,7 @@ class QuizServiceTest {
                 .reading(reading)
                 .hanViet("")
                 .meaning("nghĩa của " + character)
-                .jlptLevel("N3")
+                .jlptLevel(JlptLevel.N3)
                 .strokeCount(10)
                 .exampleSentence(sentence)
                 .build();
@@ -405,7 +406,7 @@ class QuizServiceTest {
                 .character(character)
                 .hanViet("")
                 .meaning(meaning)
-                .jlptLevel("N4")
+                .jlptLevel(JlptLevel.N4)
                 .strokeCount(0)
                 .build();
     }

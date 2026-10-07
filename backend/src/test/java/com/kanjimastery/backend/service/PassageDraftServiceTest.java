@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.model.ExamPassage;
@@ -44,7 +45,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class PassageDraftServiceTest {
 
-    private static final GrammarPoint AFTER = GrammarPoint.builder().id(3L).jlptLevel("N4").pattern("〜てから")
+    private static final GrammarPoint AFTER = GrammarPoint.builder().id(3L).jlptLevel(JlptLevel.N4).pattern("〜てから")
             .meaningVi("Sau khi").build();
     /** Đoạn văn 4 chỗ trống, AI viết lệch ký hiệu chỗ trống 【２】 và [3]. */
     private static final String PASSAGE = """
@@ -85,7 +86,7 @@ class PassageDraftServiceTest {
     void draft_shouldQueueThePassageWithItsBlanks_linkGrammarPoints_andFlagWhatTheSecondSolveDisagreesWith() {
         givenTheLevelHasGrammarAndAPassage();
         // 散歩 là từ N3 trong kho nhỏ này: chỉ một từ vượt cấp thì ghi chú, không gắn cờ.
-        when(levelChecker.open("N4")).thenReturn(new VocabularyLevelChecker.Session(4, Map.of(
+        when(levelChecker.open(JlptLevel.N4)).thenReturn(new VocabularyLevelChecker.Session(4, Map.of(
                 "休み", 5, "食べる", 5, "公園", 5, "散歩", 3, "雨", 5, "家", 5, "本", 5, "読む", 5, "話す", 5,
                 "好き", 5)));
         List<String> prompts = new ArrayList<>();
@@ -164,8 +165,8 @@ class PassageDraftServiceTest {
     @Test
     void draft_shouldRefuse_whenGeminiIsNotConfigured_orItsAnswerIsNotAPassage() {
         when(geminiClient.isEnabled()).thenReturn(false, true);
-        when(grammarPointRepository.findByJlptLevelOrderByLessonAscIdAsc("N4")).thenReturn(List.of());
-        when(passageRepository.findByJlptLevelOrderByIdDesc(eq("N4"), any(Pageable.class))).thenReturn(Page.empty());
+        when(grammarPointRepository.findByJlptLevelOrderByLessonAscIdAsc(JlptLevel.N4)).thenReturn(List.of());
+        when(passageRepository.findByJlptLevelOrderByIdDesc(eq(JlptLevel.N4), any(Pageable.class))).thenReturn(Page.empty());
         when(geminiClient.generateJson(anyString())).thenReturn(Optional.of("[1, 2]"));
 
         assertThatThrownBy(() -> service.draft("N4"))
@@ -184,9 +185,9 @@ class PassageDraftServiceTest {
 
     private void givenTheLevelHasGrammarAndAPassage() {
         when(geminiClient.isEnabled()).thenReturn(true);
-        when(grammarPointRepository.findByJlptLevelOrderByLessonAscIdAsc("N4")).thenReturn(List.of(AFTER));
-        when(passageRepository.findByJlptLevelOrderByIdDesc(eq("N4"), any(Pageable.class))).thenReturn(new PageImpl<>(
-                List.of(ExamPassage.builder().id(1L).jlptLevel("N4").title("駅までの道").content("...").build())));
+        when(grammarPointRepository.findByJlptLevelOrderByLessonAscIdAsc(JlptLevel.N4)).thenReturn(List.of(AFTER));
+        when(passageRepository.findByJlptLevelOrderByIdDesc(eq(JlptLevel.N4), any(Pageable.class))).thenReturn(new PageImpl<>(
+                List.of(ExamPassage.builder().id(1L).jlptLevel(JlptLevel.N4).title("駅までの道").content("...").build())));
     }
 
     private ExamPassage savedPassage() {

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.dto.GrammarImportResult;
 import com.kanjimastery.backend.dto.GrammarPointResponse;
@@ -22,7 +23,7 @@ import static org.assertj.core.api.Assertions.tuple;
 class GrammarPointIT extends AbstractIntegrationTest {
 
     /** Cấp độ thật nhưng các bài giả, xoá hết sau mỗi test. */
-    private static final String LEVEL = "N5";
+    private static final JlptLevel LEVEL = JlptLevel.N5;
 
     @Autowired
     private GrammarPointService grammarPointService;
@@ -55,7 +56,7 @@ class GrammarPointIT extends AbstractIntegrationTest {
         question(ExamQuestionStatus.APPROVED, fromTo);
         question(ExamQuestionStatus.DRAFT, fromTo);
 
-        List<GrammarPointResponse> points = grammarPointService.list(LEVEL);
+        List<GrammarPointResponse> points = grammarPointService.list(LEVEL.name());
         assertThat(points)
                 .extracting(GrammarPointResponse::getLesson, GrammarPointResponse::getPattern,
                         GrammarPointResponse::getApprovedQuestions, GrammarPointResponse::getDraftQuestions)

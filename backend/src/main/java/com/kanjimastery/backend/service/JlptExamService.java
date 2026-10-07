@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.ExamMondaiResponse;
@@ -53,7 +54,7 @@ public class JlptExamService {
      * @param correct số câu đúng trên {@code total} câu của các phần
      * @param seconds tổng thời gian làm các phần (không tính phần chốt trễ quá giờ)
      */
-    public record CompletedSitting(Long userId, String level, int correct, int total, int seconds) {
+    public record CompletedSitting(Long userId, JlptLevel level, int correct, int total, int seconds) {
     }
 
     private final JlptBlueprintProperties blueprints;
@@ -72,7 +73,7 @@ public class JlptExamService {
                 .toList();
     }
 
-    private JlptLevelResponse levelResponse(String level, JlptBlueprintProperties.Level blueprint) {
+    private JlptLevelResponse levelResponse(JlptLevel level, JlptBlueprintProperties.Level blueprint) {
         Map<JlptQuestionType, Long> available = availableByType(level);
         List<JlptLevelResponse.Section> sections = blueprint.getSections().stream()
                 .map(section -> {
@@ -100,7 +101,7 @@ public class JlptExamService {
     /** Tạo buổi thi với các phần đã chọn và bắt đầu ngay phần đầu tiên. */
     @Transactional
     public StartExamResponse startSitting(Long userId, StartJlptExamRequest request) {
-        String level = request.getJlptLevel().toUpperCase();
+        JlptLevel level = Levels.require(request.getJlptLevel());
         JlptBlueprintProperties.Level blueprint = blueprints.getLevels().get(level);
         if (blueprint == null) {
             throw new BadRequestException("Chưa có cấu trúc đề JLPT cho cấp độ: " + level);
@@ -332,8 +333,8 @@ public class JlptExamService {
         return (int) minutes * 60;
     }
 
-    private Map<JlptQuestionType, Long> availableByType(String level) {
-        return questionRepository.countApprovedByType(level).stream()
+    private Map<JlptQuestionType, Long> availableByType(JlptLevel level) {
+        return questionRepository.countApprovedByType(level.name()).stream()
                 .collect(Collectors.toMap(ExamQuestionRepository.TypeCount::getType,
                         ExamQuestionRepository.TypeCount::getCount));
     }

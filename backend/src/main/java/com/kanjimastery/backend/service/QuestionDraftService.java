@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.exception.BadRequestException;
@@ -26,7 +27,6 @@ import java.util.EnumSet;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -59,7 +59,7 @@ public class QuestionDraftService {
     private static final Set<JlptQuestionType> VOCABULARY_TYPES =
             EnumSet.of(JlptQuestionType.PARAPHRASE, JlptQuestionType.USAGE);
     /** Các cấp độ mà 言い換え類義 gạch chân cả câu. */
-    private static final Set<String> WHOLE_SENTENCE_PARAPHRASE = Set.of("N4", "N5");
+    private static final Set<JlptLevel> WHOLE_SENTENCE_PARAPHRASE = EnumSet.of(JlptLevel.N4, JlptLevel.N5);
     /** Từ loại hỏi được 言い換え, 用法 - không hỏi liên từ, từ chỉ định, câu chào... */
     private static final Set<PartOfSpeech> VOCABULARY_CLASSES = EnumSet.of(PartOfSpeech.NOUN, PartOfSpeech.VERB,
             PartOfSpeech.I_ADJECTIVE, PartOfSpeech.NA_ADJECTIVE, PartOfSpeech.ADVERB);
@@ -120,7 +120,7 @@ public class QuestionDraftService {
      */
     public DraftResult draftVocabulary(String level, JlptQuestionType type, int count) {
         requireGemini();
-        String normalized = level.strip().toUpperCase(Locale.ROOT);
+        JlptLevel normalized = Levels.require(level);
         if (!VOCABULARY_TYPES.contains(type)) {
             throw new BadRequestException("Chỉ sinh nháp từ vựng được dạng 言い換え類義 và 用法");
         }
@@ -173,7 +173,7 @@ public class QuestionDraftService {
     }
 
     /** Kiểm tra các câu nháp (câu đã bị loại từ trước thì bỏ qua), lưu tất cả, kể cả câu bị loại. */
-    private DraftResult review(String level, String task, List<Draft> drafts, int unreadable, String subject) {
+    private DraftResult review(JlptLevel level, String task, List<Draft> drafts, int unreadable, String subject) {
         List<Draft> candidates = drafts.stream()
                 .filter(draft -> !ExamQuestionStatus.REJECTED.equals(draft.question().getStatus()))
                 .toList();
@@ -264,8 +264,8 @@ public class QuestionDraftService {
     }
 
     /** Từ trong bài của cấp độ chưa có câu dạng {@code type}, có nghĩa, đúng từ loại hỏi được; chọn ngẫu nhiên. */
-    private List<Kanji> wordsWithoutQuestion(String level, JlptQuestionType type, int count) {
-        Set<Long> covered = new HashSet<>(questionRepository.findWordIdsWithQuestion(level, type.name()));
+    private List<Kanji> wordsWithoutQuestion(JlptLevel level, JlptQuestionType type, int count) {
+        Set<Long> covered = new HashSet<>(questionRepository.findWordIdsWithQuestion(level.name(), type.name()));
         List<Kanji> candidates = kanjiRepository.findAllByTagNamePrefix(level + "-%").stream()
                 .filter(word -> !covered.contains(word.getId()))
                 .filter(word -> StringUtils.hasText(word.getMeaning()))
@@ -288,7 +288,7 @@ public class QuestionDraftService {
         return words;
     }
 
-    private static String vocabularyPrompt(String level, JlptQuestionType type, boolean wholeSentence, List<Kanji> words) {
+    private static String vocabularyPrompt(JlptLevel level, JlptQuestionType type, boolean wholeSentence, List<Kanji> words) {
         String list = IntStream.range(0, words.size())
                 .mapToObj(index -> (index + 1) + ". " + words.get(index).getCharacter()
                         + readingInBrackets(words.get(index)) + " - " + words.get(index).getMeaning())
@@ -346,7 +346,7 @@ public class QuestionDraftService {
                 """;
     }
 
-    private static Optional<Draft> paraphrase(JsonNode item, String level, boolean wholeSentence, List<Kanji> words) {
+    private static Optional<Draft> paraphrase(JsonNode item, JlptLevel level, boolean wholeSentence, List<Kanji> words) {
         Optional<Kanji> word = word(item, words);
         String sentence = item.path("sentence").asText("").strip();
         List<String> options = DraftReviewer.texts(item.path("options"));
@@ -367,7 +367,7 @@ public class QuestionDraftService {
         return Optional.of(new Draft(question, sentence + "\n" + String.join("\n", options), prompt));
     }
 
-    private static Optional<Draft> usage(JsonNode item, String level, List<Kanji> words) {
+    private static Optional<Draft> usage(JsonNode item, JlptLevel level, List<Kanji> words) {
         Optional<Kanji> word = word(item, words);
         List<String> options = DraftReviewer.texts(item.path("options"));
         int answer = item.path("answer").asInt(-1);

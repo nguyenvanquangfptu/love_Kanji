@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
 import com.kanjimastery.backend.dto.QuestionReviewItem;
@@ -39,7 +40,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class QuestionReportIT extends AbstractIntegrationTest {
 
-    private static final String LEVEL = "N8";
+    private static final JlptLevel LEVEL = JlptLevel.N1;
 
     @Autowired
     private QuestionReportService reportService;
@@ -121,7 +122,7 @@ class QuestionReportIT extends AbstractIntegrationTest {
         assertThat(withdrawn.getFlag()).isEqualTo(ExamQuestionFlag.REPORTED);
         assertThat(withdrawn.getReviewNote()).contains("3 người học báo lỗi");
         AdminExamQuestionResponse reported = questionReviewService.search(
-                        new ExamQuestionReviewService.Filter(LEVEL, null, null, false, null, true), 0, 20)
+                        new ExamQuestionReviewService.Filter(LEVEL.name(), null, null, false, null, true), 0, 20)
                 .getContent().stream().filter(found -> found.getId().equals(standalone.getId())).findFirst()
                 .orElseThrow();
         assertThat(reported.getReports()).extracting(AdminExamQuestionResponse.Report::reason)
@@ -138,7 +139,7 @@ class QuestionReportIT extends AbstractIntegrationTest {
         assertThat(reportRepository.countByQuestionIdAndStatus(standalone.getId(), QuestionReportStatus.OPEN)).isZero();
         assertThat(reportRepository.countByQuestionIdAndStatus(standalone.getId(), QuestionReportStatus.RESOLVED))
                 .isEqualTo(3);
-        assertThat(questionReviewService.search(new ExamQuestionReviewService.Filter(LEVEL, null, null, false, null,
+        assertThat(questionReviewService.search(new ExamQuestionReviewService.Filter(LEVEL.name(), null, null, false, null,
                 true), 0, 20).getContent()).isEmpty();
     }
 

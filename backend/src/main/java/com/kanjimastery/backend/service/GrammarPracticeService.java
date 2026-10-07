@@ -15,7 +15,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -87,6 +86,6 @@ public class GrammarPracticeService {
     }
 
     private static String normalize(String level) {
-        return level.strip().toUpperCase(Locale.ROOT);
+        return Levels.require(level).name();
     }
 }

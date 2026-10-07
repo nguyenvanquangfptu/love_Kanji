@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.QuestionReportReason;
 import com.kanjimastery.backend.model.ExamQuestionFlag;
 import com.kanjimastery.backend.model.ExamQuestionSource;
@@ -19,7 +20,7 @@ import java.util.List;
 @AllArgsConstructor
 public class AdminExamQuestionResponse {
     private Long id;
-    private String jlptLevel;
+    private JlptLevel jlptLevel;
     /** {@link com.kanjimastery.backend.model.JlptQuestionType} */
     private JlptQuestionType questionType;
     private QuizDirection skill;

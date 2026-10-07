@@ -86,12 +86,12 @@ public class LeaderboardService {
     public void pushJlptResult(JlptExamService.CompletedSitting result) {
         String member = String.valueOf(result.userId());
         double score = jlptRankingScore(result.correct(), result.total(), result.seconds());
-        Double best = redisTemplate.opsForZSet().score(jlptKey(result.level()), member);
+        Double best = redisTemplate.opsForZSet().score(jlptKey(result.level().name()), member);
         if (best != null && best >= score) {
             return;
         }
-        redisTemplate.opsForZSet().add(jlptKey(result.level()), member, score);
-        redisTemplate.opsForHash().put(jlptDetailKey(result.level()), member,
+        redisTemplate.opsForZSet().add(jlptKey(result.level().name()), member, score);
+        redisTemplate.opsForHash().put(jlptDetailKey(result.level().name()), member,
                 result.correct() + "," + result.total() + "," + result.seconds());
     }
 

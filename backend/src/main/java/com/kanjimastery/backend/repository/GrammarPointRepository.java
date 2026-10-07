@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.GrammarPoint;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,11 +15,11 @@ import java.util.Optional;
 public interface GrammarPointRepository extends JpaRepository<GrammarPoint, Long> {
 
     /** Theo bài rồi theo thứ tự nhập. */
-    List<GrammarPoint> findByJlptLevelOrderByLessonAscIdAsc(String jlptLevel);
+    List<GrammarPoint> findByJlptLevelOrderByLessonAscIdAsc(JlptLevel jlptLevel);
 
     List<GrammarPoint> findAllByOrderByJlptLevelDescLessonAscIdAsc();
 
-    Optional<GrammarPoint> findByJlptLevelAndPattern(String jlptLevel, String pattern);
+    Optional<GrammarPoint> findByJlptLevelAndPattern(JlptLevel jlptLevel, String pattern);
 
     /** Số câu thi gắn với mỗi điểm ngữ pháp, theo trạng thái duyệt. */
     interface QuestionCount {

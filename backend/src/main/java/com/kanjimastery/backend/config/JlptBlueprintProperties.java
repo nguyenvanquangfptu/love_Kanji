@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.config;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.ExamSection;
 import lombok.Getter;
@@ -21,10 +22,10 @@ import java.util.Optional;
 public class JlptBlueprintProperties {
 
     /** Theo cấp độ (N5, N4...). */
-    private Map<String, Level> levels = new LinkedHashMap<>();
+    private Map<JlptLevel, Level> levels = new LinkedHashMap<>();
 
     /** Một phần thi của một cấp độ; rỗng nếu cấp độ hoặc phần đó không có trong cấu trúc đề. */
-    public Optional<Section> section(String level, ExamSection name) {
+    public Optional<Section> section(JlptLevel level, ExamSection name) {
         Level blueprint = levels.get(level);
         return blueprint == null
                 ? Optional.empty()

@@ -35,8 +35,9 @@ public class ExamSitting {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "jlpt_level", nullable = false, length = 5)
-    private String jlptLevel;
+    private JlptLevel jlptLevel;
 
     /** Các phần đã chọn ({@link ExamSection}), cách nhau bởi dấu phẩy, theo thứ tự làm bài. */
     @Column(nullable = false, length = 40)

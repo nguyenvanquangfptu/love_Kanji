@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.config.ExamProperties;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.ExamQuestionPublicResponse;
@@ -79,7 +80,7 @@ class ExamServiceTest {
     @Test
     void getReview_shouldScoreEachSkill_inReadingWritingMeaningOrder() {
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
-                .userId(USER_ID).jlptLevel("N5").status(ExamAttemptStatus.COMPLETED).totalScore(3)
+                .userId(USER_ID).jlptLevel(JlptLevel.N5).status(ExamAttemptStatus.COMPLETED).totalScore(3)
                 .startedAt(LocalDateTime.now().minusMinutes(20)).build()));
         when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(
                 answer(1L, "B", true), answer(2L, "A", false), answer(3L, null, false), answer(4L, "C", true),
@@ -102,7 +103,7 @@ class ExamServiceTest {
     @Test
     void getReview_shouldListTheWordsOfWrongAnswers_butNotOfSkippedQuestions() {
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
-                .userId(USER_ID).jlptLevel("N5").status(ExamAttemptStatus.TIMEOUT).totalScore(1)
+                .userId(USER_ID).jlptLevel(JlptLevel.N5).status(ExamAttemptStatus.TIMEOUT).totalScore(1)
                 .startedAt(LocalDateTime.now().minusMinutes(31)).diagnosedAt(LocalDateTime.now()).build()));
         when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(
                 answer(1L, "B", false), answer(2L, null, false), answer(3L, "A", true), answer(4L, "C", false)));
@@ -164,9 +165,9 @@ class ExamServiceTest {
         vocabulary.getQuestions().put(JlptQuestionType.CONTEXT, 8);
         JlptBlueprintProperties.Level n4 = new JlptBlueprintProperties.Level();
         n4.setSections(List.of(vocabulary));
-        blueprints.getLevels().put("N4", n4);
+        blueprints.getLevels().put(JlptLevel.N4, n4);
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
-                .userId(USER_ID).jlptLevel("N4").status(ExamAttemptStatus.COMPLETED).totalScore(2)
+                .userId(USER_ID).jlptLevel(JlptLevel.N4).status(ExamAttemptStatus.COMPLETED).totalScore(2)
                 .sittingId(5L).section(ExamSection.VOCABULARY).durationSeconds(900)
                 .startedAt(LocalDateTime.now().minusMinutes(10)).build()));
         when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(
@@ -191,7 +192,7 @@ class ExamServiceTest {
     @Test
     void getReview_ofAQuickExam_shouldHaveNoMondaiScores() {
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
-                .userId(USER_ID).jlptLevel("N5").status(ExamAttemptStatus.COMPLETED).totalScore(1)
+                .userId(USER_ID).jlptLevel(JlptLevel.N5).status(ExamAttemptStatus.COMPLETED).totalScore(1)
                 .startedAt(LocalDateTime.now().minusMinutes(20)).build()));
         when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(answer(1L, "A", true)));
         when(questionRepository.findAllWithLinksByIdIn(anyList())).thenReturn(List.of(
@@ -206,7 +207,7 @@ class ExamServiceTest {
     @Test
     void getReview_shouldNameTheGrammarPointsEachQuestionTests() {
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
-                .userId(USER_ID).jlptLevel("N4").status(ExamAttemptStatus.COMPLETED).totalScore(0)
+                .userId(USER_ID).jlptLevel(JlptLevel.N4).status(ExamAttemptStatus.COMPLETED).totalScore(0)
                 .sittingId(5L).section(ExamSection.GRAMMAR).startedAt(LocalDateTime.now().minusMinutes(10)).build()));
         when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(
                 answer(1L, "B", false), answer(2L, "A", true)));
@@ -237,7 +238,7 @@ class ExamServiceTest {
     }
 
     private static ExamQuestion question(Long id, QuizDirection skill, Long... kanjiIds) {
-        return ExamQuestion.builder().id(id).jlptLevel("N5").questionText("Câu " + id).optionA("1").optionB("2")
+        return ExamQuestion.builder().id(id).jlptLevel(JlptLevel.N5).questionText("Câu " + id).optionA("1").optionB("2")
                 .optionC("3").optionD("4").correctOption("A").skill(skill).kanjiIds(Set.of(kanjiIds)).build();
     }
 }

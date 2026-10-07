@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.QuizDirection;
@@ -55,7 +56,7 @@ class ExamDiagnosisServiceTest {
     void diagnose_shouldRecordEveryAnsweredQuestionForItsWords_asAnExamAnswer() {
         when(attemptRepository.markDiagnosed(eq(ATTEMPT_ID), any())).thenReturn(1);
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
-                .userId(USER_ID).jlptLevel("N5").status(ExamAttemptStatus.COMPLETED)
+                .userId(USER_ID).jlptLevel(JlptLevel.N5).status(ExamAttemptStatus.COMPLETED)
                 .startedAt(LocalDateTime.now().minusMinutes(20)).build()));
         when(answerRepository.findByAttemptId(ATTEMPT_ID)).thenReturn(List.of(
                 answer(1L, "C", false), answer(2L, "A", true), answer(3L, null, false)));
@@ -94,7 +95,7 @@ class ExamDiagnosisServiceTest {
     }
 
     private static ExamQuestion question(Long id, QuizDirection skill, Long... kanjiIds) {
-        return ExamQuestion.builder().id(id).jlptLevel("N5").questionText("Câu " + id).optionA("một").optionB("hai")
+        return ExamQuestion.builder().id(id).jlptLevel(JlptLevel.N5).questionText("Câu " + id).optionA("một").optionB("hai")
                 .optionC("ぎん").optionD("きん").correctOption(id == 1L ? "D" : "A").skill(skill)
                 .kanjiIds(Set.of(kanjiIds)).build();
     }

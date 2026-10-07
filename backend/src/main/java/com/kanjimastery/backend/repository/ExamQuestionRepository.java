@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -100,7 +101,7 @@ public interface ExamQuestionRepository
 
     /** Số câu đề JLPT theo cấp độ, dạng câu và trạng thái duyệt. */
     interface BankCount {
-        String getLevel();
+        JlptLevel getLevel();
 
         JlptQuestionType getType();
 

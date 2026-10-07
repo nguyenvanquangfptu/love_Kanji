@@ -30,8 +30,9 @@ public class ExamPassage {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "jlpt_level", nullable = false, length = 5)
-    private String jlptLevel;
+    private JlptLevel jlptLevel;
 
     @Column(length = 200)
     private String title;

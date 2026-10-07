@@ -23,7 +23,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -43,8 +42,8 @@ public class ExamPassageReviewService {
     public Page<AdminExamPassageResponse> search(String level, ExamQuestionStatus status, int page, int size) {
         PageRequest pageRequest = PageRequest.of(page, size);
         Page<ExamPassage> found = status != null
-                ? passageRepository.findByJlptLevelAndStatusOrderByIdDesc(level.toUpperCase(), status, pageRequest)
-                : passageRepository.findByJlptLevelOrderByIdDesc(level.toUpperCase(), pageRequest);
+                ? passageRepository.findByJlptLevelAndStatusOrderByIdDesc(Levels.require(level), status, pageRequest)
+                : passageRepository.findByJlptLevelOrderByIdDesc(Levels.require(level), pageRequest);
         Map<Long, List<ExamQuestion>> questions = questionsOf(found.map(ExamPassage::getId).getContent());
         return new PageImpl<>(found.getContent().stream()
                 .map(passage -> toResponse(passage, questions.getOrDefault(passage.getId(), List.of())))

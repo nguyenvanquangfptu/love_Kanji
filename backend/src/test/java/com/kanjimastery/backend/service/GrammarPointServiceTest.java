@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.dto.GrammarImportResult;
 import com.kanjimastery.backend.dto.GrammarPointRequest;
 import com.kanjimastery.backend.exception.BadRequestException;
@@ -33,11 +34,11 @@ class GrammarPointServiceTest {
 
     @Test
     void importCsv_shouldCreateNewPoints_updateChangedOnes_andReportBadLines() {
-        GrammarPoint same = point("N4", "N4-26", "〜んです", "Giải thích lý do", null);
-        GrammarPoint changed = point("N4", "N4-34", "〜とおりに", "Làm theo", null);
-        when(repository.findByJlptLevelAndPattern("N4", "〜んです")).thenReturn(Optional.of(same));
-        when(repository.findByJlptLevelAndPattern("N4", "〜とおりに")).thenReturn(Optional.of(changed));
-        when(repository.findByJlptLevelAndPattern("N4", "〜てから")).thenReturn(Optional.empty());
+        GrammarPoint same = point(JlptLevel.N4, "N4-26", "〜んです", "Giải thích lý do", null);
+        GrammarPoint changed = point(JlptLevel.N4, "N4-34", "〜とおりに", "Làm theo", null);
+        when(repository.findByJlptLevelAndPattern(JlptLevel.N4, "〜んです")).thenReturn(Optional.of(same));
+        when(repository.findByJlptLevelAndPattern(JlptLevel.N4, "〜とおりに")).thenReturn(Optional.of(changed));
+        when(repository.findByJlptLevelAndPattern(JlptLevel.N4, "〜てから")).thenReturn(Optional.empty());
         String csv = """
                 cap_do,bai,mau,nghia,cach_noi
                 n4,N4-26,〜んです,Giải thích lý do
@@ -69,8 +70,8 @@ class GrammarPointServiceTest {
 
     @Test
     void exportCsv_shouldWriteTheImportFormat_soItCanBeImportedBack() {
-        when(repository.findByJlptLevelOrderByLessonAscIdAsc("N3")).thenReturn(List.of(
-                point("N3", null, "〜わけではない", "Không phải là, không hẳn", "普通形 + わけではない")));
+        when(repository.findByJlptLevelOrderByLessonAscIdAsc(JlptLevel.N3)).thenReturn(List.of(
+                point(JlptLevel.N3, null, "〜わけではない", "Không phải là, không hẳn", "普通形 + わけではない")));
 
         String csv = service.exportCsv("n3");
 
@@ -80,8 +81,8 @@ class GrammarPointServiceTest {
 
     @Test
     void create_shouldRefuseAPatternTheLevelAlreadyHas() {
-        when(repository.findByJlptLevelAndPattern("N4", "〜てから"))
-                .thenReturn(Optional.of(point("N4", null, "〜てから", "Sau khi", null)));
+        when(repository.findByJlptLevelAndPattern(JlptLevel.N4, "〜てから"))
+                .thenReturn(Optional.of(point(JlptLevel.N4, null, "〜てから", "Sau khi", null)));
         GrammarPointRequest request = new GrammarPointRequest();
         request.setJlptLevel("N4");
         request.setPattern("~てから");
@@ -91,7 +92,7 @@ class GrammarPointServiceTest {
         verify(repository, times(0)).save(any());
     }
 
-    private static GrammarPoint point(String level, String lesson, String pattern, String meaning, String connection) {
+    private static GrammarPoint point(JlptLevel level, String lesson, String pattern, String meaning, String connection) {
         return GrammarPoint.builder().id(1L).jlptLevel(level).lesson(lesson).pattern(pattern).meaningVi(meaning)
                 .connection(connection).build();
     }

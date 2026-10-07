@@ -24,8 +24,9 @@ public class ExamQuestion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "jlpt_level", nullable = false, length = 5)
-    private String jlptLevel;
+    private JlptLevel jlptLevel;
 
     @Column(name = "question_text", nullable = false, columnDefinition = "TEXT")
     private String questionText;

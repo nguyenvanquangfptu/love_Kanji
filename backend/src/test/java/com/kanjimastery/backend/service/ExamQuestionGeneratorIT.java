@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionSource;
@@ -25,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ExamQuestionGeneratorIT extends AbstractIntegrationTest {
 
     /** Cấp độ giả để không đụng tới các bài N5/N4 thật trong dữ liệu mẫu. */
-    private static final String LEVEL = "N9";
+    private static final JlptLevel LEVEL = JlptLevel.N1;
 
     @Autowired
     private ExamQuestionGenerator generator;
@@ -52,7 +53,7 @@ class ExamQuestionGeneratorIT extends AbstractIntegrationTest {
         for (String[] word : words) {
             wordIds.add(kanjiRepository.save(Kanji.builder()
                     .character(word[0]).reading(word[1]).exampleSentence(word[2]).meaning(word[3])
-                    .hanViet("").jlptLevel("N5").strokeCount(10).tags(new HashSet<>(Set.of(lesson)))
+                    .hanViet("").jlptLevel(JlptLevel.N5).strokeCount(10).tags(new HashSet<>(Set.of(lesson)))
                     .build()).getId());
         }
     }
@@ -70,8 +71,8 @@ class ExamQuestionGeneratorIT extends AbstractIntegrationTest {
     @Test
     void generate_shouldSaveFourQuestionsPerWord_andNothingMoreTheSecondTime() {
         // Mỗi từ: đọc, viết, điền từ (4 danh từ còn lại làm đáp án nhiễu), nghĩa.
-        assertThat(generator.generate(LEVEL).created()).isEqualTo(20);
-        assertThat(generator.generate(LEVEL).created()).isZero();
+        assertThat(generator.generate(LEVEL.name()).created()).isEqualTo(20);
+        assertThat(generator.generate(LEVEL.name()).created()).isZero();
 
         List<Long> ids = questionRepository.findAll().stream()
                 .filter(question -> LEVEL.equals(question.getJlptLevel()))
@@ -87,6 +88,6 @@ class ExamQuestionGeneratorIT extends AbstractIntegrationTest {
                     : question.getHighlight());
         });
         assertThat(saved).filteredOn(question -> JlptQuestionType.CONTEXT.equals(question.getQuestionType())).hasSize(5);
-        assertThat(questionRepository.generatedQuestionWords(LEVEL)).hasSize(20);
+        assertThat(questionRepository.generatedQuestionWords(LEVEL.name())).hasSize(20);
     }
 }

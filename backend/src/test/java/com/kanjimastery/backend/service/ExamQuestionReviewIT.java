@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.dto.AdminExamQuestionRequest;
 import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
@@ -43,9 +44,9 @@ class ExamQuestionReviewIT extends AbstractIntegrationTest {
 
     @BeforeEach
     void setUp() {
-        particle = grammarPointRepository.save(GrammarPoint.builder().jlptLevel("N5").lesson("N5-06").pattern("NをV")
+        particle = grammarPointRepository.save(GrammarPoint.builder().jlptLevel(JlptLevel.N5).lesson("N5-06").pattern("NをV")
                 .meaningVi("Làm V (tác động lên N)").build());
-        draft = questionRepository.save(ExamQuestion.builder().jlptLevel("N5").questionText("[ReviewIT] Chọn trợ từ")
+        draft = questionRepository.save(ExamQuestion.builder().jlptLevel(JlptLevel.N5).questionText("[ReviewIT] Chọn trợ từ")
                 .sentence("パン（　　）食べます。").optionA("が").optionB("を").optionC("に").optionD("で")
                 .correctOption("B").questionType(JlptQuestionType.GRAMMAR_FORM).status(ExamQuestionStatus.DRAFT)
                 .flag(ExamQuestionFlag.AMBIGUOUS).reviewNote("Máy giải lại: A cũng có thể đúng")
@@ -85,7 +86,7 @@ class ExamQuestionReviewIT extends AbstractIntegrationTest {
         assertThat(approved.getReviewedAt()).isNotNull();
         assertThat(examPool()).contains(draft.getId());
         QuestionBankStatsResponse n5 = reviewService.stats().stream()
-                .filter(stats -> stats.jlptLevel().equals("N5")).findFirst().orElseThrow();
+                .filter(stats -> stats.jlptLevel() == JlptLevel.N5).findFirst().orElseThrow();
         assertThat(n5.types()).filteredOn(type -> type.type().equals(JlptQuestionType.GRAMMAR_FORM)).singleElement()
                 .satisfies(type -> {
                     assertThat(type.approved()).isGreaterThanOrEqualTo(1);
@@ -104,7 +105,7 @@ class ExamQuestionReviewIT extends AbstractIntegrationTest {
         ExamQuestion approved = questionRepository.save(grammarQuestion("を", "が")
                 .status(ExamQuestionStatus.APPROVED).build());
         ExamQuestion broken = questionRepository.save(grammarQuestion("を", "を").build());
-        ExamPassage passage = passageRepository.save(ExamPassage.builder().jlptLevel("N5").content("【1】").build());
+        ExamPassage passage = passageRepository.save(ExamPassage.builder().jlptLevel(JlptLevel.N5).content("【1】").build());
         ExamQuestion blank = questionRepository.save(grammarQuestion("を", "が").questionText("【1】")
                 .questionType(JlptQuestionType.TEXT_GRAMMAR).passageId(passage.getId()).blankNo(1).build());
         try {
@@ -137,7 +138,7 @@ class ExamQuestionReviewIT extends AbstractIntegrationTest {
     }
 
     private static ExamQuestion.ExamQuestionBuilder grammarQuestion(String optionA, String optionB) {
-        return ExamQuestion.builder().jlptLevel("N5").questionText("[ReviewIT] Chọn trợ từ").sentence("パン（　　）食べます。")
+        return ExamQuestion.builder().jlptLevel(JlptLevel.N5).questionText("[ReviewIT] Chọn trợ từ").sentence("パン（　　）食べます。")
                 .optionA(optionA).optionB(optionB).optionC("に").optionD("で").correctOption("A")
                 .questionType(JlptQuestionType.GRAMMAR_FORM).status(ExamQuestionStatus.DRAFT);
     }

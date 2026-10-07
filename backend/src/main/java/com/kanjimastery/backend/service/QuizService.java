@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.config.RateLimitProperties;
 import com.kanjimastery.backend.dto.QuizQuestionResponse;
@@ -116,7 +117,7 @@ public class QuizService {
                 throw new BadRequestException("Bạn chưa có từ khó nào để luyện riêng");
             }
         } else {
-            String normalizedLevel = StringUtils.hasText(level) ? level.toUpperCase() : null;
+            JlptLevel normalizedLevel = Levels.optional(level);
             // Cả cấp độ = mọi bài của cấp đó (N5-01..N5-25), không theo cột jlpt_level: từ như 意味 ghi N3 nhưng cũng học ở bài N5.
             pool = tagId == null && normalizedLevel != null
                     ? kanjiRepository.findAllByTagNamePrefix(normalizedLevel + "-%")

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.Tag;
@@ -106,7 +107,7 @@ class TagRepositoryIT extends AbstractIntegrationTest {
                 .character(character + System.nanoTime() % 10_000)
                 .hanViet("")
                 .strokeCount(1)
-                .jlptLevel("N5")
+                .jlptLevel(JlptLevel.N5)
                 .meaning("nghĩa")
                 .tags(Set.of(tag))
                 .build());

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -80,7 +81,7 @@ class DraftReviewer {
     }
 
     /** Ghi chú từ vượt cấp / ngoài kho; nhiều từ vượt cấp thì gắn cờ. */
-    void checkLevel(String level, List<Draft> drafts) {
+    void checkLevel(JlptLevel level, List<Draft> drafts) {
         if (drafts.isEmpty()) {
             return;
         }
@@ -196,7 +197,7 @@ class DraftReviewer {
     }
 
     /** Câu nháp AI chờ duyệt; xáo 4 lựa chọn, đáp án theo vị trí mới của {@code correct}. */
-    static ExamQuestion question(String level, JlptQuestionType type, String text, String sentence, String highlight,
+    static ExamQuestion question(JlptLevel level, JlptQuestionType type, String text, String sentence, String highlight,
                                  List<String> options, String correct, String explanation) {
         List<String> shuffled = new ArrayList<>(options);
         Collections.shuffle(shuffled);

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionSource;
@@ -64,7 +65,7 @@ public class ExamQuestionGenerator {
      */
     private static final Set<PartOfSpeech> CONTEXT_CLASSES = EnumSet.of(PartOfSpeech.NOUN, PartOfSpeech.VERB);
     /** Đề có câu 表記 viết bằng katakana: chỉ N5. */
-    private static final Set<String> KATAKANA_ORTHOGRAPHY_LEVELS = Set.of("N5");
+    private static final Set<JlptLevel> KATAKANA_ORTHOGRAPHY_LEVELS = EnumSet.of(JlptLevel.N5);
     static final String KATAKANA_ORTHOGRAPHY_TEXT = "Chọn cách viết bằng katakana của từ được gạch chân.";
 
     private final KanjiRepository kanjiRepository;
@@ -72,14 +73,14 @@ public class ExamQuestionGenerator {
     private final QuestionBuilder questionBuilder;
 
     /** @param words số từ trong các bài của cấp độ; {@code created} số câu thi mới */
-    public record Result(String level, int words, int created) {
+    public record Result(JlptLevel level, int words, int created) {
     }
 
     @Transactional
     public Result generate(String level) {
-        String normalized = level.toUpperCase();
+        JlptLevel normalized = Levels.require(level);
         List<Kanji> pool = kanjiRepository.findAllByTagNamePrefix(normalized + "-%");
-        Set<String> existing = questionRepository.generatedQuestionWords(normalized).stream()
+        Set<String> existing = questionRepository.generatedQuestionWords(normalized.name()).stream()
                 .map(row -> row.getKind() + ":" + row.getKanjiId())
                 .collect(Collectors.toSet());
         List<PlannedQuestion> plans = new ArrayList<>();
@@ -159,7 +160,7 @@ public class ExamQuestionGenerator {
     }
 
     /** Bỏ câu không đủ 4 đáp án (cấp độ quá ít từ) hoặc có đáp án quá dài cho cột. */
-    private static Optional<ExamQuestion> toExamQuestion(String level, BuiltQuestion question) {
+    private static Optional<ExamQuestion> toExamQuestion(JlptLevel level, BuiltQuestion question) {
         List<String> choices = question.choices();
         if (choices.size() != QuestionBuilder.CHOICES
                 || choices.stream().anyMatch(choice -> choice.length() > MAX_OPTION_LENGTH)
@@ -191,7 +192,7 @@ public class ExamQuestionGenerator {
      * cùng từ loại, cùng cấp độ, độ dài gần nhau - câu "家を（　　）" thì các lựa chọn đều là động từ, chỉ một từ hợp
      * nghĩa. Từ không xác định được từ loại hoặc không đủ 3 từ cùng loại thì bỏ qua.
      */
-    private List<ExamQuestion> contextQuestions(String level, List<Kanji> words, List<Kanji> pool) {
+    private List<ExamQuestion> contextQuestions(JlptLevel level, List<Kanji> words, List<Kanji> pool) {
         if (words.isEmpty()) {
             return List.of();
         }
@@ -234,7 +235,7 @@ public class ExamQuestionGenerator {
      * 表記 katakana: từ katakana trong câu ví dụ được viết bằng hiragana (giữ ー) và gạch chân, chọn cách viết katakana
      * đúng; đáp án nhiễu là 3 cách viết sai dễ nhầm ({@link KatakanaSpelling}). Từ không đủ 3 cách viết sai thì bỏ qua.
      */
-    private static List<ExamQuestion> katakanaQuestions(String level, List<Kanji> words) {
+    private static List<ExamQuestion> katakanaQuestions(JlptLevel level, List<Kanji> words) {
         List<ExamQuestion> questions = new ArrayList<>();
         for (Kanji word : words) {
             String katakana = word.getCharacter();
@@ -301,7 +302,7 @@ public class ExamQuestionGenerator {
                 .collect(Collectors.toSet());
     }
 
-    private static ExamQuestion.ExamQuestionBuilder question(String level, Kanji word, String questionText,
+    private static ExamQuestion.ExamQuestionBuilder question(JlptLevel level, Kanji word, String questionText,
                                                              List<String> choices, int correctIndex) {
         return ExamQuestion.builder()
                 .jlptLevel(level)

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -9,7 +10,7 @@ import lombok.Getter;
 @AllArgsConstructor
 public class GrammarPointResponse {
     private Long id;
-    private String jlptLevel;
+    private JlptLevel jlptLevel;
     private String lesson;
     private String pattern;
     private String connection;

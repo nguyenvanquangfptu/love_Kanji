@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.config.SrsProperties;
 import com.kanjimastery.backend.dto.DailyPlanResponse;
 import com.kanjimastery.backend.model.LearningProfile;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -45,7 +47,6 @@ public class StudyPlanService {
     /** Dùng app chưa đủ chừng này ngày thì nhịp học còn quá nhiễu để dự báo ngày học xong. */
     static final int MIN_PACE_DAYS = 7;
     /** Từ dễ đến khó: mục tiêu N4 gồm cả từ của các bài N5. */
-    static final List<String> JLPT_LEVELS = List.of("N5", "N4", "N3", "N2", "N1");
 
     private final UserKanjiSrsRepository srsRepository;
     private final ReviewLogRepository reviewLogRepository;
@@ -59,7 +60,7 @@ public class StudyPlanService {
         LocalDateTime now = calendar.now();
         LocalDate today = calendar.today();
         LearningProfile profile = profileRepository.findById(userId).orElse(null);
-        String targetLevel = profile == null ? null : profile.getTargetLevel();
+        JlptLevel targetLevel = profile == null ? null : profile.getTargetLevel();
         LocalDate examDate = profile == null ? null : profile.getExamDate();
 
         int dailyMinutes = profile != null ? profile.getDailyMinutes() : srsProperties.getDefaultDailyMinutes();
@@ -145,10 +146,11 @@ public class StudyPlanService {
     }
 
     /** Các cấp độ từ N5 tới cấp mục tiêu; chưa có mục tiêu thì mọi cấp độ. */
-    static List<String> levelsUpTo(String targetLevel) {
-        // List.of không cho tìm null (ném NullPointerException).
-        int index = targetLevel == null ? -1 : JLPT_LEVELS.indexOf(targetLevel);
-        return index < 0 ? JLPT_LEVELS : JLPT_LEVELS.subList(0, index + 1);
+    static List<String> levelsUpTo(JlptLevel targetLevel) {
+        return Arrays.stream(JlptLevel.values())
+                .filter(level -> targetLevel == null || targetLevel.isAtLeast(level))
+                .map(JlptLevel::name)
+                .toList();
     }
 
     /**

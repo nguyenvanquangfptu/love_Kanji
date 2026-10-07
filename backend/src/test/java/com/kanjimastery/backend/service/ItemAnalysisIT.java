@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
@@ -35,7 +36,7 @@ import static org.assertj.core.api.Assertions.within;
  */
 class ItemAnalysisIT extends AbstractIntegrationTest {
 
-    private static final String LEVEL = "N8";
+    private static final JlptLevel LEVEL = JlptLevel.N1;
     private static final int ATTEMPTS = 40;
 
     @Autowired
@@ -116,7 +117,7 @@ class ItemAnalysisIT extends AbstractIntegrationTest {
         assertThat(questionRepository.findById(discriminating.getId()).orElseThrow().getFlag()).isNull();
 
         // Trang duyệt hiện thống kê; chạy lại không gắn thêm cờ cho câu đang có cờ.
-        AdminExamQuestionResponse shown = reviewService.search(new ExamQuestionReviewService.Filter(LEVEL, null, null,
+        AdminExamQuestionResponse shown = reviewService.search(new ExamQuestionReviewService.Filter(LEVEL.name(), null, null,
                         true, null, false), 0, 20).getContent().stream()
                 .filter(question -> question.getId().equals(backwards.getId())).findFirst().orElseThrow();
         assertThat(shown.getStats().responses()).isEqualTo(ATTEMPTS);

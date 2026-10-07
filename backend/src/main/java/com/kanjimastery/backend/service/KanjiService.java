@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.ResourceNotFoundException;
 import com.kanjimastery.backend.dto.KanjiRequest;
@@ -31,7 +32,7 @@ public class KanjiService {
 
     @Transactional(readOnly = true)
     public Page<KanjiResponse> search(String level, String keyword, Long tagId, Pageable pageable) {
-        String normalizedLevel = StringUtils.hasText(level) ? level.toUpperCase() : null;
+        JlptLevel normalizedLevel = Levels.optional(level);
         String pattern = StringUtils.hasText(keyword) ? "%" + keyword.trim().toLowerCase() + "%" : null;
         return kanjiRepository.search(normalizedLevel, pattern, tagId, pageable)
                 .map(this::toResponseWithTags);
@@ -98,7 +99,7 @@ public class KanjiService {
         kanji.setHanViet(StringUtils.hasText(request.getHanViet()) ? request.getHanViet() : "");
         kanji.setReading(StringUtils.hasText(request.getReading()) ? request.getReading().trim() : null);
         kanji.setStrokeCount(request.getStrokeCount());
-        kanji.setJlptLevel(request.getJlptLevel().toUpperCase());
+        kanji.setJlptLevel(Levels.require(request.getJlptLevel()));
         kanji.setMeaning(request.getMeaning());
         kanji.setExampleSentence(StringUtils.hasText(request.getExampleSentence()) ? request.getExampleSentence().trim() : null);
         if (!CollectionUtils.isEmpty(request.getTagIds())) {

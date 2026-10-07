@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.model.ExamPassage;
 import com.kanjimastery.backend.model.ExamQuestion;
@@ -43,7 +44,7 @@ public class JlptExamAssembler {
      * được thêm dần các từ của phần này. 文章の文法 lấy trọn đoạn văn (mọi câu hỏi của đoạn, theo thứ tự chỗ trống).
      * Kết quả theo thứ tự 問題1, 問題2..., kể cả 問題 không có câu nào.
      */
-    public List<Mondai> assemble(Long userId, String level, JlptBlueprintProperties.Section section,
+    public List<Mondai> assemble(Long userId, JlptLevel level, JlptBlueprintProperties.Section section,
                                  Set<Long> askedWords) {
         List<Mondai> mondai = new ArrayList<>();
         int number = 0;
@@ -56,7 +57,7 @@ public class JlptExamAssembler {
                 continue;
             }
             List<Long> candidateIds = questionRepository
-                    .findForLearnerByLevelAndType(userId, level, entry.getKey().name(), planned * 2 + SPARE_CANDIDATES)
+                    .findForLearnerByLevelAndType(userId, level.name(), entry.getKey().name(), planned * 2 + SPARE_CANDIDATES)
                     .stream()
                     .map(ExamQuestion::getId)
                     .toList();
@@ -84,8 +85,8 @@ public class JlptExamAssembler {
     /**
      * Các đoạn văn đã duyệt (đoạn chưa gặp trước), lấy trọn từng đoạn sao cho tổng số câu không quá {@code planned}.
      */
-    private List<ExamQuestion> passageQuestions(Long userId, String level, int planned, Set<Long> askedWords) {
-        List<ExamPassage> passages = passageRepository.findApprovedForLearner(userId, level, CANDIDATE_PASSAGES);
+    private List<ExamQuestion> passageQuestions(Long userId, JlptLevel level, int planned, Set<Long> askedWords) {
+        List<ExamPassage> passages = passageRepository.findApprovedForLearner(userId, level.name(), CANDIDATE_PASSAGES);
         if (passages.isEmpty()) {
             return List.of();
         }

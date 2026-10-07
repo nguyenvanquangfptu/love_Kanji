@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.ExamQuestionFlag;
 import com.kanjimastery.backend.model.ExamQuestionSource;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
@@ -16,7 +17,7 @@ import java.util.List;
 @AllArgsConstructor
 public class AdminExamPassageResponse {
     private Long id;
-    private String jlptLevel;
+    private JlptLevel jlptLevel;
     private String title;
     /** Chỗ trống đánh dấu 【1】【2】... */
     private String content;

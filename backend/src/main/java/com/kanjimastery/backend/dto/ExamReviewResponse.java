@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
@@ -15,7 +16,7 @@ import java.util.List;
 @AllArgsConstructor
 public class ExamReviewResponse {
     private Long attemptId;
-    private String jlptLevel;
+    private JlptLevel jlptLevel;
     private ExamAttemptStatus status;
     private Integer totalScore;
     private Integer totalQuestions;

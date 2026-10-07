@@ -10,7 +10,6 @@ import com.kanjimastery.backend.repository.LearningProfileRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -56,7 +55,7 @@ public class LearningProfileService {
         }
         LearningProfile profile = profileRepository.findById(userId)
                 .orElseGet(() -> LearningProfile.builder().userId(userId).build());
-        profile.setTargetLevel(StringUtils.hasText(request.getTargetLevel()) ? request.getTargetLevel() : null);
+        profile.setTargetLevel(Levels.optional(request.getTargetLevel()));
         profile.setExamDate(request.getExamDate());
         profile.setDailyMinutes(request.getDailyMinutes());
         profile.setNewWordsPerDay(request.getNewWordsPerDay());

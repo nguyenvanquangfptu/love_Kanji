@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.ExamPassage;
 import org.springframework.data.domain.Page;
@@ -30,7 +31,7 @@ public interface ExamPassageRepository extends JpaRepository<ExamPassage, Long> 
     List<ExamPassage> findApprovedForLearner(@Param("userId") Long userId, @Param("level") String level,
                                              @Param("count") int count);
 
-    Page<ExamPassage> findByJlptLevelOrderByIdDesc(String jlptLevel, Pageable pageable);
+    Page<ExamPassage> findByJlptLevelOrderByIdDesc(JlptLevel jlptLevel, Pageable pageable);
 
-    Page<ExamPassage> findByJlptLevelAndStatusOrderByIdDesc(String jlptLevel, ExamQuestionStatus status, Pageable pageable);
+    Page<ExamPassage> findByJlptLevelAndStatusOrderByIdDesc(JlptLevel jlptLevel, ExamQuestionStatus status, Pageable pageable);
 }

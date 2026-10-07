@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.User;
@@ -40,7 +41,7 @@ class UserKanjiSrsRepositoryIT extends AbstractIntegrationTest {
                 .character("験" + suffix.substring(suffix.length() - 4))
                 .hanViet("NGHIỆM")
                 .strokeCount(18)
-                .jlptLevel("N4")
+                .jlptLevel(JlptLevel.N4)
                 .meaning("Thử nghiệm")
                 .build()).getId();
     }

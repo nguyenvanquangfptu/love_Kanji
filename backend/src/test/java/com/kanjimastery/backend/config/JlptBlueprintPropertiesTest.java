@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.config;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import org.junit.jupiter.api.Test;
@@ -23,18 +24,18 @@ class JlptBlueprintPropertiesTest {
     void blueprintFile_shouldBindEveryLevel_withTheOfficialQuestionCountsInMondaiOrder() throws IOException {
         JlptBlueprintProperties blueprints = load();
 
-        assertThat(blueprints.getLevels()).containsOnlyKeys("N5", "N4", "N3");
-        JlptBlueprintProperties.Section vocabulary = blueprints.section("N4", ExamSection.VOCABULARY).orElseThrow();
+        assertThat(blueprints.getLevels()).containsOnlyKeys(JlptLevel.N5, JlptLevel.N4, JlptLevel.N3);
+        JlptBlueprintProperties.Section vocabulary = blueprints.section(JlptLevel.N4, ExamSection.VOCABULARY).orElseThrow();
         assertThat(vocabulary.getMinutes()).isEqualTo(25);
         assertThat(vocabulary.getQuestions()).containsExactly(
                 entry(JlptQuestionType.KANJI_READING, 7), entry(JlptQuestionType.ORTHOGRAPHY, 5),
                 entry(JlptQuestionType.CONTEXT, 8), entry(JlptQuestionType.PARAPHRASE, 4),
                 entry(JlptQuestionType.USAGE, 4));
         assertThat(vocabulary.plannedQuestions()).isEqualTo(28);
-        assertThat(blueprints.section("N5", ExamSection.GRAMMAR).orElseThrow().types()).containsExactly(
+        assertThat(blueprints.section(JlptLevel.N5, ExamSection.GRAMMAR).orElseThrow().types()).containsExactly(
                 JlptQuestionType.GRAMMAR_FORM, JlptQuestionType.SENTENCE_ORDER, JlptQuestionType.TEXT_GRAMMAR);
-        assertThat(blueprints.section("N3", ExamSection.VOCABULARY).orElseThrow().plannedQuestions()).isEqualTo(35);
-        assertThat(blueprints.section("N2", ExamSection.VOCABULARY)).isEmpty();
+        assertThat(blueprints.section(JlptLevel.N3, ExamSection.VOCABULARY).orElseThrow().plannedQuestions()).isEqualTo(35);
+        assertThat(blueprints.section(JlptLevel.N2, ExamSection.VOCABULARY)).isEmpty();
     }
 
     @Test
@@ -43,7 +44,7 @@ class JlptBlueprintPropertiesTest {
 
         load().getLevels().forEach((level, blueprint) -> {
             assertThat(blueprint.getSections()).extracting(JlptBlueprintProperties.Section::getName)
-                    .as(level).containsExactly(ExamSection.VOCABULARY, ExamSection.GRAMMAR);
+                    .as(level.name()).containsExactly(ExamSection.VOCABULARY, ExamSection.GRAMMAR);
             blueprint.getSections().forEach(section -> {
                 assertThat(section.getMinutes()).as(level + " " + section.getName()).isPositive();
                 assertThat(section.getQuestions().keySet()).as(level + " " + section.getName()).isSubsetOf(types);

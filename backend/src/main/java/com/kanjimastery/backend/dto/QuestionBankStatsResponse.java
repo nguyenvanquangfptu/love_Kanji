@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.ExamSection;
 import java.util.List;
@@ -10,7 +11,7 @@ import java.util.List;
  * @param jlptLevel cấp độ
  * @param types     các dạng câu theo thứ tự trong đề (phần Từ vựng rồi Ngữ pháp)
  */
-public record QuestionBankStatsResponse(String jlptLevel, List<TypeStats> types) {
+public record QuestionBankStatsResponse(JlptLevel jlptLevel, List<TypeStats> types) {
 
     /**
      * @param section   phần thi ({@link com.kanjimastery.backend.model.ExamSection})

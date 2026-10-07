@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.ExamSection;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,7 +14,7 @@ import java.util.List;
 @AllArgsConstructor
 public class StartExamResponse {
     private Long attemptId;
-    private String jlptLevel;
+    private JlptLevel jlptLevel;
     private List<ExamQuestionPublicResponse> questions;
     /** Frontend dùng số giây này để đếm ngược cục bộ, tránh lệch giờ do đồng hồ client sai (clock drift). */
     private long remainingSeconds;

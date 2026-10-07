@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.ExamSittingStatus;
@@ -16,7 +17,7 @@ import java.util.List;
 @AllArgsConstructor
 public class ExamSittingResponse {
     private Long sittingId;
-    private String jlptLevel;
+    private JlptLevel jlptLevel;
     /** {@link com.kanjimastery.backend.model.ExamSittingStatus} */
     private ExamSittingStatus status;
     private LocalDateTime startedAt;

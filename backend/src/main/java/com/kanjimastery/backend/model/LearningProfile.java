@@ -26,8 +26,9 @@ public class LearningProfile {
     private Long userId;
 
     /** N5..N1; null = chưa chọn. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "target_level", length = 5)
-    private String targetLevel;
+    private JlptLevel targetLevel;
 
     @Column(name = "exam_date")
     private LocalDate examDate;

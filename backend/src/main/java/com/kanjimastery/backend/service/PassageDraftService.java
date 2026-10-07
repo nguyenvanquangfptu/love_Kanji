@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.exception.BadRequestException;
@@ -26,7 +27,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -52,10 +52,10 @@ public class PassageDraftService {
     private static final Pattern LOOSE_MARKER = Pattern.compile("[【\\[［]\\s*([0-9０-９]+)\\s*[】\\]］]");
     private static final int MAX_TITLE_LENGTH = 200;
     /** Kiểu bài của 文章の文法 theo cấp độ, như đề thật. */
-    private static final Map<String, String> STYLE = Map.of(
-            "N5", "bài viết ngắn (作文) của một du học sinh về cuộc sống hằng ngày, khoảng 150-250 chữ",
-            "N4", "bài viết ngắn (作文) hoặc lá thư, email của một du học sinh, khoảng 250-350 chữ",
-            "N3", "bài luận ngắn hoặc bài viết kể một trải nghiệm, khoảng 350-450 chữ");
+    private static final Map<JlptLevel, String> STYLE = Map.of(
+            JlptLevel.N5, "bài viết ngắn (作文) của một du học sinh về cuộc sống hằng ngày, khoảng 150-250 chữ",
+            JlptLevel.N4, "bài viết ngắn (作文) hoặc lá thư, email của một du học sinh, khoảng 250-350 chữ",
+            JlptLevel.N3, "bài luận ngắn hoặc bài viết kể một trải nghiệm, khoảng 350-450 chữ");
 
     private final GeminiClient geminiClient;
     private final DraftReviewer reviewer;
@@ -79,7 +79,7 @@ public class PassageDraftService {
         if (!geminiClient.isEnabled()) {
             throw new BadRequestException("Chưa cấu hình Gemini (GEMINI_API_KEY) nên chưa sinh nháp được");
         }
-        String normalized = level.strip().toUpperCase(Locale.ROOT);
+        JlptLevel normalized = Levels.require(level);
         int blanks = blueprints.section(normalized, ExamSection.GRAMMAR)
                 .map(section -> section.getQuestions().getOrDefault(JlptQuestionType.TEXT_GRAMMAR, 0))
                 .orElse(0);
@@ -145,7 +145,7 @@ public class PassageDraftService {
         return new PassageDraftResult(saved.getId(), saved.getStatus(), saved.getFlag(), questions.size());
     }
 
-    private static String prompt(String level, int blanks, List<GrammarPoint> points, List<String> titles) {
+    private static String prompt(JlptLevel level, int blanks, List<GrammarPoint> points, List<String> titles) {
         String avoid = titles.isEmpty() ? ""
                 : "\nĐã có các đoạn văn với tiêu đề sau, hãy viết về chủ đề khác: " + String.join("、", titles) + ".";
         String grammar = points.stream().map(GrammarPoint::getPattern).collect(Collectors.joining("、"));
@@ -185,7 +185,7 @@ public class PassageDraftService {
         return normalized.toString();
     }
 
-    private static Optional<Draft> question(JsonNode item, String level, Map<String, Long> pointIds) {
+    private static Optional<Draft> question(JsonNode item, JlptLevel level, Map<String, Long> pointIds) {
         int blank = item.path("blank").asInt(0);
         List<String> options = DraftReviewer.texts(item.path("options"));
         int answer = item.path("answer").asInt(-1);

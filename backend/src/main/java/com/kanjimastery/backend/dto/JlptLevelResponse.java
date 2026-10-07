@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.ExamSection;
 import lombok.AllArgsConstructor;
@@ -13,7 +14,7 @@ import java.util.List;
 @Builder
 @AllArgsConstructor
 public class JlptLevelResponse {
-    private String jlptLevel;
+    private JlptLevel jlptLevel;
     /** Theo thứ tự làm bài. */
     private List<Section> sections;
 

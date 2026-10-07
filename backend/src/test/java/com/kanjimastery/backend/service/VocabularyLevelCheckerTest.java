@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,12 +25,12 @@ class VocabularyLevelCheckerTest {
     @Test
     void check_shouldListWordsAboveTheLevelAndUnknownWords_butOnlyDistrustManyWordsAboveTheLevel() {
         when(kanjiRepository.findAllWordLevels()).thenReturn(List.of(
-                new Word("毎朝", "まいあさ", "N5"), new Word("新聞", "しんぶん", "N5"), new Word("読む", "よ(む)", "N5"),
-                new Word("政治", "せいじ", "N4"), new Word("記事", "きじ", "N3"), new Word("勉強", "べんきょう", "N5"),
-                new Word("論文", "ろんぶん", "N3"), new Word("統計", "とうけい", "N3"), new Word("調べる", "しらべる", "N5"),
+                new Word("毎朝", "まいあさ", JlptLevel.N5), new Word("新聞", "しんぶん", JlptLevel.N5), new Word("読む", "よ(む)", JlptLevel.N5),
+                new Word("政治", "せいじ", JlptLevel.N4), new Word("記事", "きじ", JlptLevel.N3), new Word("勉強", "べんきょう", JlptLevel.N5),
+                new Word("論文", "ろんぶん", JlptLevel.N3), new Word("統計", "とうけい", JlptLevel.N3), new Word("調べる", "しらべる", JlptLevel.N5),
                 // Cùng từ có ở cả N3 và N5 thì tính theo cấp dễ nhất.
-                new Word("新聞", "しんぶん", "N3")));
-        VocabularyLevelChecker.Session session = checker.open("N4");
+                new Word("新聞", "しんぶん", JlptLevel.N3)));
+        VocabularyLevelChecker.Session session = checker.open(JlptLevel.N4);
 
         // Trợ từ, số, động từ cơ bản する không tính; 勉強する tra được qua 勉強.
         VocabularyLevelChecker.Result easy = session.check("毎朝、新聞を読んで、三時間勉強します。");
@@ -52,7 +53,7 @@ class VocabularyLevelCheckerTest {
         assertThat(hard.suspicious()).isTrue();
     }
 
-    private record Word(String getCharacter, String getReading, String getJlptLevel)
+    private record Word(String getCharacter, String getReading, JlptLevel getJlptLevel)
             implements KanjiRepository.WordLevel {
     }
 }

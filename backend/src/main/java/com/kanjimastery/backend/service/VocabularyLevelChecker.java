@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.atilika.kuromoji.ipadic.Token;
 import com.atilika.kuromoji.ipadic.Tokenizer;
 import com.kanjimastery.backend.repository.KanjiRepository;
@@ -61,7 +62,7 @@ public class VocabularyLevelChecker {
     }
 
     /** Mở một lượt kiểm tra cho cấp độ: nạp kho từ và từ điển Kuromoji một lần, dùng cho nhiều câu. */
-    public Session open(String level) {
+    public Session open(JlptLevel level) {
         Map<String, Integer> easiest = new HashMap<>();
         for (KanjiRepository.WordLevel word : kanjiRepository.findAllWordLevels()) {
             int rank = rank(word.getJlptLevel());
@@ -74,9 +75,9 @@ public class VocabularyLevelChecker {
         return new Session(rank(level), easiest);
     }
 
-    /** N5 → 5 ... N1 → 1: số càng lớn càng dễ; cấp độ lạ coi như khó nhất. */
-    static int rank(String level) {
-        return level != null && level.matches("N[1-5]") ? level.charAt(1) - '0' : 0;
+    /** N5 → 5 ... N1 → 1: số càng lớn càng dễ; không có cấp độ coi như khó nhất. */
+    static int rank(JlptLevel level) {
+        return level == null ? 0 : JlptLevel.values().length - level.ordinal();
     }
 
     /** Một lượt kiểm tra; không dùng chung giữa các luồng. */

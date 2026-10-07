@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
@@ -56,7 +57,7 @@ import static org.assertj.core.api.Assertions.tuple;
 class JlptExamSittingIT extends AbstractIntegrationTest {
 
     /** Cấp độ giả với cấu trúc đề nhỏ, để không đụng tới đề N5-N3 thật. */
-    private static final String LEVEL = "N8";
+    private static final JlptLevel LEVEL = JlptLevel.N1;
 
     @Autowired
     private JlptExamService jlptExamService;
@@ -105,7 +106,7 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
         for (String[] word : new String[][] {{"新聞", "しんぶん"}, {"学校", "がっこう"}, {"先生", "せんせい"},
                 {"病院", "びょういん"}, {"電車", "でんしゃ"}}) {
             wordIds.add(kanjiRepository.save(Kanji.builder().character(word[0]).reading(word[1]).meaning(word[0])
-                    .hanViet("").jlptLevel("N5").strokeCount(10).build()).getId());
+                    .hanViet("").jlptLevel(JlptLevel.N5).strokeCount(10).build()).getId());
         }
         // Từ vựng: câu đọc và câu điền từ cho 3 từ đầu; ngữ pháp: 3 câu, câu đầu dính tới từ thứ nhất.
         for (int i = 0; i < 3; i++) {
@@ -116,7 +117,7 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
         grammarOnFourthWord = question(GRAMMAR_FORM, null, wordIds.get(3));
         grammarOnFifthWord = question(GRAMMAR_FORM, null, wordIds.get(4));
 
-        // Đề N8: Từ vựng 4 câu 10 phút (2 câu đọc, 2 câu điền từ), Ngữ pháp 2 câu 5 phút.
+        // Đề N1 (không có trong cấu trúc đề thật): Từ vựng 4 câu 10 phút (2 câu đọc, 2 câu điền từ), Ngữ pháp 2 câu 5 phút.
         JlptBlueprintProperties.Section vocabulary = section(ExamSection.VOCABULARY, 10);
         vocabulary.getQuestions().put(KANJI_READING, 2);
         vocabulary.getQuestions().put(CONTEXT, 2);
@@ -179,7 +180,7 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
                 .containsExactly(tuple(ExamSection.VOCABULARY, ExamAttemptStatus.TIMEOUT, 1, 3),
                         tuple(ExamSection.GRAMMAR, null, null, null));
         // Phần của đề JLPT không lên bảng xếp hạng thi nhanh.
-        assertThat(leaderboardService.getMyRank(LEVEL, userId).getScore()).isNull();
+        assertThat(leaderboardService.getMyRank(LEVEL.name(), userId).getScore()).isNull();
 
         // Câu ngữ pháp dính tới từ đã hỏi ở phần Từ vựng bị bỏ; đủ 2 câu nên đủ 5 phút.
         StartExamResponse grammar = jlptExamService.startNextSection(userId, sittingId);
@@ -196,12 +197,12 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
         ExamSittingResponse finished = jlptExamService.getSitting(userId, sittingId);
         assertThat(finished.getStatus()).isEqualTo(ExamSittingStatus.COMPLETED);
         // Buổi thi đủ hai phần lên bảng xếp hạng đề JLPT: đúng 1/5 câu (3 câu Từ vựng + 2 câu Ngữ pháp).
-        JlptLeaderboardEntryResponse mine = leaderboardService.getMyJlptRank(LEVEL, userId);
+        JlptLeaderboardEntryResponse mine = leaderboardService.getMyJlptRank(LEVEL.name(), userId);
         assertThat(mine.rank()).isEqualTo(1);
         assertThat(mine.correct()).isEqualTo(1);
         assertThat(mine.total()).isEqualTo(5);
         assertThat(mine.estimatedScore()).isEqualTo(12);
-        assertThat(leaderboardService.getJlptTop(LEVEL, 10)).extracting(JlptLeaderboardEntryResponse::userId)
+        assertThat(leaderboardService.getJlptTop(LEVEL.name(), 10)).extracting(JlptLeaderboardEntryResponse::userId)
                 .containsExactly(userId);
         assertThat(finished.getFinishedAt()).isNotNull();
         assertThat(finished.getNextSection()).isNull();
@@ -301,7 +302,7 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
 
     private static StartJlptExamRequest request(String... sections) {
         StartJlptExamRequest request = new StartJlptExamRequest();
-        request.setJlptLevel(LEVEL);
+        request.setJlptLevel(LEVEL.name());
         request.setSections(List.of(sections));
         return request;
     }

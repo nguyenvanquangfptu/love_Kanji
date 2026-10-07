@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.config.SrsProperties;
 import com.kanjimastery.backend.dto.DailyPlanResponse;
 import com.kanjimastery.backend.model.LearningProfile;
@@ -114,7 +115,7 @@ class StudyPlanServiceTest {
     @Test
     void today_shouldSpreadTheRemainingWordsUntilTwoWeeksBeforeTheExam_andForecastFromTheRecentPace() {
         givenPace(null, 0);
-        givenProfile("N4", TODAY.plusDays(60), 30, null);
+        givenProfile(JlptLevel.N4, TODAY.plusDays(60), 30, null);
         givenScope(List.of("N5", "N4"), 1697, 197);
         givenLoad(25, 0, 3, 100);
         // Học từ 20 ngày trước: nhịp tính trên 14 ngày gần nhất, 280 từ = 20 từ/ngày.
@@ -138,7 +139,7 @@ class StudyPlanServiceTest {
     @Test
     void today_shouldNotForecast_fromLessThanAWeekOfHistory() {
         givenPace(null, 0);
-        givenProfile("N4", TODAY.plusDays(60), 30, null);
+        givenProfile(JlptLevel.N4, TODAY.plusDays(60), 30, null);
         givenScope(List.of("N5", "N4"), 1697, 197);
         givenLoad(0, 0, 1, 100);
         // Mới dùng app từ hôm qua: 2 ngày, chưa đủ để nói lên nhịp học.
@@ -155,7 +156,7 @@ class StudyPlanServiceTest {
     @Test
     void today_shouldWarn_whenTheDailyTimeCannotFitTheWordsNeededForTheExam() {
         givenPace(null, 0);
-        givenProfile("N4", TODAY.plusDays(20), 10, null);
+        givenProfile(JlptLevel.N4, TODAY.plusDays(20), 10, null);
         givenScope(List.of("N5", "N4"), 1000, 0);
         givenLoad(40, 0, 0, 200);
         when(reviewLogRepository.firstReviewAt(USER_ID)).thenReturn(Optional.empty());
@@ -204,7 +205,7 @@ class StudyPlanServiceTest {
                 return 31;
             }
         };
-        when(tagRepository.nextLessonToAdd(USER_ID, StudyPlanService.JLPT_LEVELS)).thenReturn(Optional.of(lesson));
+        when(tagRepository.nextLessonToAdd(USER_ID, List.of("N5", "N4", "N3", "N2", "N1"))).thenReturn(Optional.of(lesson));
 
         DailyPlanResponse plan = service.today(USER_ID);
 
@@ -215,8 +216,8 @@ class StudyPlanServiceTest {
 
     @Test
     void levelsUpTo_shouldIncludeEveryEasierLevel() {
-        assertThat(StudyPlanService.levelsUpTo("N5")).containsExactly("N5");
-        assertThat(StudyPlanService.levelsUpTo("N3")).containsExactly("N5", "N4", "N3");
+        assertThat(StudyPlanService.levelsUpTo(JlptLevel.N5)).containsExactly("N5");
+        assertThat(StudyPlanService.levelsUpTo(JlptLevel.N3)).containsExactly("N5", "N4", "N3");
         assertThat(StudyPlanService.levelsUpTo(null)).containsExactly("N5", "N4", "N3", "N2", "N1");
     }
 
@@ -234,7 +235,7 @@ class StudyPlanServiceTest {
         });
     }
 
-    private void givenProfile(String targetLevel, LocalDate examDate, int dailyMinutes, Integer newWordsPerDay) {
+    private void givenProfile(JlptLevel targetLevel, LocalDate examDate, int dailyMinutes, Integer newWordsPerDay) {
         when(profileRepository.findById(USER_ID)).thenReturn(Optional.of(LearningProfile.builder()
                 .userId(USER_ID)
                 .targetLevel(targetLevel)

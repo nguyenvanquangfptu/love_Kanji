@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.config.SrsProperties;
 import com.kanjimastery.backend.dto.DailyCardResponse;
@@ -175,7 +176,7 @@ class FsrsSimulationIT extends AbstractIntegrationTest {
         LocalDate firstDay = LocalDate.now(VIETNAM).minusDays(DAYS);
         for (int i = 0; i < WORDS; i++) {
             wordIds.add(kanjiRepository.save(Kanji.builder().character(String.format("模%04d", i))
-                    .reading("も" + i).hanViet("MÔ").meaning("Từ mô phỏng " + i).jlptLevel("N4").strokeCount(14)
+                    .reading("も" + i).hanViet("MÔ").meaning("Từ mô phỏng " + i).jlptLevel(JlptLevel.N4).strokeCount(14)
                     .build()).getId());
         }
         Learner sm2 = learner("sm2", SchedulerType.SM2);

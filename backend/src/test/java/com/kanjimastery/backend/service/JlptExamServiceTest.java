@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.ExamMondaiResponse;
@@ -96,7 +97,7 @@ class JlptExamServiceTest {
         grammar.getQuestions().put(TEXT_GRAMMAR, 4);
         JlptBlueprintProperties.Level n4 = new JlptBlueprintProperties.Level();
         n4.setSections(List.of(vocabulary, grammar));
-        blueprints.getLevels().put("N4", n4);
+        blueprints.getLevels().put(JlptLevel.N4, n4);
     }
 
     @Test
@@ -115,7 +116,7 @@ class JlptExamServiceTest {
 
         List<JlptLevelResponse> levels = jlptExamService.levels();
 
-        assertThat(levels).singleElement().extracting(JlptLevelResponse::getJlptLevel).isEqualTo("N4");
+        assertThat(levels).singleElement().extracting(JlptLevelResponse::getJlptLevel).isEqualTo(JlptLevel.N4);
         JlptLevelResponse.Section words = levels.get(0).getSections().get(0);
         // 7 + 3 (mới có 3 câu 表記) + 8 = 18 câu; 25 phút x 18/28 = 16 phút.
         assertThat(words.getQuestionCount()).isEqualTo(18);
@@ -143,7 +144,7 @@ class JlptExamServiceTest {
         });
         List<ExamQuestion> reading = questions(1, 7);
         List<ExamQuestion> context = questions(101, 8);
-        when(assembler.assemble(eq(USER_ID), eq("N4"), eq(vocabulary), any())).thenReturn(List.of(
+        when(assembler.assemble(eq(USER_ID), eq(JlptLevel.N4), eq(vocabulary), any())).thenReturn(List.of(
                 new JlptExamAssembler.Mondai(1, KANJI_READING, 7, reading),
                 new JlptExamAssembler.Mondai(2, ORTHOGRAPHY, 5, List.of()),
                 new JlptExamAssembler.Mondai(3, CONTEXT, 8, context),
@@ -163,7 +164,7 @@ class JlptExamServiceTest {
         verify(sittingRepository).save(sitting.capture());
         assertThat(sitting.getValue().getSections()).isEqualTo("VOCABULARY,GRAMMAR");
         assertThat(sitting.getValue().getUserId()).isEqualTo(USER_ID);
-        assertThat(sitting.getValue().getJlptLevel()).isEqualTo("N4");
+        assertThat(sitting.getValue().getJlptLevel()).isEqualTo(JlptLevel.N4);
         // 15 câu thay vì 28: 25 phút x 15/28 = 13 phút.
         assertThat(attempt.getValue().getSittingId()).isEqualTo(SITTING_ID);
         assertThat(attempt.getValue().getSection()).isEqualTo(ExamSection.VOCABULARY);
@@ -204,7 +205,7 @@ class JlptExamServiceTest {
         when(questionRepository.findAllWithWordsByIdIn(List.of(1L, 2L))).thenReturn(List.of(
                 ExamQuestion.builder().id(1L).kanjiIds(Set.of(10L)).build(),
                 ExamQuestion.builder().id(2L).kanjiIds(Set.of(11L)).build()));
-        when(assembler.assemble(USER_ID, "N4", grammar, Set.of(10L, 11L))).thenReturn(List.of(
+        when(assembler.assemble(USER_ID, JlptLevel.N4, grammar, Set.of(10L, 11L))).thenReturn(List.of(
                 new JlptExamAssembler.Mondai(1, GRAMMAR_FORM, 13, questions(201, 1))));
         ArgumentCaptor<UserExamAttempt> attempt = ArgumentCaptor.forClass(UserExamAttempt.class);
         when(examService.begin(attempt.capture(), any(), any())).thenReturn(StartExamResponse.builder().build());
@@ -279,7 +280,7 @@ class JlptExamServiceTest {
 
         // Phần Từ vựng tự nộp trễ 10 giây sau khi hết giờ: chỉ tính đủ 25 phút.
         assertThat(jlptExamService.onSectionFinished(SITTING_ID))
-                .contains(new JlptExamService.CompletedSitting(USER_ID, "N4", 35, 49, 1500 + 900));
+                .contains(new JlptExamService.CompletedSitting(USER_ID, JlptLevel.N4, 35, 49, 1500 + 900));
     }
 
     @Test
@@ -336,12 +337,12 @@ class JlptExamServiceTest {
     }
 
     private static ExamSitting sitting(ExamSittingStatus status) {
-        return ExamSitting.builder().id(SITTING_ID).userId(USER_ID).jlptLevel("N4").sections("VOCABULARY,GRAMMAR")
+        return ExamSitting.builder().id(SITTING_ID).userId(USER_ID).jlptLevel(JlptLevel.N4).sections("VOCABULARY,GRAMMAR")
                 .status(status).startedAt(LocalDateTime.now().minusMinutes(40)).build();
     }
 
     private static UserExamAttempt attempt(Long id, ExamSection section, ExamAttemptStatus status) {
-        return UserExamAttempt.builder().id(id).userId(USER_ID).jlptLevel("N4").sittingId(SITTING_ID).section(section)
+        return UserExamAttempt.builder().id(id).userId(USER_ID).jlptLevel(JlptLevel.N4).sittingId(SITTING_ID).section(section)
                 .status(status).startedAt(LocalDateTime.now().minusMinutes(30)).build();
     }
 

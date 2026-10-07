@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.CardState;
@@ -58,7 +59,7 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
                 .character("試" + suffix.substring(suffix.length() - 4))
                 .hanViet("THÍ")
                 .strokeCount(13)
-                .jlptLevel("N4")
+                .jlptLevel(JlptLevel.N4)
                 .meaning("Thử")
                 .build()).getId();
     }
@@ -272,7 +273,7 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
                 .character(character + suffix.substring(suffix.length() - 4))
                 .hanViet("THÍ")
                 .strokeCount(5)
-                .jlptLevel("N4")
+                .jlptLevel(JlptLevel.N4)
                 .meaning("Thử")
                 .build()).getId();
         otherKanjiIds.add(id);

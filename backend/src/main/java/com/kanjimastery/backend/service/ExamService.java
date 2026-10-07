@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.ResourceNotFoundException;
@@ -70,7 +71,7 @@ public class ExamService {
 
     @Transactional
     public StartExamResponse start(Long userId, StartExamRequest request) {
-        String level = request.getJlptLevel().toUpperCase();
+        JlptLevel level = Levels.require(request.getJlptLevel());
         int count = request.getQuestionCount() != null ? request.getQuestionCount() : examProperties.getDefaultQuestionCount();
 
         List<ExamQuestion> questions = pickQuestions(level, count);
@@ -112,12 +113,12 @@ public class ExamService {
      * kỹ năng - ngân hàng câu sinh từ kho từ vựng có nhiều câu hỏi nghĩa hơn hẳn. Mỗi từ tối đa một câu: câu hỏi nghĩa
      * ghi kèm cách đọc sẽ lộ đáp án câu hỏi đọc của cùng từ đó. Xáo thứ tự ở cuối.
      */
-    private List<ExamQuestion> pickQuestions(String level, int count) {
+    private List<ExamQuestion> pickQuestions(JlptLevel level, int count) {
         List<List<ExamQuestion>> candidates = new ArrayList<>();
         for (QuizDirection skill : QuizDirection.values()) {
-            candidates.add(questionRepository.findRandomByLevelAndSkill(level, skill.name(), count * 2));
+            candidates.add(questionRepository.findRandomByLevelAndSkill(level.name(), skill.name(), count * 2));
         }
-        candidates.add(questionRepository.findRandomUnclassifiedByLevel(level, count * 2));
+        candidates.add(questionRepository.findRandomUnclassifiedByLevel(level.name(), count * 2));
         Map<Long, ExamQuestion> withWords = questionRepository
                 .findAllWithWordsByIdIn(candidates.stream().flatMap(List::stream).map(ExamQuestion::getId).toList())
                 .stream()

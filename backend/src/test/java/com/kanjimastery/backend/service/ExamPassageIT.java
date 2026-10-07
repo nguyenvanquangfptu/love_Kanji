@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.AdminExamPassageResponse;
@@ -40,7 +41,7 @@ import static org.assertj.core.api.Assertions.tuple;
 class ExamPassageIT extends AbstractIntegrationTest {
 
     /** Cấp độ giả với phần Ngữ pháp chỉ có 2 câu 文章の文法. */
-    private static final String LEVEL = "N8";
+    private static final JlptLevel LEVEL = JlptLevel.N1;
     private static final String CONTENT = "わたしは毎朝パンを食べます。【1】、きのうはご飯を食べました。"
             + "ご飯を食べて【2】、学校へ行きました。";
 
@@ -103,12 +104,12 @@ class ExamPassageIT extends AbstractIntegrationTest {
 
     @Test
     void aPassage_shouldBeReviewedAsAWhole_andComeIntoTheExamWithAllItsBlanksInOrder() {
-        AdminExamPassageResponse draft = passageReviewService.search(LEVEL, ExamQuestionStatus.DRAFT, 0, 10)
+        AdminExamPassageResponse draft = passageReviewService.search(LEVEL.name(), ExamQuestionStatus.DRAFT, 0, 10)
                 .getContent().get(0);
         assertThat(draft.getQuestions()).extracting(question -> question.getId())
                 .containsExactly(first.getId(), second.getId());
         // Câu của đoạn không hiện riêng ở danh sách câu, và không duyệt lẻ được.
-        assertThat(questionReviewService.search(new ExamQuestionReviewService.Filter(LEVEL, null, null, false, null, false),
+        assertThat(questionReviewService.search(new ExamQuestionReviewService.Filter(LEVEL.name(), null, null, false, null, false),
                 0, 20).getContent()).isEmpty();
         assertThatThrownBy(() -> questionReviewService.changeStatus(first.getId(), ExamQuestionStatus.APPROVED, null))
                 .isInstanceOf(BadRequestException.class);
@@ -137,7 +138,7 @@ class ExamPassageIT extends AbstractIntegrationTest {
         ExamPassage unseen = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).content("【1】")
                 .status(ExamQuestionStatus.APPROVED).build());
         try {
-            assertThat(passageRepository.findApprovedForLearner(userId, LEVEL, 10)).extracting(ExamPassage::getId)
+            assertThat(passageRepository.findApprovedForLearner(userId, LEVEL.name(), 10)).extracting(ExamPassage::getId)
                     .containsExactly(unseen.getId(), passage.getId());
         } finally {
             passageRepository.deleteById(unseen.getId());
@@ -154,7 +155,7 @@ class ExamPassageIT extends AbstractIntegrationTest {
 
     private static StartJlptExamRequest request() {
         StartJlptExamRequest request = new StartJlptExamRequest();
-        request.setJlptLevel(LEVEL);
+        request.setJlptLevel(LEVEL.name());
         request.setSections(List.of("GRAMMAR"));
         return request;
     }

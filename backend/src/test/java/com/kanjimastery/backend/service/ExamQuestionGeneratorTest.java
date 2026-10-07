@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionSource;
@@ -76,9 +77,9 @@ class ExamQuestionGeneratorTest {
                         tuple(3L, KANJI_READING.name()), tuple(3L, ORTHOGRAPHY.name()), tuple(3L, CONTEXT.name()), tuple(3L, MEANING.name()),
                         tuple(4L, KANJI_READING.name()), tuple(4L, MEANING.name()),
                         tuple(5L, MEANING.name()), tuple(6L, MEANING.name()));
-        assertThat(result).isEqualTo(new ExamQuestionGenerator.Result("N4", 6, 15));
+        assertThat(result).isEqualTo(new ExamQuestionGenerator.Result(JlptLevel.N4, 6, 15));
         assertThat(saved).allSatisfy(question -> {
-            assertThat(question.getJlptLevel()).isEqualTo("N4");
+            assertThat(question.getJlptLevel()).isEqualTo(JlptLevel.N4);
             assertThat(question.getSource()).isEqualTo(ExamQuestionSource.GENERATED);
             assertThat(List.of(question.getOptionA(), question.getOptionB(), question.getOptionC(),
                     question.getOptionD())).doesNotHaveDuplicates();
@@ -259,6 +260,6 @@ class ExamQuestionGeneratorTest {
 
     private static Kanji word(Long id, String character, String reading, String sentence, String meaning) {
         return Kanji.builder().id(id).character(character).reading(reading).exampleSentence(sentence).meaning(meaning)
-                .hanViet("").jlptLevel("N4").strokeCount(5).build();
+                .hanViet("").jlptLevel(JlptLevel.N4).strokeCount(5).build();
     }
 }

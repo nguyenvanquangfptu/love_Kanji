@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamQuestion;
@@ -71,7 +72,7 @@ class ExamDiagnosisIT extends AbstractIntegrationTest {
                 .orElseThrow();
         attemptId = attemptRepository.save(UserExamAttempt.builder()
                 .userId(userId)
-                .jlptLevel("N5")
+                .jlptLevel(JlptLevel.N5)
                 .startedAt(LocalDateTime.now().minusMinutes(5))
                 .build()).getId();
         examSessionStore.initSession(attemptId, List.of(waterQuestion.getId(), goldQuestion.getId()), 1800);

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.AdminExamQuestionRequest;
@@ -98,7 +99,7 @@ public class ExamQuestionReviewService {
             // Câu của đoạn văn 文章の文法 được duyệt theo cả đoạn, ở danh sách đoạn văn.
             predicates.add(builder.isNull(root.get("passageId")));
             if (StringUtils.hasText(filter.level())) {
-                predicates.add(builder.equal(root.get("jlptLevel"), filter.level().toUpperCase()));
+                predicates.add(builder.equal(root.get("jlptLevel"), Levels.require(filter.level())));
             }
             if (filter.type() != null) {
                 predicates.add(builder.equal(root.get("questionType"), filter.type()));
@@ -248,7 +249,7 @@ public class ExamQuestionReviewService {
     /** Theo các cấp độ có cấu trúc đề: mỗi dạng câu có bao nhiêu câu ở mỗi trạng thái, đủ cho bao nhiêu đề. */
     @Transactional(readOnly = true)
     public List<QuestionBankStatsResponse> stats() {
-        Map<String, Map<JlptQuestionType, long[]>> counts = new HashMap<>();
+        Map<JlptLevel, Map<JlptQuestionType, long[]>> counts = new HashMap<>();
         for (ExamQuestionRepository.BankCount count : questionRepository.countByLevelTypeAndStatus()) {
             long[] byStatus = counts.computeIfAbsent(count.getLevel(), level -> new HashMap<>())
                     .computeIfAbsent(count.getType(), type -> new long[4]);

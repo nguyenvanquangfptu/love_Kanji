@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.JlptLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -39,7 +40,7 @@ public class DailyPlanResponse {
 
     /** Người học đã đặt mục tiêu chưa. */
     private boolean goalSet;
-    private String targetLevel;
+    private JlptLevel targetLevel;
     private LocalDate examDate;
     /** Từ trong các bài từ N5 tới cấp mục tiêu mà người học chưa học lần nào; null nếu chưa chọn cấp độ. */
     private Long wordsToLearn;
