@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.ReviewState;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
@@ -85,7 +86,7 @@ class ItemAnalysisIT extends AbstractIntegrationTest {
             answer(attemptId, reviewedAfterwards, i < ATTEMPTS / 2, anHourAgo);
         }
         // Người duyệt đã xem lại câu này sau các lượt thi trên: lượt cũ không còn tính.
-        reviewedAfterwards.setReviewedAt(LocalDateTime.now());
+        reviewedAfterwards.getReview().decide(ExamQuestionStatus.APPROVED, LocalDateTime.now());
         questionRepository.save(reviewedAfterwards);
     }
 
@@ -142,6 +143,6 @@ class ItemAnalysisIT extends AbstractIntegrationTest {
     private static ExamQuestion.ExamQuestionBuilder question() {
         return ExamQuestion.builder().jlptLevel(LEVEL).questionText("[AnalysisIT] Chọn").sentence("駅（　　）行きます。")
                 .optionA("へ").optionB("を").optionC("が").optionD("の").correctOption("A")
-                .questionType(JlptQuestionType.GRAMMAR_FORM).status(ExamQuestionStatus.APPROVED);
+                .questionType(JlptQuestionType.GRAMMAR_FORM).review(new ReviewState(ExamQuestionStatus.APPROVED));
     }
 }

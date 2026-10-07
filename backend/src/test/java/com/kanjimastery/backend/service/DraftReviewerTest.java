@@ -37,7 +37,7 @@ class DraftReviewerTest {
     @Test
     void flag_shouldNotReplaceAReportedQuestionsFlag() {
         ExamQuestion question = new ExamQuestion();
-        question.setFlag(ExamQuestionFlag.REPORTED);
+        question.getReview().raise(ExamQuestionFlag.REPORTED, null);
 
         DraftReviewer.flag(question, ExamQuestionFlag.WRONG_ANSWER, "Máy chọn B.");
 

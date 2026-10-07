@@ -1,6 +1,7 @@
 package com.kanjimastery.backend.model;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -40,29 +41,33 @@ public class ExamPassage {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
-    /** Câu hỏi của đoạn văn luôn cùng trạng thái. */
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
+    /** Trạng thái duyệt; đổi qua các phương thức của {@link ReviewState}. */
+    @Embedded
     @Builder.Default
-    private ExamQuestionStatus status = ExamQuestionStatus.DRAFT;
+    private ReviewState review = new ReviewState(ExamQuestionStatus.DRAFT);
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     @Builder.Default
     private ExamQuestionSource source = ExamQuestionSource.MANUAL;
 
-    /** Cảnh báo nặng nhất trong các câu hỏi của đoạn. */
-    @Enumerated(EnumType.STRING)
-    @Column(length = 20)
-    private ExamQuestionFlag flag;
-
-    @Column(name = "review_note", columnDefinition = "TEXT")
-    private String reviewNote;
-
-    @Column(name = "reviewed_at")
-    private LocalDateTime reviewedAt;
-
     @Column(name = "created_at", nullable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    public ExamQuestionStatus getStatus() {
+        return review.getStatus();
+    }
+
+    public ExamQuestionFlag getFlag() {
+        return review.getFlag();
+    }
+
+    public String getReviewNote() {
+        return review.getReviewNote();
+    }
+
+    public LocalDateTime getReviewedAt() {
+        return review.getReviewedAt();
+    }
 }

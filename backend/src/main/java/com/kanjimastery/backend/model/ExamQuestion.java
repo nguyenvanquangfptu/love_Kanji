@@ -67,23 +67,10 @@ public class ExamQuestion {
     @Column(name = "question_type", length = 20)
     private JlptQuestionType questionType;
 
-    /** Chỉ câu đã duyệt mới được lấy vào đề. */
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
+    /** Trạng thái duyệt; đổi qua các phương thức của {@link ReviewState}. */
+    @Embedded
     @Builder.Default
-    private ExamQuestionStatus status = ExamQuestionStatus.APPROVED;
-
-    /** Cảnh báo cho người duyệt; null = không có. */
-    @Enumerated(EnumType.STRING)
-    @Column(length = 20)
-    private ExamQuestionFlag flag;
-
-    /** Lý do loại, hoặc chi tiết cảnh báo của bước kiểm tra tự động. */
-    @Column(name = "review_note", columnDefinition = "TEXT")
-    private String reviewNote;
-
-    @Column(name = "reviewed_at")
-    private LocalDateTime reviewedAt;
+    private ReviewState review = new ReviewState(ExamQuestionStatus.APPROVED);
 
     /** Đoạn văn chứa câu hỏi (問題3 文章の文法); null với câu đứng riêng. */
     @Column(name = "passage_id")
@@ -111,4 +98,20 @@ public class ExamQuestion {
     @Column(name = "grammar_point_id")
     @Builder.Default
     private Set<Long> grammarPointIds = new HashSet<>();
+
+    public ExamQuestionStatus getStatus() {
+        return review.getStatus();
+    }
+
+    public ExamQuestionFlag getFlag() {
+        return review.getFlag();
+    }
+
+    public String getReviewNote() {
+        return review.getReviewNote();
+    }
+
+    public LocalDateTime getReviewedAt() {
+        return review.getReviewedAt();
+    }
 }

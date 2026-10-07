@@ -42,7 +42,7 @@ public class ExamPassageReviewService {
     public Page<AdminExamPassageResponse> search(String level, ExamQuestionStatus status, int page, int size) {
         PageRequest pageRequest = PageRequest.of(page, size);
         Page<ExamPassage> found = status != null
-                ? passageRepository.findByJlptLevelAndStatusOrderByIdDesc(Levels.require(level), status, pageRequest)
+                ? passageRepository.findByJlptLevelAndReviewStatusOrderByIdDesc(Levels.require(level), status, pageRequest)
                 : passageRepository.findByJlptLevelOrderByIdDesc(Levels.require(level), pageRequest);
         Map<Long, List<ExamQuestion>> questions = questionsOf(found.map(ExamPassage::getId).getContent());
         return new PageImpl<>(found.getContent().stream()
@@ -84,18 +84,14 @@ public class ExamPassageReviewService {
             if (!problems.isEmpty()) {
                 throw new BadRequestException("Chưa duyệt được, đoạn văn cần sửa: " + String.join("; ", problems));
             }
-            passage.setFlag(null);
-            questions.forEach(question -> question.setFlag(null));
         }
         LocalDateTime now = LocalDateTime.now();
-        passage.setStatus(status);
-        passage.setReviewedAt(now);
+        passage.getReview().decide(status, now);
         if (StringUtils.hasText(note)) {
-            passage.setReviewNote(note.strip());
+            passage.getReview().replaceNote(note.strip());
         }
         for (ExamQuestion question : questions) {
-            question.setStatus(status);
-            question.setReviewedAt(now);
+            question.getReview().decide(status, now);
         }
         if (!questions.isEmpty()) {
             // Người duyệt đã quyết định về cả đoạn: các báo lỗi đang mở của các câu coi như đã xử lý.

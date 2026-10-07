@@ -419,7 +419,7 @@ public class QuestionDraftService {
     }
 
     private static void reject(ExamQuestion question, String problem) {
-        question.setStatus(ExamQuestionStatus.REJECTED);
+        question.getReview().moveTo(ExamQuestionStatus.REJECTED);
         DraftReviewer.note(question, "Loại tự động - " + problem + ".");
     }
 }

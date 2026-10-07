@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.ReviewState;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.model.ExamPassage;
@@ -95,7 +96,7 @@ class JlptExamAssemblerTest {
     private static ExamQuestion blank(Long id, Long passageId, int blankNo) {
         return ExamQuestion.builder().id(id).jlptLevel(JlptLevel.N4).questionText("【" + blankNo + "】").optionA("1")
                 .optionB("2").optionC("3").optionD("4").correctOption("A").questionType(TEXT_GRAMMAR)
-                .status(ExamQuestionStatus.APPROVED).passageId(passageId).blankNo(blankNo).build();
+                .review(new ReviewState(ExamQuestionStatus.APPROVED)).passageId(passageId).blankNo(blankNo).build();
     }
 
     private static ExamQuestion question(Long id, Long kanjiId) {

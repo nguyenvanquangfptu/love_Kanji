@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.ReviewState;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
@@ -136,7 +137,7 @@ class ExamPassageIT extends AbstractIntegrationTest {
 
         // Lần làm đề sau: đoạn văn chưa gặp đứng trước đoạn đã làm.
         ExamPassage unseen = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).content("【1】")
-                .status(ExamQuestionStatus.APPROVED).build());
+                .review(new ReviewState(ExamQuestionStatus.APPROVED)).build());
         try {
             assertThat(passageRepository.findApprovedForLearner(userId, LEVEL.name(), 10)).extracting(ExamPassage::getId)
                     .containsExactly(unseen.getId(), passage.getId());
@@ -149,7 +150,7 @@ class ExamPassageIT extends AbstractIntegrationTest {
         return questionRepository.save(ExamQuestion.builder().jlptLevel(LEVEL)
                 .questionText("Chọn từ điền vào chỗ trống 【" + blankNo + "】.").optionA(correct).optionB(others[0])
                 .optionC(others[1]).optionD(others[2]).correctOption("A")
-                .questionType(JlptQuestionType.TEXT_GRAMMAR).status(ExamQuestionStatus.DRAFT)
+                .questionType(JlptQuestionType.TEXT_GRAMMAR).review(new ReviewState(ExamQuestionStatus.DRAFT))
                 .passageId(passage.getId()).blankNo(blankNo).build());
     }
 

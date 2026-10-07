@@ -71,9 +71,7 @@ public class ItemAnalysisService {
                     || !ExamQuestionStatus.APPROVED.equals(question.getStatus())) {
                 continue;
             }
-            question.setFlag(ExamQuestionFlag.STATS);
-            String note = describe(row, now);
-            question.setReviewNote(question.getReviewNote() == null ? note : question.getReviewNote() + " " + note);
+            question.getReview().raise(ExamQuestionFlag.STATS, describe(row, now));
             flagged++;
         }
         log.info("Phân tích câu hỏi: {} câu có thống kê, gắn cờ {} câu.", stats.size(), flagged);

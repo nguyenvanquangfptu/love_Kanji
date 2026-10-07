@@ -105,10 +105,10 @@ public class ExamQuestionReviewService {
                 predicates.add(builder.equal(root.get("questionType"), filter.type()));
             }
             if (filter.status() != null) {
-                predicates.add(builder.equal(root.get("status"), filter.status()));
+                predicates.add(builder.equal(root.get("review").get("status"), filter.status()));
             }
             if (filter.flaggedOnly()) {
-                predicates.add(builder.isNotNull(root.get("flag")));
+                predicates.add(builder.isNotNull(root.get("review").get("flag")));
             }
             if (filter.grammarPointId() != null) {
                 predicates.add(builder.isMember(filter.grammarPointId(), root.<Set<Long>>get("grammarPointIds")));
@@ -173,14 +173,12 @@ public class ExamQuestionReviewService {
             if (!problems.isEmpty()) {
                 throw new BadRequestException("Chưa duyệt được, câu hỏi cần sửa: " + String.join("; ", problems));
             }
-            question.setFlag(null);
-        }
-        question.setStatus(status);
-        if (StringUtils.hasText(note)) {
-            question.setReviewNote(note.strip());
         }
         LocalDateTime now = LocalDateTime.now();
-        question.setReviewedAt(now);
+        question.getReview().decide(status, now);
+        if (StringUtils.hasText(note)) {
+            question.getReview().replaceNote(note.strip());
+        }
         // Người duyệt đã quyết định về câu: các báo lỗi đang mở coi như đã xử lý.
         reportRepository.closeOpen(List.of(id), QuestionReportStatus.RESOLVED, now);
         return toResponse(question);
@@ -194,8 +192,8 @@ public class ExamQuestionReviewService {
     public AdminExamQuestionResponse dismissReports(Long id) {
         ExamQuestion question = questionWithLinks(id);
         reportRepository.closeOpen(List.of(id), QuestionReportStatus.DISMISSED, LocalDateTime.now());
-        if (ExamQuestionFlag.REPORTED.equals(question.getFlag())) {
-            question.setFlag(null);
+        if (question.getFlag() == ExamQuestionFlag.REPORTED) {
+            question.getReview().clearFlag();
         }
         return toResponse(question);
     }
@@ -218,8 +216,7 @@ public class ExamQuestionReviewService {
                 skipped.add(new BulkApproval.Skipped(id, reason));
                 continue;
             }
-            question.setStatus(ExamQuestionStatus.APPROVED);
-            question.setReviewedAt(now);
+            question.getReview().decide(ExamQuestionStatus.APPROVED, now);
             approved++;
         }
         return new BulkApproval(approved, skipped);

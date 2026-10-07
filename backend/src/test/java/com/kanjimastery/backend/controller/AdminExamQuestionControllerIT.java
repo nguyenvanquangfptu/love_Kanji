@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.controller;
 
+import com.kanjimastery.backend.model.ReviewState;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.ExamQuestion;
@@ -40,7 +41,7 @@ class AdminExamQuestionControllerIT extends AbstractIntegrationTest {
     void setUp() {
         draft = questionRepository.save(ExamQuestion.builder().jlptLevel(JlptLevel.N4).questionText("[ControllerIT] Chọn")
                 .sentence("駅（　　）行きます。").optionA("へ").optionB("を").optionC("が").optionD("の")
-                .correctOption("A").questionType(JlptQuestionType.GRAMMAR_FORM).status(ExamQuestionStatus.DRAFT)
+                .correctOption("A").questionType(JlptQuestionType.GRAMMAR_FORM).review(new ReviewState(ExamQuestionStatus.DRAFT))
                 .build());
     }
 

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.ReviewState;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.dto.PracticeQuestionResponse;
@@ -74,7 +75,7 @@ class GrammarPracticeIT extends AbstractIntegrationTest {
         after = grammarPointRepository.save(GrammarPoint.builder().jlptLevel(LEVEL).pattern("Vてから")
                 .meaningVi("Sau khi V1 rồi V2").build());
         passage = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).content("【1】")
-                .status(ExamQuestionStatus.APPROVED).build());
+                .review(new ReviewState(ExamQuestionStatus.APPROVED)).build());
     }
 
     @AfterEach
@@ -143,7 +144,7 @@ class GrammarPracticeIT extends AbstractIntegrationTest {
         ExamQuestion question = questionRepository.save(ExamQuestion.builder().jlptLevel(LEVEL)
                 .questionText("[PracticeIT] Chọn").sentence("雨が降った（　　）、家にいました。").optionA("から")
                 .optionB("のに").optionC("まで").optionD("ても").correctOption("A")
-                .questionType(JlptQuestionType.GRAMMAR_FORM).status(status).grammarPointIds(pointIds).build());
+                .questionType(JlptQuestionType.GRAMMAR_FORM).review(new ReviewState(status)).grammarPointIds(pointIds).build());
         questionIds.add(question.getId());
         return question;
     }

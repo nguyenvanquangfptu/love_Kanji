@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.ReviewState;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.dto.GrammarImportResult;
@@ -66,7 +67,7 @@ class GrammarPointIT extends AbstractIntegrationTest {
     private void question(ExamQuestionStatus status, Long grammarPointId) {
         questionRepository.save(ExamQuestion.builder().jlptLevel(LEVEL).questionText("[GrammarPointIT] câu")
                 .optionA("1").optionB("2").optionC("3").optionD("4").correctOption("A")
-                .questionType(JlptQuestionType.GRAMMAR_FORM).status(status)
+                .questionType(JlptQuestionType.GRAMMAR_FORM).review(new ReviewState(status))
                 .grammarPointIds(Set.of(grammarPointId)).build());
     }
 }

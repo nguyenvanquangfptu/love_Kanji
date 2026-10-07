@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.controller;
 
+import com.kanjimastery.backend.model.ReviewState;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.ExamPassage;
@@ -46,7 +47,7 @@ class AdminExamPassageControllerIT extends AbstractIntegrationTest {
                 .content("きのうは雨でした。【1】、出かけませんでした。").build());
         questionRepository.save(ExamQuestion.builder().jlptLevel(JlptLevel.N4).questionText("【1】")
                 .optionA("だから").optionB("でも").optionC("それに").optionD("または").correctOption("A")
-                .questionType(JlptQuestionType.TEXT_GRAMMAR).status(ExamQuestionStatus.DRAFT)
+                .questionType(JlptQuestionType.TEXT_GRAMMAR).review(new ReviewState(ExamQuestionStatus.DRAFT))
                 .passageId(passage.getId()).blankNo(1).build());
     }
 

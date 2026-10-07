@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.ReviewState;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
@@ -76,7 +77,7 @@ class QuestionReportIT extends AbstractIntegrationTest {
     void setUp() {
         standalone = questionRepository.save(question().build());
         passage = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).content("【1】【2】")
-                .status(ExamQuestionStatus.APPROVED).build());
+                .review(new ReviewState(ExamQuestionStatus.APPROVED)).build());
         firstBlank = questionRepository.save(question().questionText("【1】").questionType(JlptQuestionType.TEXT_GRAMMAR)
                 .sentence(null).passageId(passage.getId()).blankNo(1).build());
         secondBlank = questionRepository.save(question().questionText("【2】").questionType(JlptQuestionType.TEXT_GRAMMAR)
@@ -188,6 +189,6 @@ class QuestionReportIT extends AbstractIntegrationTest {
     private static ExamQuestion.ExamQuestionBuilder question() {
         return ExamQuestion.builder().jlptLevel(LEVEL).questionText("[ReportIT] Chọn").sentence("駅（　　）行きます。")
                 .optionA("へ").optionB("を").optionC("が").optionD("の").correctOption("A")
-                .questionType(JlptQuestionType.GRAMMAR_FORM).status(ExamQuestionStatus.APPROVED);
+                .questionType(JlptQuestionType.GRAMMAR_FORM).review(new ReviewState(ExamQuestionStatus.APPROVED));
     }
 }

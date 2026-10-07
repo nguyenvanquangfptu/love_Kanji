@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.ReviewState;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.dto.AdminExamQuestionRequest;
@@ -48,8 +49,9 @@ class ExamQuestionReviewIT extends AbstractIntegrationTest {
                 .meaningVi("Làm V (tác động lên N)").build());
         draft = questionRepository.save(ExamQuestion.builder().jlptLevel(JlptLevel.N5).questionText("[ReviewIT] Chọn trợ từ")
                 .sentence("パン（　　）食べます。").optionA("が").optionB("を").optionC("に").optionD("で")
-                .correctOption("B").questionType(JlptQuestionType.GRAMMAR_FORM).status(ExamQuestionStatus.DRAFT)
-                .flag(ExamQuestionFlag.AMBIGUOUS).reviewNote("Máy giải lại: A cũng có thể đúng")
+                .correctOption("B").questionType(JlptQuestionType.GRAMMAR_FORM)
+                .review(new ReviewState(ExamQuestionStatus.DRAFT, ExamQuestionFlag.AMBIGUOUS,
+                        "Máy giải lại: A cũng có thể đúng", null))
                 .grammarPointIds(new HashSet<>(Set.of(particle.getId()))).build());
     }
 
@@ -103,7 +105,7 @@ class ExamQuestionReviewIT extends AbstractIntegrationTest {
     void approveAll_shouldApproveOnlyCleanDrafts_andSayWhyTheOthersStayed() {
         ExamQuestion clean = questionRepository.save(grammarQuestion("を", "が").build());
         ExamQuestion approved = questionRepository.save(grammarQuestion("を", "が")
-                .status(ExamQuestionStatus.APPROVED).build());
+                .review(new ReviewState(ExamQuestionStatus.APPROVED)).build());
         ExamQuestion broken = questionRepository.save(grammarQuestion("を", "を").build());
         ExamPassage passage = passageRepository.save(ExamPassage.builder().jlptLevel(JlptLevel.N5).content("【1】").build());
         ExamQuestion blank = questionRepository.save(grammarQuestion("を", "が").questionText("【1】")
@@ -140,7 +142,7 @@ class ExamQuestionReviewIT extends AbstractIntegrationTest {
     private static ExamQuestion.ExamQuestionBuilder grammarQuestion(String optionA, String optionB) {
         return ExamQuestion.builder().jlptLevel(JlptLevel.N5).questionText("[ReviewIT] Chọn trợ từ").sentence("パン（　　）食べます。")
                 .optionA(optionA).optionB(optionB).optionC("に").optionD("で").correctOption("A")
-                .questionType(JlptQuestionType.GRAMMAR_FORM).status(ExamQuestionStatus.DRAFT);
+                .questionType(JlptQuestionType.GRAMMAR_FORM).review(new ReviewState(ExamQuestionStatus.DRAFT));
     }
 
     private List<Long> examPool() {

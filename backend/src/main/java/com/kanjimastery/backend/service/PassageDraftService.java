@@ -128,9 +128,9 @@ public class PassageDraftService {
         if (problems.isEmpty()) {
             check(passage, wellFormed);
         } else {
-            passage.setStatus(ExamQuestionStatus.REJECTED);
-            note(passage, "Loại tự động - " + String.join("; ", problems) + ".");
-            drafts.forEach(draft -> draft.question().setStatus(ExamQuestionStatus.REJECTED));
+            passage.getReview().moveTo(ExamQuestionStatus.REJECTED);
+            passage.getReview().addNote("Loại tự động - " + String.join("; ", problems) + ".");
+            drafts.forEach(draft -> draft.question().getReview().moveTo(ExamQuestionStatus.REJECTED));
         }
 
         List<ExamQuestion> questions = drafts.stream().map(Draft::question).toList();
@@ -210,7 +210,7 @@ public class PassageDraftService {
         }
         VocabularyLevelChecker.Result result = levelChecker.open(passage.getJlptLevel()).check(filled);
         if (result.suspicious()) {
-            passage.setFlag(ExamQuestionFlag.ABOVE_LEVEL);
+            passage.getReview().raise(ExamQuestionFlag.ABOVE_LEVEL, null);
         }
         if (!result.describe().isEmpty()) {
             note(passage, result.describe());
@@ -221,13 +221,13 @@ public class PassageDraftService {
         // Cờ của đoạn là cờ nặng nhất trong đoạn và các câu hỏi.
         for (Draft draft : drafts) {
             ExamQuestionFlag flag = draft.question().getFlag();
-            if (flag != null && (passage.getFlag() == null || flag.severity() < passage.getFlag().severity())) {
-                passage.setFlag(flag);
+            if (flag != null) {
+                passage.getReview().raise(flag, null);
             }
         }
     }
 
     private static void note(ExamPassage passage, String detail) {
-        passage.setReviewNote(passage.getReviewNote() == null ? detail : passage.getReviewNote() + " " + detail);
+        passage.getReview().addNote(detail);
     }
 }

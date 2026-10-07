@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.ReviewState;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -73,8 +74,8 @@ class DraftReviewer {
             if (problems.isEmpty()) {
                 wellFormed.add(draft);
             } else {
-                question.setStatus(ExamQuestionStatus.REJECTED);
-                note(question, "Loại tự động - sai cấu trúc: " + String.join("; ", problems));
+                question.getReview().moveTo(ExamQuestionStatus.REJECTED);
+                question.getReview().addNote("Loại tự động - sai cấu trúc: " + String.join("; ", problems));
             }
         }
         return wellFormed;
@@ -163,14 +164,11 @@ class DraftReviewer {
 
     /** Một câu chỉ giữ một cờ: sai đáp án nặng nhất, rồi tới hai đáp án, rồi tới từ vượt cấp. */
     static void flag(ExamQuestion question, ExamQuestionFlag flag, String detail) {
-        if (question.getFlag() == null || flag.severity() < question.getFlag().severity()) {
-            question.setFlag(flag);
-        }
-        note(question, detail);
+        question.getReview().raise(flag, detail);
     }
 
     static void note(ExamQuestion question, String detail) {
-        question.setReviewNote(question.getReviewNote() == null ? detail : question.getReviewNote() + " " + detail);
+        question.getReview().addNote(detail);
     }
 
     static List<String> options(ExamQuestion question) {
@@ -214,7 +212,7 @@ class DraftReviewer {
                 .correctOption(letter(shuffled.indexOf(correct)))
                 .explanation(trimmed.isEmpty() ? null : trimmed)
                 .questionType(type)
-                .status(ExamQuestionStatus.DRAFT)
+                .review(new ReviewState(ExamQuestionStatus.DRAFT))
                 .source(ExamQuestionSource.AI)
                 .build();
     }

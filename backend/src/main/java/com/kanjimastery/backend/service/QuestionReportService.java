@@ -67,25 +67,23 @@ public class QuestionReportService {
                 + "hoặc loại.";
         flag(question, note);
         if (question.getPassageId() == null) {
-            question.setStatus(ExamQuestionStatus.DRAFT);
+            question.getReview().moveTo(ExamQuestionStatus.DRAFT);
             log.info("Câu {} bị {} người báo lỗi - rút về chờ duyệt.", question.getId(), reports);
             return;
         }
         ExamPassage passage = passageRepository.findById(question.getPassageId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Không tìm thấy đoạn văn: " + question.getPassageId()));
-        passage.setStatus(ExamQuestionStatus.DRAFT);
-        passage.setFlag(ExamQuestionFlag.REPORTED);
-        passage.setReviewNote(passage.getReviewNote() == null ? note : passage.getReviewNote() + " " + note);
+        passage.getReview().moveTo(ExamQuestionStatus.DRAFT);
+        passage.getReview().replaceFlag(ExamQuestionFlag.REPORTED, note);
         List<ExamQuestion> blanks = questionRepository.findAllWithLinksByPassageIdIn(List.of(passage.getId()));
-        blanks.forEach(blank -> blank.setStatus(ExamQuestionStatus.DRAFT));
-        question.setStatus(ExamQuestionStatus.DRAFT);
+        blanks.forEach(blank -> blank.getReview().moveTo(ExamQuestionStatus.DRAFT));
+        question.getReview().moveTo(ExamQuestionStatus.DRAFT);
         log.info("Câu {} (đoạn văn {}) bị {} người báo lỗi - rút cả đoạn về chờ duyệt.", question.getId(),
                 passage.getId(), reports);
     }
 
     private static void flag(ExamQuestion question, String note) {
-        question.setFlag(ExamQuestionFlag.REPORTED);
-        question.setReviewNote(question.getReviewNote() == null ? note : question.getReviewNote() + " " + note);
+        question.getReview().replaceFlag(ExamQuestionFlag.REPORTED, note);
     }
 }
