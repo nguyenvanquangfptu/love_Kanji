@@ -1,5 +1,7 @@
 package com.kanjimastery.backend.controller;
 
+import com.kanjimastery.backend.model.ExamQuestionStatus;
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.dto.AdminExamQuestionRequest;
 import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
 import com.kanjimastery.backend.dto.BulkApproveRequest;
@@ -36,8 +38,8 @@ public class AdminExamQuestionController {
     @GetMapping
     public ResponseEntity<Page<AdminExamQuestionResponse>> search(
             @RequestParam(required = false) String level,
-            @RequestParam(required = false) String type,
-            @RequestParam(required = false) String status,
+            @RequestParam(required = false) JlptQuestionType type,
+            @RequestParam(required = false) ExamQuestionStatus status,
             @RequestParam(defaultValue = "false") boolean flagged,
             @RequestParam(required = false) Long grammarPointId,
             @RequestParam(defaultValue = "false") boolean reported,

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.AdminExamQuestionRequest;
 import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
@@ -51,9 +52,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ExamQuestionReviewService {
 
-    private static final Set<String> STATUSES = Set.of(ExamQuestionStatus.DRAFT, ExamQuestionStatus.APPROVED,
-            ExamQuestionStatus.REJECTED, ExamQuestionStatus.RETIRED);
-
     private final ExamQuestionRepository questionRepository;
     private final KanjiRepository kanjiRepository;
     private final GrammarPointRepository grammarPointRepository;
@@ -66,7 +64,7 @@ public class ExamQuestionReviewService {
      *
      * @param reportedOnly chỉ câu có báo lỗi của người học đang chờ xem
      */
-    public record Filter(String level, String type, String status, boolean flaggedOnly, Long grammarPointId,
+    public record Filter(String level, JlptQuestionType type, ExamQuestionStatus status, boolean flaggedOnly, Long grammarPointId,
                          boolean reportedOnly) {
     }
 
@@ -102,10 +100,10 @@ public class ExamQuestionReviewService {
             if (StringUtils.hasText(filter.level())) {
                 predicates.add(builder.equal(root.get("jlptLevel"), filter.level().toUpperCase()));
             }
-            if (StringUtils.hasText(filter.type())) {
+            if (filter.type() != null) {
                 predicates.add(builder.equal(root.get("questionType"), filter.type()));
             }
-            if (StringUtils.hasText(filter.status())) {
+            if (filter.status() != null) {
                 predicates.add(builder.equal(root.get("status"), filter.status()));
             }
             if (filter.flaggedOnly()) {
@@ -161,10 +159,7 @@ public class ExamQuestionReviewService {
      * duyệt được; duyệt rồi thì cảnh báo của bước kiểm tra tự động coi như đã được người duyệt xem.
      */
     @Transactional
-    public AdminExamQuestionResponse changeStatus(Long id, String status, String note) {
-        if (!STATUSES.contains(status)) {
-            throw new BadRequestException("Trạng thái không hợp lệ: " + status);
-        }
+    public AdminExamQuestionResponse changeStatus(Long id, ExamQuestionStatus status, String note) {
         ExamQuestion question = questionWithLinks(id);
         if (question.getPassageId() != null) {
             throw new BadRequestException("Câu này thuộc một đoạn văn - duyệt hoặc loại cả đoạn văn");
@@ -253,7 +248,7 @@ public class ExamQuestionReviewService {
     /** Theo các cấp độ có cấu trúc đề: mỗi dạng câu có bao nhiêu câu ở mỗi trạng thái, đủ cho bao nhiêu đề. */
     @Transactional(readOnly = true)
     public List<QuestionBankStatsResponse> stats() {
-        Map<String, Map<String, long[]>> counts = new HashMap<>();
+        Map<String, Map<JlptQuestionType, long[]>> counts = new HashMap<>();
         for (ExamQuestionRepository.BankCount count : questionRepository.countByLevelTypeAndStatus()) {
             long[] byStatus = counts.computeIfAbsent(count.getLevel(), level -> new HashMap<>())
                     .computeIfAbsent(count.getType(), type -> new long[4]);

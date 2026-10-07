@@ -123,8 +123,8 @@ public class ExamQuestionGenerator {
     /** Khoá chống sinh trùng: dạng câu JLPT nếu có, không thì kỹ năng (câu hỏi nghĩa). */
     private static String kind(QuizDirection skill) {
         return switch (skill) {
-            case KANJI_TO_READING -> JlptQuestionType.KANJI_READING;
-            case READING_TO_KANJI -> JlptQuestionType.ORTHOGRAPHY;
+            case KANJI_TO_READING -> JlptQuestionType.KANJI_READING.name();
+            case READING_TO_KANJI -> JlptQuestionType.ORTHOGRAPHY.name();
             case MEANING -> skill.name();
         };
     }
@@ -173,7 +173,7 @@ public class ExamQuestionGenerator {
             case READING_TO_KANJI -> "Chọn cách viết bằng chữ Hán của từ được gạch chân.";
             default -> "Từ 「" + word.getCharacter() + "」" + reading + " có nghĩa là gì?";
         };
-        String questionType = switch (question.direction()) {
+        JlptQuestionType questionType = switch (question.direction()) {
             case KANJI_TO_READING -> JlptQuestionType.KANJI_READING;
             case READING_TO_KANJI -> JlptQuestionType.ORTHOGRAPHY;
             default -> null;

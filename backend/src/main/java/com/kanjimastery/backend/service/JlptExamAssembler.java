@@ -33,7 +33,7 @@ public class JlptExamAssembler {
     private final ExamPassageRepository passageRepository;
 
     /** Một 問題 của đề: số thứ tự trong đề thật, dạng câu, số câu theo đề thật và các câu đã chọn. */
-    public record Mondai(int number, String type, int plannedCount, List<ExamQuestion> questions) {
+    public record Mondai(int number, JlptQuestionType type, int plannedCount, List<ExamQuestion> questions) {
     }
 
     /**
@@ -47,7 +47,7 @@ public class JlptExamAssembler {
                                  Set<Long> askedWords) {
         List<Mondai> mondai = new ArrayList<>();
         int number = 0;
-        for (Map.Entry<String, Integer> entry : section.getQuestions().entrySet()) {
+        for (Map.Entry<JlptQuestionType, Integer> entry : section.getQuestions().entrySet()) {
             number++;
             int planned = entry.getValue();
             if (JlptQuestionType.TEXT_GRAMMAR.equals(entry.getKey())) {
@@ -56,7 +56,7 @@ public class JlptExamAssembler {
                 continue;
             }
             List<Long> candidateIds = questionRepository
-                    .findForLearnerByLevelAndType(userId, level, entry.getKey(), planned * 2 + SPARE_CANDIDATES)
+                    .findForLearnerByLevelAndType(userId, level, entry.getKey().name(), planned * 2 + SPARE_CANDIDATES)
                     .stream()
                     .map(ExamQuestion::getId)
                     .toList();

@@ -41,7 +41,7 @@ public class GrammarPointService {
         List<GrammarPoint> points = StringUtils.hasText(level)
                 ? repository.findByJlptLevelOrderByLessonAscIdAsc(level.toUpperCase())
                 : repository.findAllByOrderByJlptLevelDescLessonAscIdAsc();
-        Map<Long, Map<String, Long>> counts = new HashMap<>();
+        Map<Long, Map<ExamQuestionStatus, Long>> counts = new HashMap<>();
         if (!points.isEmpty()) {
             for (GrammarPointRepository.QuestionCount count : repository.countQuestionsByStatus(
                     points.stream().map(GrammarPoint::getId).toList())) {
@@ -183,7 +183,7 @@ public class GrammarPointService {
         point.setExplanationVi(StringUtils.hasText(explanation) ? explanation.strip() : null);
     }
 
-    private static GrammarPointResponse toResponse(GrammarPoint point, Map<String, Long> counts) {
+    private static GrammarPointResponse toResponse(GrammarPoint point, Map<ExamQuestionStatus, Long> counts) {
         return GrammarPointResponse.builder()
                 .id(point.getId())
                 .jlptLevel(point.getJlptLevel())

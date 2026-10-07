@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -270,11 +271,11 @@ public class ExamService {
         if (attempt.getSection() == null) {
             return List.of();
         }
-        List<String> types = blueprints.section(attempt.getJlptLevel(), attempt.getSection())
+        List<JlptQuestionType> types = blueprints.section(attempt.getJlptLevel(), attempt.getSection())
                 .map(JlptBlueprintProperties.Section::types)
                 .orElse(List.of());
-        Map<String, int[]> byType = new LinkedHashMap<>();
-        for (String type : types) {
+        Map<JlptQuestionType, int[]> byType = new LinkedHashMap<>();
+        for (JlptQuestionType type : types) {
             byType.put(type, new int[2]);
         }
         for (QuestionReviewItem item : items) {

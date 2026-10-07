@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.ExamMondaiResponse;
@@ -284,8 +285,8 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
                 .isEqualTo(ExamSittingStatus.IN_PROGRESS);
     }
 
-    private ExamQuestion question(String type, QuizDirection skill, Long wordId) {
-        return questionRepository.save(ExamQuestion.builder().jlptLevel(LEVEL).questionText(type)
+    private ExamQuestion question(JlptQuestionType type, QuizDirection skill, Long wordId) {
+        return questionRepository.save(ExamQuestion.builder().jlptLevel(LEVEL).questionText(type.name())
                 .optionA("1").optionB("2").optionC("3").optionD("4").correctOption("A")
                 .skill(skill).questionType(type).kanjiIds(Set.of(wordId)).build());
     }

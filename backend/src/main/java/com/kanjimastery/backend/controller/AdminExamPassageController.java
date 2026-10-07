@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.controller;
 
+import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.dto.AdminExamPassageResponse;
 import com.kanjimastery.backend.dto.ExamPassageRequest;
 import com.kanjimastery.backend.dto.ExamQuestionStatusRequest;
@@ -28,7 +29,7 @@ public class AdminExamPassageController {
     @Operation(summary = "Đoạn văn của một cấp độ", description = "Mới nhất trước, kèm câu hỏi theo thứ tự chỗ trống.")
     @GetMapping
     public ResponseEntity<Page<AdminExamPassageResponse>> search(@RequestParam String level,
-                                                                 @RequestParam(required = false) String status,
+                                                                 @RequestParam(required = false) ExamQuestionStatus status,
                                                                  @RequestParam(defaultValue = "0") int page,
                                                                  @RequestParam(defaultValue = "10") int size) {
         return ResponseEntity.ok(passageReviewService.search(level, status, page, Math.min(Math.max(size, 1), 50)));

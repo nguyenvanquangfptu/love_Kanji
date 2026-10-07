@@ -1,5 +1,8 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.ExamQuestionFlag;
+import com.kanjimastery.backend.model.ExamQuestionSource;
+import com.kanjimastery.backend.model.ExamQuestionStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -18,11 +21,11 @@ public class AdminExamPassageResponse {
     /** Chỗ trống đánh dấu 【1】【2】... */
     private String content;
     /** {@link com.kanjimastery.backend.model.ExamQuestionStatus} */
-    private String status;
+    private ExamQuestionStatus status;
     /** {@link com.kanjimastery.backend.model.ExamQuestionSource} */
-    private String source;
+    private ExamQuestionSource source;
     /** {@link com.kanjimastery.backend.model.ExamQuestionFlag}; null = không có cảnh báo. */
-    private String flag;
+    private ExamQuestionFlag flag;
     private String reviewNote;
     private LocalDateTime reviewedAt;
     private List<AdminExamQuestionResponse> questions;

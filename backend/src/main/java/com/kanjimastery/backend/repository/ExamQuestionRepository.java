@@ -1,5 +1,7 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.ExamQuestionStatus;
+import com.kanjimastery.backend.model.JlptQuestionType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -58,7 +60,7 @@ public interface ExamQuestionRepository
 
     /** Số câu đã duyệt của một dạng câu JLPT. */
     interface TypeCount {
-        String getType();
+        JlptQuestionType getType();
 
         Long getCount();
     }
@@ -100,9 +102,9 @@ public interface ExamQuestionRepository
     interface BankCount {
         String getLevel();
 
-        String getType();
+        JlptQuestionType getType();
 
-        String getStatus();
+        ExamQuestionStatus getStatus();
 
         Long getCount();
     }

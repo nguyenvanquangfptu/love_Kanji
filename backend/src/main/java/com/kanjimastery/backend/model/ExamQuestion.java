@@ -61,18 +61,21 @@ public class ExamQuestion {
     @Column(length = 20)
     private QuizDirection skill;
 
-    /** Dạng câu trong đề JLPT ({@link JlptQuestionType}); null = chỉ dùng cho thi nhanh. */
+    /** Dạng câu trong đề JLPT; null = chỉ dùng cho thi nhanh. */
+    @Enumerated(EnumType.STRING)
     @Column(name = "question_type", length = 20)
-    private String questionType;
+    private JlptQuestionType questionType;
 
-    /** {@link ExamQuestionStatus} - chỉ câu đã duyệt mới được lấy vào đề. */
+    /** Chỉ câu đã duyệt mới được lấy vào đề. */
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     @Builder.Default
-    private String status = ExamQuestionStatus.APPROVED;
+    private ExamQuestionStatus status = ExamQuestionStatus.APPROVED;
 
-    /** Cảnh báo cho người duyệt ({@link ExamQuestionFlag}); null = không có. */
+    /** Cảnh báo cho người duyệt; null = không có. */
+    @Enumerated(EnumType.STRING)
     @Column(length = 20)
-    private String flag;
+    private ExamQuestionFlag flag;
 
     /** Lý do loại, hoặc chi tiết cảnh báo của bước kiểm tra tự động. */
     @Column(name = "review_note", columnDefinition = "TEXT")
@@ -89,10 +92,10 @@ public class ExamQuestion {
     @Column(name = "blank_no")
     private Integer blankNo;
 
-    /** {@link ExamQuestionSource} */
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     @Builder.Default
-    private String source = ExamQuestionSource.MANUAL;
+    private ExamQuestionSource source = ExamQuestionSource.MANUAL;
 
     /** Các từ vựng câu hỏi kiểm tra - làm sai thì các từ này được đưa vào ôn tập. */
     @ElementCollection

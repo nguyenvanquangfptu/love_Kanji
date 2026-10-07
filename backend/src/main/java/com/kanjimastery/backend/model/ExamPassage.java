@@ -2,6 +2,8 @@ package com.kanjimastery.backend.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -37,19 +39,21 @@ public class ExamPassage {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
-    /** {@link ExamQuestionStatus}; câu hỏi của đoạn văn luôn cùng trạng thái. */
+    /** Câu hỏi của đoạn văn luôn cùng trạng thái. */
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     @Builder.Default
-    private String status = ExamQuestionStatus.DRAFT;
+    private ExamQuestionStatus status = ExamQuestionStatus.DRAFT;
 
-    /** {@link ExamQuestionSource} */
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     @Builder.Default
-    private String source = ExamQuestionSource.MANUAL;
+    private ExamQuestionSource source = ExamQuestionSource.MANUAL;
 
-    /** {@link ExamQuestionFlag}: cảnh báo nặng nhất trong các câu hỏi của đoạn. */
+    /** Cảnh báo nặng nhất trong các câu hỏi của đoạn. */
+    @Enumerated(EnumType.STRING)
     @Column(length = 20)
-    private String flag;
+    private ExamQuestionFlag flag;
 
     @Column(name = "review_note", columnDefinition = "TEXT")
     private String reviewNote;

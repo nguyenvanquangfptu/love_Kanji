@@ -91,7 +91,7 @@ class AdminExamQuestionControllerIT extends AbstractIntegrationTest {
     @WithMockUser(roles = "ADMIN")
     void admins_shouldListDraftsApproveThemAndSeeTheBank() throws Exception {
         mockMvc.perform(get("/api/v1/admin/exam-questions").param("level", "N4")
-                        .param("type", JlptQuestionType.GRAMMAR_FORM).param("status", ExamQuestionStatus.DRAFT))
+                        .param("type", JlptQuestionType.GRAMMAR_FORM.name()).param("status", ExamQuestionStatus.DRAFT.name()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.content[0].id").value(draft.getId()))
@@ -103,7 +103,7 @@ class AdminExamQuestionControllerIT extends AbstractIntegrationTest {
         mockMvc.perform(post("/api/v1/admin/exam-questions/{id}/status", draft.getId())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"status\": \"APPROVED\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value(ExamQuestionStatus.APPROVED));
+                .andExpect(jsonPath("$.status").value(ExamQuestionStatus.APPROVED.name()));
 
         mockMvc.perform(get("/api/v1/admin/exam-questions/stats"))
                 .andExpect(status().isOk())

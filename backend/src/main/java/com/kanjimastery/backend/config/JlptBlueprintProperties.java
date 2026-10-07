@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.config;
 
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.ExamSection;
 import lombok.Getter;
 import lombok.Setter;
@@ -42,11 +43,11 @@ public class JlptBlueprintProperties {
     public static class Section {
         private ExamSection name;
         private int minutes;
-        /** Dạng câu ({@link com.kanjimastery.backend.model.JlptQuestionType}) -> số câu, theo thứ tự 問題1, 問題2... */
-        private Map<String, Integer> questions = new LinkedHashMap<>();
+        /** Dạng câu -> số câu, theo thứ tự 問題1, 問題2... */
+        private Map<JlptQuestionType, Integer> questions = new LinkedHashMap<>();
 
         /** Các dạng câu theo thứ tự 問題: dạng thứ i là 問題(i+1). */
-        public List<String> types() {
+        public List<JlptQuestionType> types() {
             return List.copyOf(questions.keySet());
         }
 

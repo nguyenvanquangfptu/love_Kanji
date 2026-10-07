@@ -9,11 +9,9 @@ import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.io.ClassPathResource;
 
 import java.io.IOException;
-import java.lang.reflect.Modifier;
-import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
@@ -41,16 +39,7 @@ class JlptBlueprintPropertiesTest {
 
     @Test
     void blueprintFile_shouldOnlyUseKnownSectionsAndQuestionTypes_inTheRealOrder() throws IOException {
-        Set<String> types = Arrays.stream(JlptQuestionType.class.getDeclaredFields())
-                .filter(field -> Modifier.isStatic(field.getModifiers()) && field.getType() == String.class)
-                .map(field -> {
-                    try {
-                        return (String) field.get(null);
-                    } catch (IllegalAccessException e) {
-                        throw new IllegalStateException(e);
-                    }
-                })
-                .collect(Collectors.toSet());
+        Set<JlptQuestionType> types = EnumSet.allOf(JlptQuestionType.class);
 
         load().getLevels().forEach((level, blueprint) -> {
             assertThat(blueprint.getSections()).extracting(JlptBlueprintProperties.Section::getName)

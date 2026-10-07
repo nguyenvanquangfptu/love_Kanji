@@ -72,7 +72,7 @@ public class PassageDraftService {
      * @param flag      cảnh báo nặng nhất của đoạn; null nếu không có
      * @param questions số câu hỏi đọc được
      */
-    public record PassageDraftResult(Long passageId, String status, String flag, int questions) {
+    public record PassageDraftResult(Long passageId, ExamQuestionStatus status, ExamQuestionFlag flag, int questions) {
     }
 
     public PassageDraftResult draft(String level) {
@@ -220,9 +220,8 @@ public class PassageDraftService {
                 context, drafts);
         // Cờ của đoạn là cờ nặng nhất trong đoạn và các câu hỏi.
         for (Draft draft : drafts) {
-            String flag = draft.question().getFlag();
-            if (flag != null && (passage.getFlag() == null
-                    || DraftReviewer.severity(flag) < DraftReviewer.severity(passage.getFlag()))) {
+            ExamQuestionFlag flag = draft.question().getFlag();
+            if (flag != null && (passage.getFlag() == null || flag.severity() < passage.getFlag().severity())) {
                 passage.setFlag(flag);
             }
         }

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.ExamMondaiResponse;
 import com.kanjimastery.backend.dto.JlptLevelResponse;
@@ -316,7 +317,7 @@ class JlptExamServiceTest {
         verify(sittingRepository).finishIfInProgress(eq(SITTING_ID), eq(ExamSittingStatus.COMPLETED), any());
     }
 
-    private record Count(String getType, Long getCount) implements ExamQuestionRepository.TypeCount {
+    private record Count(JlptQuestionType getType, Long getCount) implements ExamQuestionRepository.TypeCount {
     }
 
     private static JlptBlueprintProperties.Section section(ExamSection name, int minutes) {

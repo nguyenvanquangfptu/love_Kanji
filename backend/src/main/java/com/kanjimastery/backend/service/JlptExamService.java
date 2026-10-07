@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.ExamMondaiResponse;
 import com.kanjimastery.backend.dto.ExamSittingResponse;
@@ -72,12 +73,12 @@ public class JlptExamService {
     }
 
     private JlptLevelResponse levelResponse(String level, JlptBlueprintProperties.Level blueprint) {
-        Map<String, Long> available = availableByType(level);
+        Map<JlptQuestionType, Long> available = availableByType(level);
         List<JlptLevelResponse.Section> sections = blueprint.getSections().stream()
                 .map(section -> {
                     List<JlptLevelResponse.Mondai> mondai = new ArrayList<>();
                     int questionCount = 0;
-                    for (Map.Entry<String, Integer> entry : section.getQuestions().entrySet()) {
+                    for (Map.Entry<JlptQuestionType, Integer> entry : section.getQuestions().entrySet()) {
                         int have = available.getOrDefault(entry.getKey(), 0L).intValue();
                         mondai.add(new JlptLevelResponse.Mondai(mondai.size() + 1, entry.getKey(), entry.getValue(),
                                 have));
@@ -120,7 +121,7 @@ public class JlptExamService {
             throw new BadRequestException("Phần thi không hợp lệ: " + request.getSections());
         }
         // Phần nào chưa có câu thì báo ngay, không để người học làm xong phần đầu mới biết phần sau không có đề.
-        Map<String, Long> available = availableByType(level);
+        Map<JlptQuestionType, Long> available = availableByType(level);
         for (JlptBlueprintProperties.Section section : blueprint.getSections()) {
             if (sections.contains(section.getName())
                     && section.types().stream().noneMatch(type -> available.getOrDefault(type, 0L) > 0)) {
@@ -331,7 +332,7 @@ public class JlptExamService {
         return (int) minutes * 60;
     }
 
-    private Map<String, Long> availableByType(String level) {
+    private Map<JlptQuestionType, Long> availableByType(String level) {
         return questionRepository.countApprovedByType(level).stream()
                 .collect(Collectors.toMap(ExamQuestionRepository.TypeCount::getType,
                         ExamQuestionRepository.TypeCount::getCount));

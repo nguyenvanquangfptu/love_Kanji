@@ -1,6 +1,7 @@
 package com.kanjimastery.backend.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import com.kanjimastery.backend.model.ExamQuestionStatus;
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -9,9 +10,8 @@ import lombok.Setter;
 @Setter
 public class ExamQuestionStatusRequest {
 
-    /** {@link com.kanjimastery.backend.model.ExamQuestionStatus} */
-    @NotBlank(message = "Thiếu trạng thái")
-    private String status;
+    @NotNull(message = "Thiếu trạng thái")
+    private ExamQuestionStatus status;
 
     private String note;
 }

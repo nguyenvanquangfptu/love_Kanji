@@ -32,7 +32,7 @@ final class ExamQuestionValidator {
     }
 
     /** Các lỗi tìm thấy; rỗng = hợp lệ. */
-    static List<String> problems(String questionType, String questionText, String sentence, String highlight,
+    static List<String> problems(JlptQuestionType questionType, String questionText, String sentence, String highlight,
                                  List<String> options, String correctOption) {
         List<String> problems = new ArrayList<>();
         if (!StringUtils.hasText(questionText)) {

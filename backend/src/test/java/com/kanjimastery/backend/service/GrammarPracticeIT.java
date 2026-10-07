@@ -134,7 +134,7 @@ class GrammarPracticeIT extends AbstractIntegrationTest {
         });
     }
 
-    private ExamQuestion question(String status, GrammarPoint... points) {
+    private ExamQuestion question(ExamQuestionStatus status, GrammarPoint... points) {
         Set<Long> pointIds = new HashSet<>();
         for (GrammarPoint point : points) {
             pointIds.add(point.getId());

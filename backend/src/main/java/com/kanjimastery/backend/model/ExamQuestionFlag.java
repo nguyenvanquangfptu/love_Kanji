@@ -1,18 +1,29 @@
 package com.kanjimastery.backend.model;
 
 /** Các giá trị của cột {@code exam_questions.flag}: cảnh báo cho người duyệt (kiểm tra tự động, người học báo lỗi). */
-public final class ExamQuestionFlag {
-    /** Máy giải lại thấy có hơn một đáp án hợp. */
-    public static final String AMBIGUOUS = "AMBIGUOUS";
+public enum ExamQuestionFlag {
     /** Máy giải lại chọn một đáp án khác với đáp án đã cho. */
-    public static final String WRONG_ANSWER = "WRONG_ANSWER";
+    WRONG_ANSWER(0),
+    /** Máy giải lại thấy có hơn một đáp án hợp. */
+    AMBIGUOUS(1),
     /** Câu dùng nhiều từ vượt cấp độ. */
-    public static final String ABOVE_LEVEL = "ABOVE_LEVEL";
+    ABOVE_LEVEL(2),
     /** Nhiều người học báo lỗi - câu đã tự rút khỏi đề. */
-    public static final String REPORTED = "REPORTED";
+    REPORTED(-1),
     /** Phân tích kết quả thi thấy câu đáng ngờ (người làm tốt lại hay sai) - câu vẫn trong đề. */
-    public static final String STATS = "STATS";
+    STATS(-1);
 
-    private ExamQuestionFlag() {
+    private final int severity;
+
+    ExamQuestionFlag(int severity) {
+        this.severity = severity;
+    }
+
+    /**
+     * Thứ tự nặng nhẹ khi một câu chỉ giữ một cờ: số nhỏ là nặng hơn. Báo lỗi của người học và kết quả phân tích (-1)
+     * nặng hơn mọi bước kiểm tra tự động, để bước kiểm tra không đè mất chúng.
+     */
+    public int severity() {
+        return severity;
     }
 }

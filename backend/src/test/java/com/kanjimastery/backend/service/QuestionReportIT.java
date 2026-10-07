@@ -176,7 +176,7 @@ class QuestionReportIT extends AbstractIntegrationTest {
                 .isEqualTo(3);
     }
 
-    private String status(ExamQuestion question) {
+    private ExamQuestionStatus status(ExamQuestion question) {
         return questionRepository.findById(question.getId()).orElseThrow().getStatus();
     }
 

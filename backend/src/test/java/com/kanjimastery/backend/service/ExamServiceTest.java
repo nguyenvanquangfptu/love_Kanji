@@ -226,7 +226,7 @@ class ExamServiceTest {
         assertThat(review.getQuestions().get(1).getGrammarPoints()).isEmpty();
     }
 
-    private static ExamQuestion typed(ExamQuestion question, String questionType) {
+    private static ExamQuestion typed(ExamQuestion question, JlptQuestionType questionType) {
         question.setQuestionType(questionType);
         return question;
     }

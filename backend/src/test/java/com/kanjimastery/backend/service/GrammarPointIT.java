@@ -62,7 +62,7 @@ class GrammarPointIT extends AbstractIntegrationTest {
                 .containsExactly(tuple("N5-01", "〜は〜です", 0L, 0L), tuple("N5-04", "〜から〜まで", 2L, 1L));
     }
 
-    private void question(String status, Long grammarPointId) {
+    private void question(ExamQuestionStatus status, Long grammarPointId) {
         questionRepository.save(ExamQuestion.builder().jlptLevel(LEVEL).questionText("[GrammarPointIT] câu")
                 .optionA("1").optionB("2").optionC("3").optionD("4").correctOption("A")
                 .questionType(JlptQuestionType.GRAMMAR_FORM).status(status)

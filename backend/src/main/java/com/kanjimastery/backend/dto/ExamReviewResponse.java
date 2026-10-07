@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.QuizDirection;
@@ -51,7 +52,7 @@ public class ExamReviewResponse {
         /** Số thứ tự trong đề thật (問題1, 問題2...). */
         private int number;
         /** {@link com.kanjimastery.backend.model.JlptQuestionType} */
-        private String type;
+        private JlptQuestionType type;
         private int correct;
         private int total;
     }

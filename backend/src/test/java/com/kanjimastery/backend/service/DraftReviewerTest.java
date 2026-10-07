@@ -11,15 +11,15 @@ class DraftReviewerTest {
 
     @Test
     void severity_shouldRankWrongAnswerThenAmbiguousThenAboveLevel() {
-        assertThat(DraftReviewer.severity(ExamQuestionFlag.WRONG_ANSWER)).isZero();
-        assertThat(DraftReviewer.severity(ExamQuestionFlag.AMBIGUOUS)).isEqualTo(1);
-        assertThat(DraftReviewer.severity(ExamQuestionFlag.ABOVE_LEVEL)).isEqualTo(2);
+        assertThat(ExamQuestionFlag.WRONG_ANSWER.severity()).isZero();
+        assertThat(ExamQuestionFlag.AMBIGUOUS.severity()).isEqualTo(1);
+        assertThat(ExamQuestionFlag.ABOVE_LEVEL.severity()).isEqualTo(2);
     }
 
     @Test
     void severity_shouldPutLearnerReportsAndStatisticsAboveEveryCheck() {
-        assertThat(DraftReviewer.severity(ExamQuestionFlag.REPORTED)).isEqualTo(-1);
-        assertThat(DraftReviewer.severity(ExamQuestionFlag.STATS)).isEqualTo(-1);
+        assertThat(ExamQuestionFlag.REPORTED.severity()).isEqualTo(-1);
+        assertThat(ExamQuestionFlag.STATS.severity()).isEqualTo(-1);
     }
 
     @Test

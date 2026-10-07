@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.GrammarPoint;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -23,7 +24,7 @@ public interface GrammarPointRepository extends JpaRepository<GrammarPoint, Long
     interface QuestionCount {
         Long getGrammarPointId();
 
-        String getStatus();
+        ExamQuestionStatus getStatus();
 
         Long getCount();
     }

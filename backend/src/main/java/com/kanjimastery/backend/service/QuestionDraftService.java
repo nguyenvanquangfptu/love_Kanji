@@ -23,6 +23,7 @@ import org.springframework.util.StringUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -53,9 +54,10 @@ public class QuestionDraftService {
     static final String PARAPHRASE_PART_TEXT = "Chọn từ hoặc cách nói gần nghĩa nhất với phần được gạch chân.";
     /** 言い換え類義 của N4, N5: cả câu được gạch chân, chọn câu gần nghĩa nhất. */
     static final String PARAPHRASE_SENTENCE_TEXT = "Chọn câu gần nghĩa nhất với câu được gạch chân.";
-    private static final Set<String> GRAMMAR_TYPES = Set.of(JlptQuestionType.GRAMMAR_FORM,
+    private static final Set<JlptQuestionType> GRAMMAR_TYPES = EnumSet.of(JlptQuestionType.GRAMMAR_FORM,
             JlptQuestionType.SENTENCE_ORDER);
-    private static final Set<String> VOCABULARY_TYPES = Set.of(JlptQuestionType.PARAPHRASE, JlptQuestionType.USAGE);
+    private static final Set<JlptQuestionType> VOCABULARY_TYPES =
+            EnumSet.of(JlptQuestionType.PARAPHRASE, JlptQuestionType.USAGE);
     /** Các cấp độ mà 言い換え類義 gạch chân cả câu. */
     private static final Set<String> WHOLE_SENTENCE_PARAPHRASE = Set.of("N4", "N5");
     /** Từ loại hỏi được 言い換え, 用法 - không hỏi liên từ, từ chỉ định, câu chào... */
@@ -83,7 +85,7 @@ public class QuestionDraftService {
     }
 
     /** Câu ngữ pháp 文法形式の判断 hoặc 文の組み立て cho một điểm ngữ pháp. */
-    public DraftResult draft(Long grammarPointId, String type, int count) {
+    public DraftResult draft(Long grammarPointId, JlptQuestionType type, int count) {
         requireGemini();
         if (!GRAMMAR_TYPES.contains(type)) {
             throw new BadRequestException("Chỉ sinh nháp được dạng 文法形式の判断 và 文の組み立て");
@@ -116,7 +118,7 @@ public class QuestionDraftService {
      * Câu từ vựng 言い換え類義 hoặc 用法 (dạng câu phải có trong đề của cấp độ) cho các từ trong bài của cấp độ chưa có
      * câu dạng đó, mỗi từ một câu.
      */
-    public DraftResult draftVocabulary(String level, String type, int count) {
+    public DraftResult draftVocabulary(String level, JlptQuestionType type, int count) {
         requireGemini();
         String normalized = level.strip().toUpperCase(Locale.ROOT);
         if (!VOCABULARY_TYPES.contains(type)) {
@@ -187,7 +189,7 @@ public class QuestionDraftService {
         return new DraftResult(wellFormed.size(), flagged, rejected, unreadable);
     }
 
-    private static String grammarPrompt(GrammarPoint point, String type, int count, List<String> existing) {
+    private static String grammarPrompt(GrammarPoint point, JlptQuestionType type, int count, List<String> existing) {
         String grammar = "「%s」 - nghĩa: %s%s".formatted(point.getPattern(), point.getMeaningVi(),
                 StringUtils.hasText(point.getConnection()) ? " - cách nối: " + point.getConnection() : "");
         String avoid = existing.isEmpty() ? "" : "\nĐã có các câu sau, hãy viết câu khác hẳn về ngữ cảnh:\n"
@@ -262,8 +264,8 @@ public class QuestionDraftService {
     }
 
     /** Từ trong bài của cấp độ chưa có câu dạng {@code type}, có nghĩa, đúng từ loại hỏi được; chọn ngẫu nhiên. */
-    private List<Kanji> wordsWithoutQuestion(String level, String type, int count) {
-        Set<Long> covered = new HashSet<>(questionRepository.findWordIdsWithQuestion(level, type));
+    private List<Kanji> wordsWithoutQuestion(String level, JlptQuestionType type, int count) {
+        Set<Long> covered = new HashSet<>(questionRepository.findWordIdsWithQuestion(level, type.name()));
         List<Kanji> candidates = kanjiRepository.findAllByTagNamePrefix(level + "-%").stream()
                 .filter(word -> !covered.contains(word.getId()))
                 .filter(word -> StringUtils.hasText(word.getMeaning()))
@@ -286,7 +288,7 @@ public class QuestionDraftService {
         return words;
     }
 
-    private static String vocabularyPrompt(String level, String type, boolean wholeSentence, List<Kanji> words) {
+    private static String vocabularyPrompt(String level, JlptQuestionType type, boolean wholeSentence, List<Kanji> words) {
         String list = IntStream.range(0, words.size())
                 .mapToObj(index -> (index + 1) + ". " + words.get(index).getCharacter()
                         + readingInBrackets(words.get(index)) + " - " + words.get(index).getMeaning())

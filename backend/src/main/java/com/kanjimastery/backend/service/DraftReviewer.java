@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kanjimastery.backend.model.ExamQuestion;
@@ -160,17 +161,11 @@ class DraftReviewer {
     }
 
     /** Một câu chỉ giữ một cờ: sai đáp án nặng nhất, rồi tới hai đáp án, rồi tới từ vượt cấp. */
-    static void flag(ExamQuestion question, String flag, String detail) {
-        if (question.getFlag() == null || severity(flag) < severity(question.getFlag())) {
+    static void flag(ExamQuestion question, ExamQuestionFlag flag, String detail) {
+        if (question.getFlag() == null || flag.severity() < question.getFlag().severity()) {
             question.setFlag(flag);
         }
         note(question, detail);
-    }
-
-    /** Thứ tự nặng nhẹ của cờ: số nhỏ là nặng hơn. */
-    static int severity(String flag) {
-        return List.of(ExamQuestionFlag.WRONG_ANSWER, ExamQuestionFlag.AMBIGUOUS, ExamQuestionFlag.ABOVE_LEVEL)
-                .indexOf(flag);
     }
 
     static void note(ExamQuestion question, String detail) {
@@ -201,7 +196,7 @@ class DraftReviewer {
     }
 
     /** Câu nháp AI chờ duyệt; xáo 4 lựa chọn, đáp án theo vị trí mới của {@code correct}. */
-    static ExamQuestion question(String level, String type, String text, String sentence, String highlight,
+    static ExamQuestion question(String level, JlptQuestionType type, String text, String sentence, String highlight,
                                  List<String> options, String correct, String explanation) {
         List<String> shuffled = new ArrayList<>(options);
         Collections.shuffle(shuffled);

@@ -52,10 +52,10 @@ class JlptExamAssemblerTest {
         Set<Long> askedWords = new HashSet<>(Set.of(11L));
         List<ExamQuestion> reading = List.of(question(1L, 10L), question(2L, 11L), question(3L, 12L), question(4L, 13L));
         List<ExamQuestion> context = List.of(question(5L, 12L), question(6L, 14L), question(7L, 15L), question(8L, 16L));
-        when(questionRepository.findForLearnerByLevelAndType(USER_ID, "N4", KANJI_READING, 24)).thenReturn(reading);
+        when(questionRepository.findForLearnerByLevelAndType(USER_ID, "N4", KANJI_READING.name(), 24)).thenReturn(reading);
         when(questionRepository.findAllWithWordsByIdIn(List.of(1L, 2L, 3L, 4L))).thenReturn(reading);
-        when(questionRepository.findForLearnerByLevelAndType(USER_ID, "N4", ORTHOGRAPHY, 22)).thenReturn(List.of());
-        when(questionRepository.findForLearnerByLevelAndType(USER_ID, "N4", CONTEXT, 24)).thenReturn(context);
+        when(questionRepository.findForLearnerByLevelAndType(USER_ID, "N4", ORTHOGRAPHY.name(), 22)).thenReturn(List.of());
+        when(questionRepository.findForLearnerByLevelAndType(USER_ID, "N4", CONTEXT.name(), 24)).thenReturn(context);
         when(questionRepository.findAllWithWordsByIdIn(List.of(5L, 6L, 7L, 8L))).thenReturn(context);
 
         List<JlptExamAssembler.Mondai> mondai = assembler.assemble(USER_ID, "N4", section, askedWords);

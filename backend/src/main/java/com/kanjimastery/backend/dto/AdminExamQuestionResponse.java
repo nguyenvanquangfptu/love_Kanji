@@ -1,5 +1,9 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.ExamQuestionFlag;
+import com.kanjimastery.backend.model.ExamQuestionSource;
+import com.kanjimastery.backend.model.ExamQuestionStatus;
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.QuizDirection;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -16,16 +20,16 @@ public class AdminExamQuestionResponse {
     private Long id;
     private String jlptLevel;
     /** {@link com.kanjimastery.backend.model.JlptQuestionType} */
-    private String questionType;
+    private JlptQuestionType questionType;
     private QuizDirection skill;
     /** {@link com.kanjimastery.backend.model.ExamQuestionStatus} */
-    private String status;
+    private ExamQuestionStatus status;
     /** {@link com.kanjimastery.backend.model.ExamQuestionFlag}; null = không có cảnh báo. */
-    private String flag;
+    private ExamQuestionFlag flag;
     private String reviewNote;
     private LocalDateTime reviewedAt;
     /** {@link com.kanjimastery.backend.model.ExamQuestionSource} */
-    private String source;
+    private ExamQuestionSource source;
     private String questionText;
     private String sentence;
     private String highlight;

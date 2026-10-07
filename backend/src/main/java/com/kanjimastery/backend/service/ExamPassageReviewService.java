@@ -34,18 +34,15 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ExamPassageReviewService {
 
-    private static final Set<String> STATUSES = Set.of(ExamQuestionStatus.DRAFT, ExamQuestionStatus.APPROVED,
-            ExamQuestionStatus.REJECTED, ExamQuestionStatus.RETIRED);
-
     private final ExamPassageRepository passageRepository;
     private final ExamQuestionRepository questionRepository;
     private final ExamQuestionReviewService questionReviewService;
     private final ExamQuestionReportRepository reportRepository;
 
     @Transactional(readOnly = true)
-    public Page<AdminExamPassageResponse> search(String level, String status, int page, int size) {
+    public Page<AdminExamPassageResponse> search(String level, ExamQuestionStatus status, int page, int size) {
         PageRequest pageRequest = PageRequest.of(page, size);
-        Page<ExamPassage> found = StringUtils.hasText(status)
+        Page<ExamPassage> found = status != null
                 ? passageRepository.findByJlptLevelAndStatusOrderByIdDesc(level.toUpperCase(), status, pageRequest)
                 : passageRepository.findByJlptLevelOrderByIdDesc(level.toUpperCase(), pageRequest);
         Map<Long, List<ExamQuestion>> questions = questionsOf(found.map(ExamPassage::getId).getContent());
@@ -69,10 +66,7 @@ public class ExamPassageReviewService {
 
     /** Đổi trạng thái cả đoạn và mọi câu hỏi của nó; loại thì cần lý do, duyệt thì đoạn và mọi câu phải hợp lệ. */
     @Transactional
-    public AdminExamPassageResponse changeStatus(Long id, String status, String note) {
-        if (!STATUSES.contains(status)) {
-            throw new BadRequestException("Trạng thái không hợp lệ: " + status);
-        }
+    public AdminExamPassageResponse changeStatus(Long id, ExamQuestionStatus status, String note) {
         if (ExamQuestionStatus.REJECTED.equals(status) && !StringUtils.hasText(note)) {
             throw new BadRequestException("Loại đoạn văn thì cần ghi lý do");
         }

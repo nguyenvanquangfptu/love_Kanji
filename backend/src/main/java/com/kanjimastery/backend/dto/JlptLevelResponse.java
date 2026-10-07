@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.ExamSection;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -41,7 +42,7 @@ public class JlptLevelResponse {
         /** Số thứ tự trong đề thật (問題1, 問題2...). */
         private int number;
         /** {@link com.kanjimastery.backend.model.JlptQuestionType} */
-        private String type;
+        private JlptQuestionType type;
         private int plannedCount;
         /** Số câu đã duyệt hiện có của dạng này. */
         private int available;

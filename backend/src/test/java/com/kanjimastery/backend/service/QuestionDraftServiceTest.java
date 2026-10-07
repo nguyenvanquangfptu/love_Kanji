@@ -174,7 +174,7 @@ class QuestionDraftServiceTest {
     void draftVocabulary_shouldAskForLessonWordsWithoutAQuestion_andRejectUsageSentencesMissingTheWord() {
         when(geminiClient.isEnabled()).thenReturn(true);
         // 届ける đã có câu 用法; でも là liên từ - không hỏi.
-        when(questionRepository.findWordIdsWithQuestion("N4", JlptQuestionType.USAGE)).thenReturn(List.of(13L));
+        when(questionRepository.findWordIdsWithQuestion("N4", JlptQuestionType.USAGE.name())).thenReturn(List.of(13L));
         when(kanjiRepository.findAllByTagNamePrefix("N4-%")).thenReturn(List.of(LEAVE, REFUSE, DELIVER, BUT));
         when(levelChecker.open("N4")).thenReturn(new VocabularyLevelChecker.Session(4, Map.of()));
         List<String> prompts = new ArrayList<>();
@@ -280,7 +280,7 @@ class QuestionDraftServiceTest {
     @Test
     void draftVocabulary_shouldRefuse_typesTheLevelsExamDoesNotHave_andWhenEveryWordHasAQuestion() {
         when(geminiClient.isEnabled()).thenReturn(true);
-        when(questionRepository.findWordIdsWithQuestion("N4", JlptQuestionType.USAGE)).thenReturn(List.of(11L));
+        when(questionRepository.findWordIdsWithQuestion("N4", JlptQuestionType.USAGE.name())).thenReturn(List.of(11L));
         when(kanjiRepository.findAllByTagNamePrefix("N4-%")).thenReturn(List.of(LEAVE));
 
         // Đề N5 không có 用法.
@@ -313,7 +313,7 @@ class QuestionDraftServiceTest {
         for (String level : List.of("N5", "N4", "N3")) {
             JlptBlueprintProperties.Section vocabulary = new JlptBlueprintProperties.Section();
             vocabulary.setName(ExamSection.VOCABULARY);
-            Map<String, Integer> questions = new LinkedHashMap<>(Map.of(JlptQuestionType.KANJI_READING, 7,
+            Map<JlptQuestionType, Integer> questions = new LinkedHashMap<>(Map.of(JlptQuestionType.KANJI_READING, 7,
                     JlptQuestionType.CONTEXT, 6, JlptQuestionType.PARAPHRASE, 3));
             if (!level.equals("N5")) {
                 questions.put(JlptQuestionType.USAGE, 4);

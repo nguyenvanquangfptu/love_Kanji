@@ -62,7 +62,7 @@ class ExamQuestionRepositoryIT extends AbstractIntegrationTest {
                 .containsExactly(untyped.getId());
     }
 
-    private static ExamQuestion question(String text, String questionType) {
+    private static ExamQuestion question(String text, JlptQuestionType questionType) {
         return ExamQuestion.builder().jlptLevel("N8").questionText(text).optionA("1").optionB("2").optionC("3")
                 .optionD("4").correctOption("A").questionType(questionType).build();
     }

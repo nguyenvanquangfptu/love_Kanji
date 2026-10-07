@@ -71,10 +71,10 @@ class ExamQuestionGeneratorTest {
         // chữ Hán, 病院 không có câu ví dụ: chỉ hỏi nghĩa.
         assertThat(saved).extracting(question -> question.getKanjiIds().iterator().next(), ExamQuestionGeneratorTest::kind)
                 .containsExactlyInAnyOrder(
-                        tuple(1L, KANJI_READING), tuple(1L, ORTHOGRAPHY), tuple(1L, CONTEXT), tuple(1L, MEANING.name()),
-                        tuple(2L, KANJI_READING), tuple(2L, ORTHOGRAPHY), tuple(2L, CONTEXT),
-                        tuple(3L, KANJI_READING), tuple(3L, ORTHOGRAPHY), tuple(3L, CONTEXT), tuple(3L, MEANING.name()),
-                        tuple(4L, KANJI_READING), tuple(4L, MEANING.name()),
+                        tuple(1L, KANJI_READING.name()), tuple(1L, ORTHOGRAPHY.name()), tuple(1L, CONTEXT.name()), tuple(1L, MEANING.name()),
+                        tuple(2L, KANJI_READING.name()), tuple(2L, ORTHOGRAPHY.name()), tuple(2L, CONTEXT.name()),
+                        tuple(3L, KANJI_READING.name()), tuple(3L, ORTHOGRAPHY.name()), tuple(3L, CONTEXT.name()), tuple(3L, MEANING.name()),
+                        tuple(4L, KANJI_READING.name()), tuple(4L, MEANING.name()),
                         tuple(5L, MEANING.name()), tuple(6L, MEANING.name()));
         assertThat(result).isEqualTo(new ExamQuestionGenerator.Result("N4", 6, 15));
         assertThat(saved).allSatisfy(question -> {
@@ -84,12 +84,12 @@ class ExamQuestionGeneratorTest {
                     question.getOptionD())).doesNotHaveDuplicates();
         });
 
-        ExamQuestion reading = question(saved, 1L, KANJI_READING);
+        ExamQuestion reading = question(saved, 1L, KANJI_READING.name());
         assertThat(reading.getSentence()).isEqualTo("毎朝新聞を読みます。");
         assertThat(reading.getHighlight()).isEqualTo("新聞");
         assertThat(correctAnswer(reading)).isEqualTo("しんぶん");
 
-        ExamQuestion writing = question(saved, 1L, ORTHOGRAPHY);
+        ExamQuestion writing = question(saved, 1L, ORTHOGRAPHY.name());
         assertThat(writing.getSentence()).isEqualTo("毎朝しんぶんを読みます。");
         assertThat(writing.getHighlight()).isEqualTo("しんぶん");
         assertThat(correctAnswer(writing)).isEqualTo("新聞");
@@ -104,7 +104,7 @@ class ExamQuestionGeneratorTest {
         assertThat(meaning.getExplanation()).isEqualTo("新聞 (しんぶん): Báo");
 
         // 文脈規定: từ được khoét khỏi câu, 3 đáp án nhiễu là các danh từ khác cùng cấp độ.
-        ExamQuestion context = question(saved, 1L, CONTEXT);
+        ExamQuestion context = question(saved, 1L, CONTEXT.name());
         assertThat(context.getSentence()).isEqualTo("毎朝（　　）を読みます。");
         assertThat(context.getHighlight()).isNull();
         assertThat(correctAnswer(context)).isEqualTo("新聞");
@@ -157,7 +157,7 @@ class ExamQuestionGeneratorTest {
         Kanji bus = word(34L, "バス", null, "バスに乗ります。", "Xe buýt");
         when(kanjiRepository.findAllByTagNamePrefix("N5-%")).thenReturn(List.of(guitar, pen, camera, bus));
         // バス đã có câu 表記.
-        when(questionRepository.generatedQuestionWords("N5")).thenReturn(List.of(generated(34L, ORTHOGRAPHY)));
+        when(questionRepository.generatedQuestionWords("N5")).thenReturn(List.of(generated(34L, ORTHOGRAPHY.name())));
 
         generator.generate("N5");
 
@@ -231,7 +231,7 @@ class ExamQuestionGeneratorTest {
 
     /** Dạng câu JLPT, hoặc kỹ năng với câu hỏi nghĩa (chỉ dùng cho thi nhanh). */
     private static String kind(ExamQuestion question) {
-        return question.getQuestionType() != null ? question.getQuestionType() : String.valueOf(question.getSkill());
+        return question.getQuestionType() != null ? question.getQuestionType().name() : String.valueOf(question.getSkill());
     }
 
     private static String correctAnswer(ExamQuestion question) {
