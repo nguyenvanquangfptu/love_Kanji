@@ -4,6 +4,7 @@ import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionSource;
+import com.kanjimastery.backend.model.GrammarPoint;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.QuizDirection;
@@ -31,6 +32,33 @@ class ExamQuestionRepositoryIT extends AbstractIntegrationTest {
     private KanjiRepository kanjiRepository;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private GrammarPointRepository grammarPointRepository;
+
+    /** Không chạy trong transaction, như ExamService.getReview: cả hai tập liên kết phải được nạp sẵn. */
+    @Test
+    void findAllWithLinksByIdIn_shouldLoadEveryWordAndGrammarPoint_withoutAnOpenTransaction() {
+        List<Long> words = kanjiRepository.findAll().stream().limit(3).map(Kanji::getId).toList();
+        List<GrammarPoint> points = grammarPointRepository.saveAll(List.of(
+                GrammarPoint.builder().jlptLevel(JlptLevel.N1).pattern("[RepoIT] 〜ものの").meaningVi("tuy").build(),
+                GrammarPoint.builder().jlptLevel(JlptLevel.N1).pattern("[RepoIT] 〜からこそ").meaningVi("chính vì").build()));
+        ExamQuestion saved = question("Câu có cả từ lẫn ngữ pháp", JlptQuestionType.GRAMMAR_FORM);
+        saved.getKanjiIds().addAll(words);
+        points.forEach(point -> saved.getGrammarPointIds().add(point.getId()));
+        Long id = questionRepository.save(saved).getId();
+        try {
+            List<ExamQuestion> loaded = questionRepository.findAllWithLinksByIdIn(List.of(id));
+
+            assertThat(loaded).singleElement().satisfies(question -> {
+                assertThat(question.getKanjiIds()).containsExactlyInAnyOrderElementsOf(words);
+                assertThat(question.getGrammarPointIds()).containsExactlyInAnyOrderElementsOf(
+                        points.stream().map(GrammarPoint::getId).toList());
+            });
+        } finally {
+            questionRepository.deleteById(id);
+            grammarPointRepository.deleteAll(points);
+        }
+    }
 
     /** Không chạy trong transaction: câu lệnh lỗi đầu tiên sẽ làm hỏng cả transaction. Không dòng nào được ghi. */
     @Test

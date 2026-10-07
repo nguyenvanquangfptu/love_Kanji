@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collection;
 import java.util.List;
@@ -89,15 +90,21 @@ public interface ExamQuestionRepository
     List<GeneratedQuestionWord> generatedQuestionWords(@Param("level") String level);
 
     /** Các câu hỏi kèm luôn từ vựng mỗi câu kiểm tra, trong một truy vấn. */
-    @Query("SELECT DISTINCT q FROM ExamQuestion q LEFT JOIN FETCH q.kanjiIds WHERE q.id IN :ids")
+    @Query("SELECT q FROM ExamQuestion q LEFT JOIN FETCH q.kanjiIds WHERE q.id IN :ids")
     List<ExamQuestion> findAllWithWordsByIdIn(@Param("ids") Collection<Long> ids);
 
-    /** Các câu hỏi kèm từ vựng và điểm ngữ pháp mỗi câu kiểm tra, trong một truy vấn. */
-    @Query("""
-            SELECT DISTINCT q FROM ExamQuestion q LEFT JOIN FETCH q.kanjiIds LEFT JOIN FETCH q.grammarPointIds
-            WHERE q.id IN :ids
-            """)
-    List<ExamQuestion> findAllWithLinksByIdIn(@Param("ids") Collection<Long> ids);
+    /** Nạp điểm ngữ pháp cho các câu đã nạp trong cùng transaction. */
+    @Query("SELECT q FROM ExamQuestion q LEFT JOIN FETCH q.grammarPointIds WHERE q IN :questions")
+    List<ExamQuestion> fetchGrammarPoints(@Param("questions") Collection<ExamQuestion> questions);
+
+    /**
+     * Các câu hỏi kèm từ vựng và điểm ngữ pháp mỗi câu kiểm tra. Hai truy vấn, mỗi truy vấn nạp một tập liên kết: nạp
+     * cả hai trong một JOIN sẽ trả về số từ × số điểm ngữ pháp dòng cho mỗi câu.
+     */
+    @Transactional(readOnly = true)
+    default List<ExamQuestion> findAllWithLinksByIdIn(Collection<Long> ids) {
+        return withGrammarPoints(findAllWithWordsByIdIn(ids));
+    }
 
     /** Số câu đề JLPT theo cấp độ, dạng câu và trạng thái duyệt. */
     interface BankCount {
@@ -145,10 +152,20 @@ public interface ExamQuestionRepository
             """)
     List<String> findSentencesByGrammarPoint(@Param("grammarPointId") Long grammarPointId);
 
-    /** Câu hỏi của các đoạn văn, kèm từ vựng và điểm ngữ pháp mỗi câu kiểm tra. */
-    @Query("""
-            SELECT DISTINCT q FROM ExamQuestion q LEFT JOIN FETCH q.kanjiIds LEFT JOIN FETCH q.grammarPointIds
-            WHERE q.passageId IN :passageIds
-            """)
-    List<ExamQuestion> findAllWithLinksByPassageIdIn(@Param("passageIds") Collection<Long> passageIds);
+    /** Câu hỏi của các đoạn văn, kèm từ vựng mỗi câu kiểm tra. */
+    @Query("SELECT q FROM ExamQuestion q LEFT JOIN FETCH q.kanjiIds WHERE q.passageId IN :passageIds")
+    List<ExamQuestion> findAllWithWordsByPassageIdIn(@Param("passageIds") Collection<Long> passageIds);
+
+    /** Câu hỏi của các đoạn văn, kèm từ vựng và điểm ngữ pháp - hai truy vấn như {@link #findAllWithLinksByIdIn}. */
+    @Transactional(readOnly = true)
+    default List<ExamQuestion> findAllWithLinksByPassageIdIn(Collection<Long> passageIds) {
+        return withGrammarPoints(findAllWithWordsByPassageIdIn(passageIds));
+    }
+
+    private List<ExamQuestion> withGrammarPoints(List<ExamQuestion> questions) {
+        if (!questions.isEmpty()) {
+            fetchGrammarPoints(questions);
+        }
+        return questions;
+    }
 }
