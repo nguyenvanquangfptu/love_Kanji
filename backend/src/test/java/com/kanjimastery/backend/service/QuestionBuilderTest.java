@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.Kanji;
 import org.junit.jupiter.api.Test;
 
@@ -54,7 +55,7 @@ class QuestionBuilderTest {
         assertThat(sentence(tooth, KANJI_TO_READING, "私は歯を磨く。")).isEqualTo("私は歯を磨く。");
     }
 
-    private String sentence(Kanji word, String direction, String exampleSentence) {
+    private String sentence(Kanji word, QuizDirection direction, String exampleSentence) {
         QuestionBuilder.BuiltQuestion question = builder.build(builder.plan(word, direction, List.of()),
                 exampleSentence, pool, Map.of());
         assertThat(question.choices()).hasSize(QuestionBuilder.CHOICES);

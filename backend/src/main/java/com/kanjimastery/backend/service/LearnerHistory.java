@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.UserKanjiSrs;
 
 import java.time.LocalDateTime;
@@ -16,7 +17,7 @@ import java.util.Map;
 public record LearnerHistory(LocalDateTime now,
                              Map<Long, UserKanjiSrs> cards,
                              Map<Long, WordHistory> words,
-                             Map<String, Tally> directions) {
+                             Map<QuizDirection, Tally> directions) {
 
     /** Số lần trả lời và số lần sai. */
     public record Tally(long answers, long errors) {
@@ -27,7 +28,7 @@ public record LearnerHistory(LocalDateTime now,
      * @param byDirection  lượt trả lời trắc nghiệm theo từng hướng hỏi
      * @param recentErrors số lần sai gần đây, tính cả "Quên" khi lật thẻ
      */
-    public record WordHistory(Map<String, Tally> byDirection, long recentErrors) {
+    public record WordHistory(Map<QuizDirection, Tally> byDirection, long recentErrors) {
     }
 
     public static LearnerHistory empty(LocalDateTime now) {
@@ -49,12 +50,12 @@ public record LearnerHistory(LocalDateTime now,
         return word == null ? 0 : word.recentErrors();
     }
 
-    public Tally tally(Long kanjiId, String direction) {
+    public Tally tally(Long kanjiId, QuizDirection direction) {
         WordHistory word = words.get(kanjiId);
         return word == null ? Tally.NONE : word.byDirection().getOrDefault(direction, Tally.NONE);
     }
 
-    public Tally directionTally(String direction) {
+    public Tally directionTally(QuizDirection direction) {
         return directions.getOrDefault(direction, Tally.NONE);
     }
 }

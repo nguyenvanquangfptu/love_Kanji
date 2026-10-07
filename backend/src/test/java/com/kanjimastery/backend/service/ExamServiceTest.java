@@ -127,9 +127,9 @@ class ExamServiceTest {
         List<ExamQuestion> writing = List.of(question(3L, QuizDirection.READING_TO_KANJI, 16L));
         List<ExamQuestion> meaning = List.of(question(4L, QuizDirection.MEANING, 15L),
                 question(5L, QuizDirection.MEANING, 17L), question(7L, QuizDirection.MEANING, 18L));
-        when(questionRepository.findRandomByLevelAndSkill("N5", QuizDirection.KANJI_TO_READING, 8)).thenReturn(reading);
-        when(questionRepository.findRandomByLevelAndSkill("N5", QuizDirection.READING_TO_KANJI, 8)).thenReturn(writing);
-        when(questionRepository.findRandomByLevelAndSkill("N5", QuizDirection.MEANING, 8)).thenReturn(meaning);
+        when(questionRepository.findRandomByLevelAndSkill("N5", QuizDirection.KANJI_TO_READING.name(), 8)).thenReturn(reading);
+        when(questionRepository.findRandomByLevelAndSkill("N5", QuizDirection.READING_TO_KANJI.name(), 8)).thenReturn(writing);
+        when(questionRepository.findRandomByLevelAndSkill("N5", QuizDirection.MEANING.name(), 8)).thenReturn(meaning);
         when(questionRepository.findRandomUnclassifiedByLevel("N5", 8)).thenReturn(List.of());
         when(questionRepository.findAllWithWordsByIdIn(List.of(1L, 2L, 6L, 3L, 4L, 5L, 7L)))
                 .thenReturn(Stream.of(reading, writing, meaning).flatMap(List::stream).toList());
@@ -236,7 +236,7 @@ class ExamServiceTest {
                 .isCorrect(correct).build();
     }
 
-    private static ExamQuestion question(Long id, String skill, Long... kanjiIds) {
+    private static ExamQuestion question(Long id, QuizDirection skill, Long... kanjiIds) {
         return ExamQuestion.builder().id(id).jlptLevel("N5").questionText("Câu " + id).optionA("1").optionB("2")
                 .optionC("3").optionD("4").correctOption("A").skill(skill).kanjiIds(Set.of(kanjiIds)).build();
     }

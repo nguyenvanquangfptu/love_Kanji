@@ -284,7 +284,7 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
                 .isEqualTo(ExamSittingStatus.IN_PROGRESS);
     }
 
-    private ExamQuestion question(String type, String skill, Long wordId) {
+    private ExamQuestion question(String type, QuizDirection skill, Long wordId) {
         return questionRepository.save(ExamQuestion.builder().jlptLevel(LEVEL).questionText(type)
                 .optionA("1").optionB("2").optionC("3").optionD("4").correctOption("A")
                 .skill(skill).questionType(type).kanjiIds(Set.of(wordId)).build());

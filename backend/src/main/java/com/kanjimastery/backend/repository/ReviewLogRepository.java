@@ -1,5 +1,7 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.CardState;
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.ReviewLog;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -66,7 +68,7 @@ public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
     interface WordDirectionStats {
         Long getKanjiId();
 
-        String getDirection();
+        QuizDirection getDirection();
 
         long getAnswers();
 
@@ -90,7 +92,7 @@ public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
                                                 @Param("since") LocalDateTime since);
 
     interface DirectionStats {
-        String getDirection();
+        QuizDirection getDirection();
 
         long getAnswers();
 
@@ -110,7 +112,7 @@ public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
     interface QuizMistake {
         Long getKanjiId();
 
-        String getDirection();
+        QuizDirection getDirection();
 
         String getChosenAnswer();
 
@@ -146,7 +148,7 @@ public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
     interface Activity {
         LocalDateTime getReviewedAt();
 
-        String getStateBefore();
+        CardState getStateBefore();
 
         Boolean getScheduled();
 

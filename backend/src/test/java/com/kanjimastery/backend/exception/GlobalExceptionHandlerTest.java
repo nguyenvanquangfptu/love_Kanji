@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.exception;
 
+import com.kanjimastery.backend.model.SchedulerType;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -8,6 +9,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
@@ -52,10 +54,27 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void unknownEnumValueInBody_shouldNameTheFieldAndTheAllowedValues() throws Exception {
+        mockMvc.perform(post("/schedules").contentType(MediaType.APPLICATION_JSON).content("{\"scheduler\": \"ANKI\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0]").value("scheduler: phải là một trong SM2, FSRS"));
+    }
+
+    @Test
+    void unknownEnumValueInQuery_shouldNameTheParameterAndTheAllowedValues() throws Exception {
+        mockMvc.perform(get("/schedules").param("scheduler", "ANKI"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0]").value("scheduler: phải là một trong SM2, FSRS"));
+    }
+
+    @Test
     void unexpectedFailure_shouldStillAnswer500() throws Exception {
         mockMvc.perform(get("/boom"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.message").value("Đã xảy ra lỗi hệ thống, vui lòng thử lại sau"));
+    }
+
+    record Schedule(SchedulerType scheduler) {
     }
 
     @RestController
@@ -69,6 +88,16 @@ class GlobalExceptionHandlerTest {
         @PostMapping("/items")
         Map<String, String> create(@RequestBody Map<String, String> body) {
             return body;
+        }
+
+        @PostMapping("/schedules")
+        SchedulerType schedule(@RequestBody Schedule body) {
+            return body.scheduler();
+        }
+
+        @GetMapping("/schedules")
+        SchedulerType schedules(@RequestParam SchedulerType scheduler) {
+            return scheduler;
         }
 
         @GetMapping("/boom")

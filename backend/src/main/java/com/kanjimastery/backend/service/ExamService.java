@@ -13,6 +13,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -53,10 +54,6 @@ import com.kanjimastery.backend.repository.UserExamAttemptRepository;
 @Service
 @RequiredArgsConstructor
 public class ExamService {
-
-    /** Thứ tự kỹ năng khi chia câu thi và khi báo điểm: đọc, viết, nghĩa. */
-    private static final List<String> SKILLS =
-            List.of(QuizDirection.KANJI_TO_READING, QuizDirection.READING_TO_KANJI, QuizDirection.MEANING);
 
     private final ExamQuestionRepository questionRepository;
     private final UserExamAttemptRepository attemptRepository;
@@ -116,8 +113,8 @@ public class ExamService {
      */
     private List<ExamQuestion> pickQuestions(String level, int count) {
         List<List<ExamQuestion>> candidates = new ArrayList<>();
-        for (String skill : SKILLS) {
-            candidates.add(questionRepository.findRandomByLevelAndSkill(level, skill, count * 2));
+        for (QuizDirection skill : QuizDirection.values()) {
+            candidates.add(questionRepository.findRandomByLevelAndSkill(level, skill.name(), count * 2));
         }
         candidates.add(questionRepository.findRandomUnclassifiedByLevel(level, count * 2));
         Map<Long, ExamQuestion> withWords = questionRepository
@@ -318,10 +315,10 @@ public class ExamService {
                 .toList();
     }
 
-    /** Số câu đúng trên số câu theo từng kỹ năng: đọc, viết, rồi nghĩa. */
+    /** Số câu đúng trên số câu theo từng kỹ năng, theo thứ tự khai báo của {@link QuizDirection}: đọc, viết, rồi nghĩa. */
     static List<ExamReviewResponse.SkillScore> skillScores(List<QuestionReviewItem> items) {
-        Map<String, int[]> bySkill = new LinkedHashMap<>();
-        for (String skill : SKILLS) {
+        Map<QuizDirection, int[]> bySkill = new EnumMap<>(QuizDirection.class);
+        for (QuizDirection skill : QuizDirection.values()) {
             bySkill.put(skill, new int[2]);
         }
         for (QuestionReviewItem item : items) {

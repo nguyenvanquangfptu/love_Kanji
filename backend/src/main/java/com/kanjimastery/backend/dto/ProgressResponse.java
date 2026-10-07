@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -51,7 +52,7 @@ public class ProgressResponse {
     @Builder
     @AllArgsConstructor
     public static class Direction {
-        private String direction;
+        private QuizDirection direction;
         private long answers;
         private long correct;
     }
@@ -74,7 +75,7 @@ public class ProgressResponse {
         private String character;
         private String reading;
         private String meaning;
-        private String direction;
+        private QuizDirection direction;
         private String chosenAnswer;
         private long times;
     }

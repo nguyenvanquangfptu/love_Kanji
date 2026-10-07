@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.UserKanjiSrs;
 import com.kanjimastery.backend.repository.ReviewLogRepository;
 import com.kanjimastery.backend.repository.ReviewLogRepository.DirectionStats;
@@ -45,10 +46,10 @@ public class LearnerHistoryService {
         Map<Long, UserKanjiSrs> cards = srsRepository.findAllByUserIdAndKanjiIdIn(userId, kanjiIds).stream()
                 .collect(Collectors.toMap(UserKanjiSrs::getKanjiId, Function.identity()));
 
-        Map<Long, Map<String, Tally>> byDirection = new HashMap<>();
+        Map<Long, Map<QuizDirection, Tally>> byDirection = new HashMap<>();
         Map<Long, Long> recentErrors = new HashMap<>();
         for (WordDirectionStats row : reviewLogRepository.wordDirectionStats(userId, kanjiIds, now.minus(RECENT_ERROR_WINDOW))) {
-            Map<String, Tally> directions = byDirection.computeIfAbsent(row.getKanjiId(), id -> new HashMap<>());
+            Map<QuizDirection, Tally> directions = byDirection.computeIfAbsent(row.getKanjiId(), id -> new HashMap<>());
             if (row.getDirection() != null) {
                 directions.put(row.getDirection(), new Tally(row.getAnswers(), row.getErrors()));
             }
@@ -58,7 +59,7 @@ public class LearnerHistoryService {
         byDirection.forEach((kanjiId, directions) ->
                 words.put(kanjiId, new WordHistory(directions, recentErrors.getOrDefault(kanjiId, 0L))));
 
-        Map<String, Tally> learnerDirections = reviewLogRepository.quizDirectionStats(userId, now.minus(DIRECTION_WINDOW))
+        Map<QuizDirection, Tally> learnerDirections = reviewLogRepository.quizDirectionStats(userId, now.minus(DIRECTION_WINDOW))
                 .stream()
                 .filter(row -> row.getDirection() != null)
                 .collect(Collectors.toMap(DirectionStats::getDirection, row -> new Tally(row.getAnswers(), row.getErrors())));
@@ -75,11 +76,11 @@ public class LearnerHistoryService {
      * Một truy vấn cho cả bài.
      */
     @Transactional(readOnly = true)
-    public Map<Long, Map<String, List<PastMistake>>> pastMistakes(Long userId, Collection<Long> kanjiIds) {
+    public Map<Long, Map<QuizDirection, List<PastMistake>>> pastMistakes(Long userId, Collection<Long> kanjiIds) {
         if (kanjiIds.isEmpty()) {
             return Map.of();
         }
-        Map<Long, Map<String, List<PastMistake>>> result = new HashMap<>();
+        Map<Long, Map<QuizDirection, List<PastMistake>>> result = new HashMap<>();
         for (QuizMistake row : reviewLogRepository.quizMistakes(userId, kanjiIds)) {
             result.computeIfAbsent(row.getKanjiId(), id -> new HashMap<>())
                     .computeIfAbsent(row.getDirection(), direction -> new ArrayList<>())

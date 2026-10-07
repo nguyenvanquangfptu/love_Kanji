@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.UserKanjiSrs;
 import com.kanjimastery.backend.service.LearnerHistory.Tally;
@@ -114,13 +115,13 @@ final class AdaptiveQuizPlanner {
      * Hướng hỏi cho từ có cách đọc, xác suất tỉ lệ với độ yếu của người học ở mỗi hướng với chính từ đó:
      * {@code (số lần sai + 2 × tỉ lệ sai chung theo hướng đó) / (số lần hỏi + 2) + 0,1}. Chưa có lịch sử thì 50/50.
      */
-    static String chooseDirection(Kanji kanji, LearnerHistory history, RandomGenerator random) {
+    static QuizDirection chooseDirection(Kanji kanji, LearnerHistory history, RandomGenerator random) {
         double toReading = weakness(kanji.getId(), KANJI_TO_READING, history);
         double toKanji = weakness(kanji.getId(), READING_TO_KANJI, history);
         return random.nextDouble() * (toReading + toKanji) < toReading ? KANJI_TO_READING : READING_TO_KANJI;
     }
 
-    static double weakness(Long kanjiId, String direction, LearnerHistory history) {
+    static double weakness(Long kanjiId, QuizDirection direction, LearnerHistory history) {
         Tally learner = history.directionTally(direction);
         double learnerErrorRate = (learner.errors() + 1.0) / (learner.answers() + 2.0);
         Tally word = history.tally(kanjiId, direction);

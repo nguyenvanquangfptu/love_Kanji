@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -58,7 +59,7 @@ public class ExamReviewResponse {
     @AllArgsConstructor
     public static class SkillScore {
         /** Như hướng hỏi trắc nghiệm: KANJI_TO_READING (đọc), READING_TO_KANJI (viết), MEANING (nghĩa). */
-        private String skill;
+        private QuizDirection skill;
         private int correct;
         private int total;
     }

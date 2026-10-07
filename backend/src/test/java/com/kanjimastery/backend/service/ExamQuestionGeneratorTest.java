@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionSource;
 import com.kanjimastery.backend.model.Kanji;
@@ -60,7 +61,7 @@ class ExamQuestionGeneratorTest {
     void generate_shouldAskEveryJlptTypeTheWordAllows_andMeaningForEveryWord_skippingWhatExists() {
         when(kanjiRepository.findAllByTagNamePrefix("N4-%"))
                 .thenReturn(List.of(newspaper, school, teacher, see, yes, hospital));
-        when(questionRepository.generatedQuestionWords("N4")).thenReturn(List.of(generated(2L, MEANING)));
+        when(questionRepository.generatedQuestionWords("N4")).thenReturn(List.of(generated(2L, MEANING.name())));
 
         ExamQuestionGenerator.Result result = generator.generate("n4");
 
@@ -70,11 +71,11 @@ class ExamQuestionGeneratorTest {
         // chữ Hán, 病院 không có câu ví dụ: chỉ hỏi nghĩa.
         assertThat(saved).extracting(question -> question.getKanjiIds().iterator().next(), ExamQuestionGeneratorTest::kind)
                 .containsExactlyInAnyOrder(
-                        tuple(1L, KANJI_READING), tuple(1L, ORTHOGRAPHY), tuple(1L, CONTEXT), tuple(1L, MEANING),
+                        tuple(1L, KANJI_READING), tuple(1L, ORTHOGRAPHY), tuple(1L, CONTEXT), tuple(1L, MEANING.name()),
                         tuple(2L, KANJI_READING), tuple(2L, ORTHOGRAPHY), tuple(2L, CONTEXT),
-                        tuple(3L, KANJI_READING), tuple(3L, ORTHOGRAPHY), tuple(3L, CONTEXT), tuple(3L, MEANING),
-                        tuple(4L, KANJI_READING), tuple(4L, MEANING),
-                        tuple(5L, MEANING), tuple(6L, MEANING));
+                        tuple(3L, KANJI_READING), tuple(3L, ORTHOGRAPHY), tuple(3L, CONTEXT), tuple(3L, MEANING.name()),
+                        tuple(4L, KANJI_READING), tuple(4L, MEANING.name()),
+                        tuple(5L, MEANING.name()), tuple(6L, MEANING.name()));
         assertThat(result).isEqualTo(new ExamQuestionGenerator.Result("N4", 6, 15));
         assertThat(saved).allSatisfy(question -> {
             assertThat(question.getJlptLevel()).isEqualTo("N4");
@@ -93,12 +94,12 @@ class ExamQuestionGeneratorTest {
         assertThat(writing.getHighlight()).isEqualTo("しんぶん");
         assertThat(correctAnswer(writing)).isEqualTo("新聞");
 
-        ExamQuestion meaning = question(saved, 1L, MEANING);
+        ExamQuestion meaning = question(saved, 1L, MEANING.name());
         assertThat(meaning.getQuestionText()).isEqualTo("Từ 「新聞」 (しんぶん) có nghĩa là gì?");
         // Câu hỏi nghĩa vẫn kèm câu ví dụ làm ngữ cảnh, như trắc nghiệm.
         assertThat(meaning.getSentence()).isEqualTo("毎朝新聞を読みます。");
         assertThat(meaning.getHighlight()).isEqualTo("新聞");
-        assertThat(question(saved, 6L, MEANING).getSentence()).isNull();
+        assertThat(question(saved, 6L, MEANING.name()).getSentence()).isNull();
         assertThat(correctAnswer(meaning)).isEqualTo("Báo");
         assertThat(meaning.getExplanation()).isEqualTo("新聞 (しんぶん): Báo");
 
@@ -230,7 +231,7 @@ class ExamQuestionGeneratorTest {
 
     /** Dạng câu JLPT, hoặc kỹ năng với câu hỏi nghĩa (chỉ dùng cho thi nhanh). */
     private static String kind(ExamQuestion question) {
-        return question.getQuestionType() != null ? question.getQuestionType() : question.getSkill();
+        return question.getQuestionType() != null ? question.getQuestionType() : String.valueOf(question.getSkill());
     }
 
     private static String correctAnswer(ExamQuestion question) {
@@ -242,7 +243,7 @@ class ExamQuestionGeneratorTest {
         };
     }
 
-    private static GeneratedQuestionWord generated(Long kanjiId, String skill) {
+    private static GeneratedQuestionWord generated(Long kanjiId, String kind) {
         return new GeneratedQuestionWord() {
             @Override
             public Long getKanjiId() {
@@ -251,7 +252,7 @@ class ExamQuestionGeneratorTest {
 
             @Override
             public String getKind() {
-                return skill;
+                return kind;
             }
         };
     }

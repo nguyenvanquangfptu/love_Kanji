@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.config.RateLimitProperties;
 import com.kanjimastery.backend.dto.QuizAnswerRequest;
 import com.kanjimastery.backend.dto.QuizAnswerResponse;
@@ -68,7 +69,7 @@ class QuizAnswerServiceTest {
     void submit_shouldRejectRequest_whenUserExceedsAnswerLimit() {
         when(rateLimiter.tryAcquire("ratelimit:quiz-answer:taro", 120, Duration.ofSeconds(60))).thenReturn(false);
 
-        assertThatThrownBy(() -> quizAnswerService.submit("taro", request(1L, "KANJI_TO_READING", "あく", 2_000)))
+        assertThatThrownBy(() -> quizAnswerService.submit("taro", request(1L, QuizDirection.KANJI_TO_READING, "あく", 2_000)))
                 .isInstanceOf(TooManyRequestsException.class);
         verifyNoInteractions(kanjiRepository, srsService);
     }
@@ -77,11 +78,11 @@ class QuizAnswerServiceTest {
     void submit_shouldGradeOnServerAndRateByResponseTime_whenAnswerIsCorrect() {
         givenAllowed();
         when(kanjiRepository.findById(1L)).thenReturn(Optional.of(aku));
-        when(responseTimeRater.rateCorrectAnswer(USER_ID, "KANJI_TO_READING", 2_000)).thenReturn(ReviewRating.EASY);
+        when(responseTimeRater.rateCorrectAnswer(USER_ID, QuizDirection.KANJI_TO_READING, 2_000)).thenReturn(ReviewRating.EASY);
         LocalDateTime next = LocalDateTime.now().plusDays(6);
         when(srsService.recordQuizAnswer(eq(USER_ID), eq(1L), any())).thenReturn(Optional.of(next));
 
-        QuizAnswerResponse response = quizAnswerService.submit("taro", request(1L, "KANJI_TO_READING", "あく", 2_000));
+        QuizAnswerResponse response = quizAnswerService.submit("taro", request(1L, QuizDirection.KANJI_TO_READING, "あく", 2_000));
 
         assertThat(response.isCorrect()).isTrue();
         assertThat(response.isInReview()).isTrue();
@@ -100,11 +101,11 @@ class QuizAnswerServiceTest {
         when(srsService.recordQuizAnswer(eq(USER_ID), eq(1L), any())).thenReturn(Optional.of(LocalDateTime.now()));
 
         // ひらく là cách đọc của một dòng 開く khác - với dòng đang hỏi thì vẫn là sai.
-        QuizAnswerResponse response = quizAnswerService.submit("taro", request(1L, "KANJI_TO_READING", "ひらく", 1_500));
+        QuizAnswerResponse response = quizAnswerService.submit("taro", request(1L, QuizDirection.KANJI_TO_READING, "ひらく", 1_500));
 
         assertThat(response.isCorrect()).isFalse();
         assertThat(response.isInReview()).isTrue();
-        verify(responseTimeRater, never()).rateCorrectAnswer(anyLong(), anyString(), anyInt());
+        verify(responseTimeRater, never()).rateCorrectAnswer(anyLong(), any(), anyInt());
         SrsService.Answer answer = recordedAnswer();
         assertThat(answer.rating()).isEqualTo(ReviewRating.AGAIN);
         assertThat(answer.chosenAnswer()).isEqualTo("ひらく");
@@ -116,19 +117,19 @@ class QuizAnswerServiceTest {
         when(kanjiRepository.findById(1L)).thenReturn(Optional.of(aku));
         when(srsService.recordQuizAnswer(eq(USER_ID), eq(1L), any())).thenReturn(Optional.empty());
 
-        assertThat(quizAnswerService.submit("taro", request(1L, "READING_TO_KANJI", "開く", null)).isCorrect()).isTrue();
-        assertThat(quizAnswerService.submit("taro", request(1L, "READING_TO_KANJI", "閉く", null)).isCorrect()).isFalse();
-        assertThat(quizAnswerService.submit("taro", request(1L, "MEANING", "Mở (cửa)", null)).isCorrect()).isTrue();
+        assertThat(quizAnswerService.submit("taro", request(1L, QuizDirection.READING_TO_KANJI, "開く", null)).isCorrect()).isTrue();
+        assertThat(quizAnswerService.submit("taro", request(1L, QuizDirection.READING_TO_KANJI, "閉く", null)).isCorrect()).isFalse();
+        assertThat(quizAnswerService.submit("taro", request(1L, QuizDirection.MEANING, "Mở (cửa)", null)).isCorrect()).isTrue();
     }
 
     @Test
     void submit_shouldDropImplausibleResponseTime() {
         givenAllowed();
         when(kanjiRepository.findById(1L)).thenReturn(Optional.of(aku));
-        when(responseTimeRater.rateCorrectAnswer(USER_ID, "KANJI_TO_READING", null)).thenReturn(ReviewRating.GOOD);
+        when(responseTimeRater.rateCorrectAnswer(USER_ID, QuizDirection.KANJI_TO_READING, null)).thenReturn(ReviewRating.GOOD);
         when(srsService.recordQuizAnswer(eq(USER_ID), eq(1L), any())).thenReturn(Optional.empty());
 
-        QuizAnswerResponse response = quizAnswerService.submit("taro", request(1L, "KANJI_TO_READING", "あく", 600_000));
+        QuizAnswerResponse response = quizAnswerService.submit("taro", request(1L, QuizDirection.KANJI_TO_READING, "あく", 600_000));
 
         assertThat(response.isInReview()).isFalse();
         assertThat(response.getNextReviewAt()).isNull();
@@ -140,7 +141,7 @@ class QuizAnswerServiceTest {
         when(rateLimiter.tryAcquire(anyString(), anyInt(), any())).thenReturn(true);
         when(kanjiRepository.findById(2L)).thenReturn(Optional.of(katakanaWord));
 
-        assertThatThrownBy(() -> quizAnswerService.submit("taro", request(2L, "KANJI_TO_READING", "テレビ", 1_000)))
+        assertThatThrownBy(() -> quizAnswerService.submit("taro", request(2L, QuizDirection.KANJI_TO_READING, "テレビ", 1_000)))
                 .isInstanceOf(BadRequestException.class);
         verifyNoInteractions(srsService);
     }
@@ -158,7 +159,7 @@ class QuizAnswerServiceTest {
         return captor.getValue();
     }
 
-    private static QuizAnswerRequest request(Long kanjiId, String direction, String chosenAnswer, Integer responseMs) {
+    private static QuizAnswerRequest request(Long kanjiId, QuizDirection direction, String chosenAnswer, Integer responseMs) {
         QuizAnswerRequest request = new QuizAnswerRequest();
         request.setKanjiId(kanjiId);
         request.setDirection(direction);

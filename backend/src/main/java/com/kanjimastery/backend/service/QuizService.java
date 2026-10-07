@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.config.RateLimitProperties;
 import com.kanjimastery.backend.dto.QuizQuestionResponse;
 import com.kanjimastery.backend.exception.BadRequestException;
@@ -146,7 +147,7 @@ public class QuizService {
 
         Map<Long, String> newSentences = generateMissingSentences(selected, pool);
 
-        Map<Long, Map<String, List<PastMistake>>> pastMistakes =
+        Map<Long, Map<QuizDirection, List<PastMistake>>> pastMistakes =
                 learnerHistoryService.pastMistakes(userId, selected.stream().map(Kanji::getId).toList());
         List<PlannedQuestion> plans = selected.stream()
                 .map(kanji -> plan(kanji, history, pastMistakes.getOrDefault(kanji.getId(), Map.of()), random))
@@ -173,9 +174,9 @@ public class QuizService {
     }
 
     /** Hướng hỏi theo điểm yếu (hoặc ngẫu nhiên đều); từ không có cách đọc thì chỉ hỏi được nghĩa. */
-    private PlannedQuestion plan(Kanji kanji, LearnerHistory history, Map<String, List<PastMistake>> pastMistakes,
+    private PlannedQuestion plan(Kanji kanji, LearnerHistory history, Map<QuizDirection, List<PastMistake>> pastMistakes,
                                  RandomGenerator random) {
-        String direction;
+        QuizDirection direction;
         if (!StringUtils.hasText(kanji.getReading())) {
             direction = MEANING;
         } else {

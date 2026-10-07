@@ -93,7 +93,7 @@ class ExamDiagnosisServiceTest {
                 .isCorrect(correct).build();
     }
 
-    private static ExamQuestion question(Long id, String skill, Long... kanjiIds) {
+    private static ExamQuestion question(Long id, QuizDirection skill, Long... kanjiIds) {
         return ExamQuestion.builder().id(id).jlptLevel("N5").questionText("Câu " + id).optionA("một").optionB("hai")
                 .optionC("ぎん").optionD("きん").correctOption(id == 1L ? "D" : "A").skill(skill)
                 .kanjiIds(Set.of(kanjiIds)).build();

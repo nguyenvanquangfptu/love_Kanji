@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionSource;
 import com.kanjimastery.backend.model.JlptQuestionType;
@@ -86,7 +87,7 @@ public class ExamQuestionGenerator {
         List<Kanji> katakanaWords = new ArrayList<>();
         boolean asksKatakana = KATAKANA_ORTHOGRAPHY_LEVELS.contains(normalized);
         for (Kanji word : pool) {
-            for (String skill : skillsFor(word)) {
+            for (QuizDirection skill : skillsFor(word)) {
                 if (!existing.contains(kind(skill) + ":" + word.getId())) {
                     plans.add(questionBuilder.plan(word, skill, List.of()));
                 }
@@ -120,17 +121,17 @@ public class ExamQuestionGenerator {
     }
 
     /** Khoá chống sinh trùng: dạng câu JLPT nếu có, không thì kỹ năng (câu hỏi nghĩa). */
-    private static String kind(String skill) {
+    private static String kind(QuizDirection skill) {
         return switch (skill) {
             case KANJI_TO_READING -> JlptQuestionType.KANJI_READING;
             case READING_TO_KANJI -> JlptQuestionType.ORTHOGRAPHY;
-            default -> skill;
+            case MEANING -> skill.name();
         };
     }
 
     /** Đọc và viết cần chữ Hán, cách đọc và một câu ví dụ chứa từ; nghĩa thì từ nào cũng hỏi được. */
-    private static List<String> skillsFor(Kanji word) {
-        List<String> skills = new ArrayList<>();
+    private static List<QuizDirection> skillsFor(Kanji word) {
+        List<QuizDirection> skills = new ArrayList<>();
         boolean hasKanji = word.getCharacter().codePoints().anyMatch(QuizDistractorGenerator::isKanji);
         if (hasKanji && StringUtils.hasText(word.getReading()) && StringUtils.hasText(word.getExampleSentence())
                 && word.getExampleSentence().contains(word.getCharacter())) {

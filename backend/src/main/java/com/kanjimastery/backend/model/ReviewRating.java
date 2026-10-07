@@ -1,29 +1,43 @@
 package com.kanjimastery.backend.model;
 
 /**
- * Thang chấm một lần ôn, giống Anki/FSRS: 1 Quên, 2 Khó, 3 Nhớ, 4 Dễ (cột {@code review_logs.rating}).
- * FSRS dùng thẳng thang này; SM-2 chấm điểm 0-5 nên cần đổi qua {@link #toSm2Quality(int)}.
+ * Thang chấm một lần ôn, giống Anki/FSRS: 1 Quên, 2 Khó, 3 Nhớ, 4 Dễ (cột {@code review_logs.rating}, lưu bằng
+ * {@link ReviewRatingConverter}). FSRS dùng thẳng {@link #value()}; SM-2 chấm điểm 0-5 nên dùng {@link #sm2Quality()}.
  */
-public final class ReviewRating {
-    public static final int AGAIN = 1;
-    public static final int HARD = 2;
-    public static final int GOOD = 3;
-    public static final int EASY = 4;
+public enum ReviewRating {
+    AGAIN(1, 1),
+    HARD(2, 3),
+    GOOD(3, 4),
+    EASY(4, 5);
 
-    private ReviewRating() {
+    private final int value;
+    private final int sm2Quality;
+
+    ReviewRating(int value, int sm2Quality) {
+        this.value = value;
+        this.sm2Quality = sm2Quality;
+    }
+
+    /** Số 1-4 lưu trong DB và dùng trong công thức FSRS. */
+    public int value() {
+        return value;
+    }
+
+    /** Điểm SM-2: Quên 1 (dưới 3 là quên: học lại từ đầu), Khó 3, Nhớ 4, Dễ 5. */
+    public int sm2Quality() {
+        return sm2Quality;
     }
 
     /**
-     * Quên 1 (dưới 3 là quên: học lại từ đầu), Khó 3, Nhớ 4, Dễ 5. Mức ngoài 1-4 là lỗi lập trình: rating từ người học đã
-     * được {@code ReviewRequest} kiểm tra, rating của trắc nghiệm do server tự tính.
+     * Mức chấm của số 1-4. Số ngoài khoảng là lỗi lập trình: rating từ người học đã được {@code ReviewRequest} kiểm
+     * tra, rating của trắc nghiệm do server tự tính.
      */
-    public static int toSm2Quality(int rating) {
-        return switch (rating) {
-            case AGAIN -> 1;
-            case HARD -> 3;
-            case GOOD -> 4;
-            case EASY -> 5;
-            default -> throw new IllegalArgumentException("Mức đánh giá (rating) phải nằm trong khoảng 1-4: " + rating);
-        };
+    public static ReviewRating fromValue(int value) {
+        for (ReviewRating rating : values()) {
+            if (rating.value == value) {
+                return rating;
+            }
+        }
+        throw new IllegalArgumentException("Mức đánh giá (rating) phải nằm trong khoảng 1-4: " + value);
     }
 }

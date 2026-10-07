@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.ReviewRating;
 import com.kanjimastery.backend.repository.ReviewLogRepository;
 import com.kanjimastery.backend.repository.ReviewLogRepository.ResponseTimeStats;
@@ -16,7 +17,7 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class ResponseTimeRaterTest {
 
-    private static final String DIRECTION = "KANJI_TO_READING";
+    private static final QuizDirection DIRECTION = QuizDirection.KANJI_TO_READING;
 
     @Mock
     private ReviewLogRepository reviewLogRepository;
@@ -70,7 +71,7 @@ class ResponseTimeRaterTest {
     }
 
     private void givenStats(Double medianMs, long samples) {
-        when(reviewLogRepository.correctQuizResponseTimes(7L, DIRECTION, ResponseTimeRater.RECENT_SAMPLES))
+        when(reviewLogRepository.correctQuizResponseTimes(7L, DIRECTION.name(), ResponseTimeRater.RECENT_SAMPLES))
                 .thenReturn(new ResponseTimeStats() {
                     @Override
                     public Double getMedianMs() {

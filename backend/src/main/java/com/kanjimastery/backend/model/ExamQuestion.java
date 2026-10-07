@@ -56,9 +56,10 @@ public class ExamQuestion {
     @Column(length = 100)
     private String highlight;
 
-    /** Kỹ năng câu hỏi kiểm tra, như hướng hỏi trắc nghiệm ({@link QuizDirection}); null nếu chưa phân loại. */
+    /** Kỹ năng câu hỏi kiểm tra, theo hướng hỏi trắc nghiệm; null nếu chưa phân loại. */
+    @Enumerated(EnumType.STRING)
     @Column(length = 20)
-    private String skill;
+    private QuizDirection skill;
 
     /** Dạng câu trong đề JLPT ({@link JlptQuestionType}); null = chỉ dùng cho thi nhanh. */
     @Column(name = "question_type", length = 20)

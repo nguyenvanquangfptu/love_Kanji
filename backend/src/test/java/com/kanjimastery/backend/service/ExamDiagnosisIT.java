@@ -98,8 +98,8 @@ class ExamDiagnosisIT extends AbstractIntegrationTest {
                 .extracting(ReviewLog::getKanjiId, ReviewLog::getDirection, ReviewLog::getCorrect,
                         ReviewLog::getRating, ReviewLog::getScheduled, ReviewLog::getChosenAnswer)
                 .containsExactlyInAnyOrder(
-                        tuple(water, QuizDirection.MEANING, false, (short) ReviewRating.AGAIN, false, "Lửa"),
-                        tuple(gold, QuizDirection.MEANING, true, (short) ReviewRating.GOOD, false, "Vàng, tiền"));
+                        tuple(water, QuizDirection.MEANING, false, ReviewRating.AGAIN, false, "Lửa"),
+                        tuple(gold, QuizDirection.MEANING, true, ReviewRating.GOOD, false, "Vàng, tiền"));
         // Từ làm sai chưa có trong lịch ôn: được thêm vào như từ đã gặp, đến hạn ngay; từ làm đúng thì không.
         assertThat(srsRepository.findByUserIdAndKanjiId(userId, water)).hasValueSatisfying(card ->
                 assertThat(card.getNextReviewAt()).isBeforeOrEqualTo(LocalDateTime.now()));

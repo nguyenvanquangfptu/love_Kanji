@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.SchedulerType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -18,7 +19,7 @@ public class LearningProfileResponse {
     /** null = để app tính. */
     private Integer newWordsPerDay;
     /** SM2 hoặc FSRS. */
-    private String scheduler;
+    private SchedulerType scheduler;
     /** Tỉ lệ nhớ mong muốn khi dùng FSRS. */
     private double desiredRetention;
     /** Mô hình trí nhớ FSRS của người học: tham số chung hay đã tối ưu riêng. */

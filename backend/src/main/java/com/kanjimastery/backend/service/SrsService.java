@@ -26,6 +26,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -34,8 +35,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import com.kanjimastery.backend.model.CardState;
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.ReviewLog;
 import com.kanjimastery.backend.model.ReviewRating;
 import com.kanjimastery.backend.model.ReviewSource;
@@ -64,13 +65,12 @@ public class SrsService {
     /**
      * Một lần người học trả lời một từ.
      *
-     * @param source       {@link ReviewSource}
      * @param direction    hướng hỏi của trắc nghiệm, null với thẻ ôn tập
-     * @param rating       {@link ReviewRating}
      * @param responseMs   đã qua {@link ResponseTimeRater#normalize(Integer)}
      * @param chosenAnswer đáp án đã chọn trong trắc nghiệm, null với thẻ ôn tập
      */
-    public record Answer(String source, String direction, boolean correct, int rating, Integer responseMs,
+    public record Answer(ReviewSource source, QuizDirection direction, boolean correct, ReviewRating rating,
+                         Integer responseMs,
                          String chosenAnswer) {
     }
 
@@ -187,7 +187,7 @@ public class SrsService {
             throw new ResourceNotFoundException("Không tìm thấy Kanji với id: " + request.getKanjiId());
         }
 
-        int rating = request.getRating();
+        ReviewRating rating = ReviewRating.fromValue(request.getRating());
         Answer answer = new Answer(ReviewSource.FLASHCARD, null, rating != ReviewRating.AGAIN, rating,
                 ResponseTimeRater.normalize(request.getResponseMs()), null);
         UserKanjiSrs card = srsRepository.findByUserIdAndKanjiId(userId, request.getKanjiId()).orElse(null);
@@ -275,15 +275,16 @@ public class SrsService {
     private record Outcome(SrsCalculatorService.SrsResult sm2, Fsrs.Memory memory, int intervalDays) {
     }
 
-    private Outcome outcome(UserKanjiSrs card, int rating, LocalDateTime now, SchedulingSettings settings) {
+    private Outcome outcome(UserKanjiSrs card, ReviewRating rating, LocalDateTime now, SchedulingSettings settings) {
         SrsCalculatorService.SrsResult sm2 = srsCalculatorService.calculateNext(
                 card == null ? 0 : card.getRepetitionCount(),
                 card == null ? new BigDecimal("2.50") : card.getEasinessFactor(),
                 card == null ? 0 : card.getReviewIntervalDays(),
-                ReviewRating.toSm2Quality(rating));
+                rating.sm2Quality());
         Fsrs fsrs = settings.fsrs();
         Fsrs.Memory before = memoryBefore(card, fsrs);
-        Fsrs.Memory memory = before == null ? fsrs.first(rating) : fsrs.next(before, rating, elapsedDays(card, now));
+        Fsrs.Memory memory = before == null ? fsrs.first(rating.value())
+                : fsrs.next(before, rating.value(), elapsedDays(card, now));
         int intervalDays = settings.usesFsrs()
                 ? fsrs.interval(memory.stability(), settings.desiredRetention())
                 : sm2.reviewIntervalDays();
@@ -292,8 +293,8 @@ public class SrsService {
 
     /** Số ngày tới lần ôn sau nếu chấm Quên, Khó, Nhớ, Dễ - hiện ngay trên các nút chấm. */
     private List<Integer> previewIntervals(UserKanjiSrs card, LocalDateTime now, SchedulingSettings settings) {
-        return IntStream.rangeClosed(ReviewRating.AGAIN, ReviewRating.EASY)
-                .mapToObj(rating -> outcome(card, rating, now, settings).intervalDays())
+        return Arrays.stream(ReviewRating.values())
+                .map(rating -> outcome(card, rating, now, settings).intervalDays())
                 .toList();
     }
 
@@ -310,9 +311,9 @@ public class SrsService {
             return new Fsrs.Memory(card.getStability(), card.getDifficulty());
         }
         if (card.getRepetitionCount() == 0) {
-            return fsrs.first(ReviewRating.AGAIN);
+            return fsrs.first(ReviewRating.AGAIN.value());
         }
-        double easiest = fsrs.first(ReviewRating.GOOD).difficulty();
+        double easiest = fsrs.first(ReviewRating.GOOD.value()).difficulty();
         double hardness = (2.5 - card.getEasinessFactor().doubleValue()) / (2.5 - 1.3);
         double difficulty = Math.min(Math.max(easiest + hardness * (10 - easiest), 1), 10);
         return new Fsrs.Memory(Math.max(card.getReviewIntervalDays(), 1), difficulty);
@@ -341,7 +342,7 @@ public class SrsService {
                 .source(answer.source())
                 .direction(answer.direction())
                 .correct(answer.correct())
-                .rating((short) answer.rating())
+                .rating(answer.rating())
                 .responseMs(answer.responseMs())
                 .chosenAnswer(answer.chosenAnswer())
                 .stateBefore(CardState.of(card))

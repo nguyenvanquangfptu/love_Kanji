@@ -33,20 +33,21 @@ public class ReviewLog {
     @Column(name = "kanji_id", nullable = false)
     private Long kanjiId;
 
-    /** {@link ReviewSource} */
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
-    private String source;
+    private ReviewSource source;
 
-    /** {@link QuizDirection}; null với thẻ ôn tập. */
+    /** Null với thẻ ôn tập. */
+    @Enumerated(EnumType.STRING)
     @Column(length = 20)
-    private String direction;
+    private QuizDirection direction;
 
     @Column(nullable = false)
     private Boolean correct;
 
-    /** {@link ReviewRating} */
+    @Convert(converter = ReviewRatingConverter.class)
     @Column(nullable = false)
-    private Short rating;
+    private ReviewRating rating;
 
     @Column(name = "response_ms")
     private Integer responseMs;
@@ -54,9 +55,9 @@ public class ReviewLog {
     @Column(name = "chosen_answer", columnDefinition = "TEXT")
     private String chosenAnswer;
 
-    /** {@link CardState} */
+    @Enumerated(EnumType.STRING)
     @Column(name = "state_before", nullable = false, length = 12)
-    private String stateBefore;
+    private CardState stateBefore;
 
     @Column(name = "ef_before", precision = 4, scale = 2)
     private BigDecimal efBefore;

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.config.SrsProperties;
 import com.kanjimastery.backend.dto.AddSrsCardsResponse;
 import com.kanjimastery.backend.dto.DailyCardResponse;
@@ -141,7 +142,7 @@ class SrsServiceTest {
         assertThat(log.getSource()).isEqualTo(ReviewSource.FLASHCARD);
         assertThat(log.getDirection()).isNull();
         assertThat(log.getCorrect()).isTrue();
-        assertThat(log.getRating()).isEqualTo((short) ReviewRating.GOOD);
+        assertThat(log.getRating()).isEqualTo(ReviewRating.GOOD);
         assertThat(log.getStateBefore()).isEqualTo(CardState.NEW);
         assertThat(log.getEfBefore()).isNull();
         assertThat(log.getIntervalBefore()).isNull();
@@ -513,16 +514,16 @@ class SrsServiceTest {
         assertThat(log.getStateBefore()).isEqualTo(CardState.REVIEW);
     }
 
-    private static ReviewRequest reviewRequest(int rating, Integer responseMs) {
+    private static ReviewRequest reviewRequest(ReviewRating rating, Integer responseMs) {
         ReviewRequest request = new ReviewRequest();
         request.setKanjiId(KANJI_ID);
-        request.setRating(rating);
+        request.setRating(rating.value());
         request.setResponseMs(responseMs);
         return request;
     }
 
-    private static SrsService.Answer quizAnswer(boolean correct, int rating) {
-        return new SrsService.Answer(ReviewSource.QUIZ, "KANJI_TO_READING", correct, rating, 3_000, "あく");
+    private static SrsService.Answer quizAnswer(boolean correct, ReviewRating rating) {
+        return new SrsService.Answer(ReviewSource.QUIZ, QuizDirection.KANJI_TO_READING, correct, rating, 3_000, "あく");
     }
 
     /** Thẻ đã ôn ít nhất một lần, lần ôn trước cách {@code nextReviewAt} đúng một khoảng ôn. */
@@ -562,11 +563,11 @@ class SrsServiceTest {
                 .thenReturn(DailyPlanResponse.builder().reviewsToday(reviewsToday).newToday(newToday).build());
     }
 
-    private void givenScheduling(String scheduler, double desiredRetention) {
+    private void givenScheduling(SchedulerType scheduler, double desiredRetention) {
         givenScheduling(scheduler, desiredRetention, Fsrs.withDefaults());
     }
 
-    private void givenScheduling(String scheduler, double desiredRetention, Fsrs fsrs) {
+    private void givenScheduling(SchedulerType scheduler, double desiredRetention, Fsrs fsrs) {
         when(learningProfileService.scheduling(USER_ID))
                 .thenReturn(new SchedulingSettings(scheduler, desiredRetention, fsrs));
     }

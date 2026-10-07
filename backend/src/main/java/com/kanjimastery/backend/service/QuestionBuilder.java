@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.service.LearnerHistoryService.PastMistake;
@@ -47,7 +48,7 @@ public class QuestionBuilder {
      * Hướng hỏi của một câu, các đáp án nhiễu gần đúng và các đáp án sai người học từng chọn cho hướng đó
      * (chưa lọc những đáp án cũng "đúng").
      */
-    public record PlannedQuestion(Kanji kanji, String direction, List<String> nearMisses,
+    public record PlannedQuestion(Kanji kanji, QuizDirection direction, List<String> nearMisses,
                                   List<PastMistake> pastMistakes) {
     }
 
@@ -55,12 +56,12 @@ public class QuestionBuilder {
      * Một câu hỏi đã dựng. {@code shownTrap}: đáp án người học từng chọn sai có mặt trong các lựa chọn;
      * {@code trapWord}: từ có thật viết như đáp án đó (câu hỏi chọn cách viết) để người học so sánh.
      */
-    public record BuiltQuestion(Kanji kanji, String direction, String prompt, String sentence, List<String> choices,
+    public record BuiltQuestion(Kanji kanji, QuizDirection direction, String prompt, String sentence, List<String> choices,
                                 int correctIndex, PastMistake shownTrap, Kanji trapWord) {
     }
 
     /** Câu hỏi theo hướng {@code direction} cho một từ, kèm đáp án nhiễu gần đúng của hướng đó. */
-    public PlannedQuestion plan(Kanji kanji, String direction, List<PastMistake> pastMistakes) {
+    public PlannedQuestion plan(Kanji kanji, QuizDirection direction, List<PastMistake> pastMistakes) {
         List<String> nearMisses = switch (direction) {
             case KANJI_TO_READING -> distractorGenerator.trapReadings(kanji.getReading(), kanji.getCharacter());
             case READING_TO_KANJI -> distractorGenerator.lookAlikeSpellings(kanji.getCharacter());
@@ -99,7 +100,7 @@ public class QuestionBuilder {
     public BuiltQuestion build(PlannedQuestion plan, String exampleSentence, List<Kanji> pool,
                                Map<String, List<Kanji>> existingWords) {
         Kanji kanji = plan.kanji();
-        String direction = plan.direction();
+        QuizDirection direction = plan.direction();
         String reading = kanji.getReading();
         List<Kanji> otherRows = existingWords.getOrDefault(kanji.getCharacter(), List.of()).stream()
                 .filter(row -> !row.getId().equals(kanji.getId()))
@@ -153,7 +154,7 @@ public class QuestionBuilder {
      * Kiểu đề JLPT: hỏi cách đọc thì giữ từ dạng Kanji trong câu; hỏi cách viết thì thay từ đó
      * bằng hiragana. Giao diện gạch chân {@code prompt} bên trong câu.
      */
-    private static String sentenceForQuestion(String exampleSentence, Kanji kanji, String direction) {
+    private static String sentenceForQuestion(String exampleSentence, Kanji kanji, QuizDirection direction) {
         if (!StringUtils.hasText(exampleSentence) || !standsAlone(exampleSentence, kanji.getCharacter())) {
             return null;
         }
