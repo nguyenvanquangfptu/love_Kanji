@@ -64,6 +64,10 @@ class UserKanjiSrsRepositoryIT extends AbstractIntegrationTest {
         assertThat(card.getNextReviewAt()).isEqualTo(now);
         assertThat(card.getLastReviewedAt()).isEqualTo(now);
         assertThat(card.getRepetitionCount()).isZero();
+        assertThat(card.getEasinessFactor()).isEqualByComparingTo("2.50");
         assertThat(card.getLapseCount()).isZero();
+        // Chưa ôn bằng FSRS: hai cột FSRS null nên Hibernate nạp trạng thái FSRS thành null.
+        assertThat(card.getFsrs()).isNull();
+        assertThat(card.getStability()).isNull();
     }
 }

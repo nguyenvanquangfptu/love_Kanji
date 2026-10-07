@@ -29,13 +29,10 @@ public class UserKanjiSrs {
     @Column(name = "kanji_id", nullable = false)
     private Long kanjiId;
 
-    @Column(name = "repetition_count")
+    /** Trạng thái SM-2. */
+    @Embedded
     @Builder.Default
-    private Integer repetitionCount = 0;
-
-    @Column(name = "easiness_factor", precision = 4, scale = 2)
-    @Builder.Default
-    private BigDecimal easinessFactor = new BigDecimal("2.50");
+    private Sm2State sm2 = Sm2State.initial();
 
     @Column(name = "review_interval_days")
     @Builder.Default
@@ -52,15 +49,29 @@ public class UserKanjiSrs {
     @Column(name = "last_reviewed_at")
     private LocalDateTime lastReviewedAt;
 
-    /** Độ ổn định FSRS (số ngày để xác suất nhớ còn 90%); null nếu chưa ôn lần nào từ khi có FSRS. */
-    @Column(name = "stability")
-    private Double stability;
-
-    /** Độ khó FSRS (1-10); null cùng lúc với {@link #stability}. */
-    @Column(name = "difficulty")
-    private Double difficulty;
+    /** Trí nhớ FSRS; null nếu chưa ôn lần nào từ khi có FSRS. */
+    @Embedded
+    private FsrsState fsrs;
 
     /** Cách nhớ riêng người học tự ghi cho từ này. */
     @Column(name = "personal_note", columnDefinition = "TEXT")
     private String personalNote;
+
+    public Integer getRepetitionCount() {
+        return sm2.repetitionCount();
+    }
+
+    public BigDecimal getEasinessFactor() {
+        return sm2.easinessFactor();
+    }
+
+    /** Null nếu chưa ôn lần nào từ khi có FSRS. */
+    public Double getStability() {
+        return fsrs == null ? null : fsrs.stability();
+    }
+
+    /** Null cùng lúc với {@link #getStability()}. */
+    public Double getDifficulty() {
+        return fsrs == null ? null : fsrs.difficulty();
+    }
 }

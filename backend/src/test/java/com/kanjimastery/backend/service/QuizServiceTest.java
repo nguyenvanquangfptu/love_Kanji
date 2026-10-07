@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.Sm2State;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.config.RateLimitProperties;
@@ -115,7 +116,7 @@ class QuizServiceTest {
         // 10 từ đầu đã đến hạn ôn, 20 từ còn lại chưa gặp: 10 câu = 6 từ yếu + 3 từ mới + 1 câu bù.
         HashMap<Long, UserKanjiSrs> dueCards = new HashMap<>();
         for (long id = 1; id <= 10; id++) {
-            dueCards.put(id, UserKanjiSrs.builder().kanjiId(id).repetitionCount(2).easinessFactor(new BigDecimal("2.50"))
+            dueCards.put(id, UserKanjiSrs.builder().kanjiId(id).sm2(new Sm2State(2, new BigDecimal("2.50")))
                     .reviewIntervalDays(6).nextReviewAt(LocalDateTime.now().minusDays(1)).build());
         }
         when(learnerHistoryService.load(eq(USER_ID), anyCollection()))

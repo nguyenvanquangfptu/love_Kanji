@@ -36,10 +36,12 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import com.kanjimastery.backend.model.CardState;
+import com.kanjimastery.backend.model.FsrsState;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.ReviewLog;
 import com.kanjimastery.backend.model.ReviewRating;
 import com.kanjimastery.backend.model.ReviewSource;
+import com.kanjimastery.backend.model.Sm2State;
 import com.kanjimastery.backend.model.UserKanjiSrs;
 import com.kanjimastery.backend.repository.ReviewLogRepository;
 import com.kanjimastery.backend.repository.UserKanjiSrsRepository;
@@ -253,15 +255,13 @@ public class SrsService {
                 .kanjiId(kanjiId)
                 .nextReviewAt(now)
                 .build();
-        srs.setRepetitionCount(outcome.sm2().repetitionCount());
-        srs.setEasinessFactor(outcome.sm2().easinessFactor());
+        srs.setSm2(new Sm2State(outcome.sm2().repetitionCount(), outcome.sm2().easinessFactor()));
         srs.setReviewIntervalDays(outcome.intervalDays());
         // Đến hạn từ đầu ngày học thứ N (4 giờ sáng), không phải đúng giờ của lần ôn này: hôm đến hạn học sớm hơn hôm nay
         // vài tiếng thì thẻ vẫn có trong phiên, không bị đẩy thêm một ngày.
         srs.setNextReviewAt(calendar.startOf(calendar.dayOf(now).plusDays(outcome.intervalDays())));
         srs.setLastReviewedAt(now);
-        srs.setStability(outcome.memory().stability());
-        srs.setDifficulty(outcome.memory().difficulty());
+        srs.setFsrs(new FsrsState(outcome.memory().stability(), outcome.memory().difficulty()));
         if (lapse) {
             srs.setLapseCount(srs.getLapseCount() + 1);
         }
