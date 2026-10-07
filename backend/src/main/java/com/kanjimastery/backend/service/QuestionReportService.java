@@ -40,10 +40,7 @@ public class QuestionReportService {
     private final UserExamAnswerRepository answerRepository;
 
     @Transactional
-    public void report(Long userId, Long questionId, String reason, String note) {
-        if (!QuestionReportReason.ALL.contains(reason)) {
-            throw new BadRequestException("Lý do báo lỗi không hợp lệ: " + reason);
-        }
+    public void report(Long userId, Long questionId, QuestionReportReason reason, String note) {
         ExamQuestion question = questionRepository.findById(questionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy câu hỏi: " + questionId));
         if (!answerRepository.existsInFinishedAttemptOf(userId, questionId)) {

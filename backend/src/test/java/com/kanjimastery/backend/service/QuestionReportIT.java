@@ -107,8 +107,6 @@ class QuestionReportIT extends AbstractIntegrationTest {
     void report_shouldNeedAFinishedAnswer_andWithdrawTheQuestionOnceThreeLearnersReportIt() {
         assertThatThrownBy(() -> reportService.report(stranger, standalone.getId(), QuestionReportReason.WRONG_ANSWER,
                 null)).isInstanceOf(BadRequestException.class);
-        assertThatThrownBy(() -> reportService.report(learners.get(0), standalone.getId(), "BORING", null))
-                .isInstanceOf(BadRequestException.class);
 
         // Báo lại thì cập nhật lý do, không tính thêm một người.
         reportService.report(learners.get(0), standalone.getId(), QuestionReportReason.WRONG_ANSWER, null);

@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.QuestionReportReason;
 import com.kanjimastery.backend.model.ExamQuestionFlag;
 import com.kanjimastery.backend.model.ExamQuestionSource;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
@@ -60,8 +61,7 @@ public class AdminExamQuestionResponse {
     public record Stats(int responses, double correctRate, Double discrimination, LocalDateTime computedAt) {
     }
 
-    /** {@code reason}: {@link com.kanjimastery.backend.model.QuestionReportReason}. */
-    public record Report(String reason, String note, LocalDateTime createdAt) {
+    public record Report(QuestionReportReason reason, String note, LocalDateTime createdAt) {
     }
 
     public record Grammar(Long id, String pattern) {

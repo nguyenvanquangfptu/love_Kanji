@@ -1,14 +1,11 @@
 package com.kanjimastery.backend.model;
 
 /** Trạng thái một báo lỗi (cột {@code exam_question_reports.status}). */
-public final class QuestionReportStatus {
+public enum QuestionReportStatus {
     /** Chờ người duyệt xem. */
-    public static final String OPEN = "OPEN";
+    OPEN,
     /** Người duyệt đã xử lý câu (duyệt lại, loại, rút khỏi đề). */
-    public static final String RESOLVED = "RESOLVED";
+    RESOLVED,
     /** Người duyệt xem và thấy câu không sai. */
-    public static final String DISMISSED = "DISMISSED";
-
-    private QuestionReportStatus() {
-    }
+    DISMISSED
 }

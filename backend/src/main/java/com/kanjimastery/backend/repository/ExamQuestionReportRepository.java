@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.repository;
 
+import com.kanjimastery.backend.model.QuestionReportStatus;
 import com.kanjimastery.backend.model.ExamQuestionReport;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -15,9 +16,10 @@ public interface ExamQuestionReportRepository extends JpaRepository<ExamQuestion
 
     Optional<ExamQuestionReport> findByQuestionIdAndUserId(Long questionId, Long userId);
 
-    long countByQuestionIdAndStatus(Long questionId, String status);
+    long countByQuestionIdAndStatus(Long questionId, QuestionReportStatus status);
 
-    List<ExamQuestionReport> findByQuestionIdInAndStatusOrderByCreatedAtAsc(Collection<Long> questionIds, String status);
+    List<ExamQuestionReport> findByQuestionIdInAndStatusOrderByCreatedAtAsc(Collection<Long> questionIds,
+                                                                       QuestionReportStatus status);
 
     /** Các câu (trong {@code questionIds}) người học đã báo lỗi, ở bất kỳ trạng thái nào. */
     @Query("SELECT r.questionId FROM ExamQuestionReport r WHERE r.userId = :userId AND r.questionId IN :questionIds")
@@ -28,8 +30,8 @@ public interface ExamQuestionReportRepository extends JpaRepository<ExamQuestion
     @Modifying
     @Query("""
             UPDATE ExamQuestionReport r SET r.status = :status, r.resolvedAt = :closedAt
-            WHERE r.questionId IN :questionIds AND r.status = 'OPEN'
+            WHERE r.questionId IN :questionIds AND r.status = com.kanjimastery.backend.model.QuestionReportStatus.OPEN
             """)
-    int closeOpen(@Param("questionIds") Collection<Long> questionIds, @Param("status") String status,
+    int closeOpen(@Param("questionIds") Collection<Long> questionIds, @Param("status") QuestionReportStatus status,
                   @Param("closedAt") LocalDateTime closedAt);
 }

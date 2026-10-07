@@ -2,6 +2,8 @@ package com.kanjimastery.backend.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -34,17 +36,17 @@ public class ExamQuestionReport {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    /** {@link QuestionReportReason} */
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    private String reason;
+    private QuestionReportReason reason;
 
     @Column(length = 500)
     private String note;
 
-    /** {@link QuestionReportStatus} */
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
     @Builder.Default
-    private String status = QuestionReportStatus.OPEN;
+    private QuestionReportStatus status = QuestionReportStatus.OPEN;
 
     @Column(name = "created_at", nullable = false)
     @Builder.Default
