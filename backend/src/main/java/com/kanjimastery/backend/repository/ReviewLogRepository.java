@@ -14,6 +14,19 @@ import java.util.Optional;
 
 public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
 
+    /** Kích thước bảng: số dòng ước lượng theo thống kê của PostgreSQL (không quét bảng) và dung lượng kể cả index. */
+    interface TableSize {
+        long getRows();
+
+        long getBytes();
+    }
+
+    @Query(value = """
+            SELECT GREATEST(c.reltuples, 0)::bigint AS "rows", pg_total_relation_size(c.oid) AS "bytes"
+            FROM pg_class c WHERE c.oid = 'review_logs'::regclass
+            """, nativeQuery = true)
+    TableSize tableSize();
+
     /** Trung vị thời gian trả lời và số mẫu - {@code medianMs} là null khi chưa có mẫu nào. */
     interface ResponseTimeStats {
         Double getMedianMs();

@@ -73,6 +73,14 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void tableSize_shouldReportTheTableAndIndexSize_withoutScanning() {
+        ReviewLogRepository.TableSize size = reviewLogRepository.tableSize();
+
+        assertThat(size.getBytes()).isPositive();
+        assertThat(size.getRows()).isNotNegative();
+    }
+
+    @Test
     void correctQuizResponseTimes_shouldReturnNullMedianAndZeroSamples_whenNoAnswers() {
         ResponseTimeStats stats = reviewLogRepository.correctQuizResponseTimes(userId, DIRECTION.name(), 200);
 
