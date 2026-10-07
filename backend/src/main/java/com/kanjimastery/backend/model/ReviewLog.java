@@ -5,16 +5,19 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
+import org.hibernate.annotations.Immutable;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/** Một lần người học trả lời một từ - xem V10__add_review_logs.sql. */
+/**
+ * Một lần người học trả lời một từ - xem V10__add_review_logs.sql. Chỉ ghi thêm, không bao giờ sửa: Hibernate không phát
+ * UPDATE cho entity này.
+ */
 @Entity
+@Immutable
 @Table(name = "review_logs")
 @Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
