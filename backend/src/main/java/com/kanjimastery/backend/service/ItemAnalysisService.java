@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -38,6 +39,7 @@ public class ItemAnalysisService {
 
     private final ExamQuestionStatsRepository statsRepository;
     private final ExamQuestionRepository questionRepository;
+    private final Clock clock;
 
     /**
      * @param analyzed số câu có thống kê
@@ -48,7 +50,7 @@ public class ItemAnalysisService {
 
     @Transactional
     public Summary analyze() {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         List<ExamQuestionStats> stats = statsRepository.computeAll(MIN_STATS_RESPONSES).stream()
                 .map(row -> new ExamQuestionStats(row.getQuestionId(), row.getResponses().intValue(),
                         row.getCorrectRate(), row.getDiscrimination(), now))

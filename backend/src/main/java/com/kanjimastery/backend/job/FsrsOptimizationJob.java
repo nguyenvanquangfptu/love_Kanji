@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -23,10 +24,11 @@ public class FsrsOptimizationJob {
 
     private final ReviewLogRepository reviewLogRepository;
     private final FsrsParametersService fsrsParametersService;
+    private final Clock clock;
 
     @Scheduled(cron = "${app.srs.fsrs-optimize-cron}", zone = "${app.srs.day-zone}")
     public void optimizeActiveLearners() {
-        List<Long> userIds = reviewLogRepository.userIdsActiveSince(LocalDateTime.now().minusDays(ACTIVE_DAYS));
+        List<Long> userIds = reviewLogRepository.userIdsActiveSince(LocalDateTime.now(clock).minusDays(ACTIVE_DAYS));
         int personalized = 0;
         for (Long userId : userIds) {
             try {

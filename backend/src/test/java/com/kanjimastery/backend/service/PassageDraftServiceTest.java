@@ -25,6 +25,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -79,7 +80,7 @@ class PassageDraftServiceTest {
         DraftReviewer reviewer = new DraftReviewer(geminiClient, new ObjectMapper(), levelChecker);
         service = new PassageDraftService(geminiClient, reviewer, levelChecker, grammarPointRepository,
                 passageRepository, questionRepository, QuestionDraftServiceTest.blueprints(),
-                new TransactionTemplate(mock(PlatformTransactionManager.class)));
+                new TransactionTemplate(mock(PlatformTransactionManager.class)), Clock.systemDefaultZone());
     }
 
     @Test

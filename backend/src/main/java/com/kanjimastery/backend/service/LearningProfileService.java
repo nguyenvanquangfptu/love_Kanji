@@ -63,7 +63,7 @@ public class LearningProfileService {
         profile.setDesiredRetention(request.getDesiredRetention() != null
                 ? request.getDesiredRetention()
                 : BigDecimal.valueOf(SchedulingSettings.DEFAULT.desiredRetention()));
-        profile.setUpdatedAt(LocalDateTime.now());
+        profile.setUpdatedAt(calendar.now());
         return toResponse(profileRepository.save(profile));
     }
 

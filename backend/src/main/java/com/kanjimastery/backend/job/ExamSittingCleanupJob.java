@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 
 /**
@@ -27,10 +28,11 @@ public class ExamSittingCleanupJob {
     private final JlptExamService jlptExamService;
     private final LeaderboardService leaderboardService;
     private final ExamProperties examProperties;
+    private final Clock clock;
 
     @Scheduled(fixedDelayString = "${app.exam.sitting-cleanup-interval-ms:600000}")
     public void closeStaleSittings() {
-        LocalDateTime cutoff = LocalDateTime.now().minusHours(examProperties.getSittingMaxHours());
+        LocalDateTime cutoff = LocalDateTime.now(clock).minusHours(examProperties.getSittingMaxHours());
         for (ExamSitting sitting : sittingRepository.findByStatusAndStartedAtBefore(ExamSittingStatus.IN_PROGRESS,
                 cutoff)) {
             try {

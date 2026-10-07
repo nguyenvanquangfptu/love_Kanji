@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -68,6 +69,7 @@ public class ExamService {
     private final ExamPassageRepository passageRepository;
     private final GrammarPointRepository grammarPointRepository;
     private final ExamQuestionReportRepository reportRepository;
+    private final Clock clock;
 
     @Transactional
     public StartExamResponse start(Long userId, StartExamRequest request) {
@@ -89,7 +91,7 @@ public class ExamService {
     @Transactional
     public StartExamResponse begin(UserExamAttempt attempt, List<ExamQuestion> questions,
                                    List<ExamMondaiResponse> mondai) {
-        attempt.setStartedAt(LocalDateTime.now());
+        attempt.setStartedAt(LocalDateTime.now(clock));
         UserExamAttempt saved = attemptRepository.save(attempt);
         int durationSeconds = examProperties.durationOf(saved);
         examSessionStore.initSession(saved.getId(), questions.stream().map(ExamQuestion::getId).toList(),
@@ -157,7 +159,7 @@ public class ExamService {
 
     public ExamSessionResponse getSession(Long userId, Long attemptId) {
         UserExamAttempt attempt = getOwnedAttempt(attemptId, userId);
-        long elapsed = Duration.between(attempt.getStartedAt(), LocalDateTime.now()).getSeconds();
+        long elapsed = Duration.between(attempt.getStartedAt(), LocalDateTime.now(clock)).getSeconds();
         long remaining = Math.max(0, examProperties.durationOf(attempt) - elapsed);
 
         return ExamSessionResponse.builder()

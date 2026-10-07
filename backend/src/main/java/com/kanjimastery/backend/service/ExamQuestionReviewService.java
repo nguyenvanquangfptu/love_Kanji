@@ -33,6 +33,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -59,6 +60,7 @@ public class ExamQuestionReviewService {
     private final JlptBlueprintProperties blueprints;
     private final ExamQuestionReportRepository reportRepository;
     private final ExamQuestionStatsRepository statsRepository;
+    private final Clock clock;
 
     /**
      * Bộ lọc của trang duyệt; trường null = không lọc. Chỉ có câu thuộc một dạng đề JLPT.
@@ -174,7 +176,7 @@ public class ExamQuestionReviewService {
                 throw new BadRequestException("Chưa duyệt được, câu hỏi cần sửa: " + String.join("; ", problems));
             }
         }
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         question.getReview().decide(status, now);
         if (StringUtils.hasText(note)) {
             question.getReview().replaceNote(note.strip());
@@ -191,7 +193,7 @@ public class ExamQuestionReviewService {
     @Transactional
     public AdminExamQuestionResponse dismissReports(Long id) {
         ExamQuestion question = questionWithLinks(id);
-        reportRepository.closeOpen(List.of(id), QuestionReportStatus.DISMISSED, LocalDateTime.now());
+        reportRepository.closeOpen(List.of(id), QuestionReportStatus.DISMISSED, LocalDateTime.now(clock));
         if (question.getFlag() == ExamQuestionFlag.REPORTED) {
             question.getReview().clearFlag();
         }
@@ -208,7 +210,7 @@ public class ExamQuestionReviewService {
                 .collect(Collectors.toMap(ExamQuestion::getId, Function.identity()));
         List<BulkApproval.Skipped> skipped = new ArrayList<>();
         int approved = 0;
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         for (Long id : new LinkedHashSet<>(ids)) {
             ExamQuestion question = found.get(id);
             String reason = question == null ? "không tìm thấy" : whyNotApprovable(question);

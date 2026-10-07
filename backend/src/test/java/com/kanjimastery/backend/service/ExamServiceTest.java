@@ -31,6 +31,7 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -73,6 +74,9 @@ class ExamServiceTest {
     private ExamQuestionReportRepository reportRepository;
     @Spy
     private JlptBlueprintProperties blueprints = new JlptBlueprintProperties();
+
+    @Spy
+    private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private ExamService examService;

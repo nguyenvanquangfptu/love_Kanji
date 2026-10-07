@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -35,10 +36,11 @@ public class LearnerHistoryService {
 
     private final UserKanjiSrsRepository srsRepository;
     private final ReviewLogRepository reviewLogRepository;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public LearnerHistory load(Long userId, Collection<Long> kanjiIds) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         if (kanjiIds.isEmpty()) {
             return LearnerHistory.empty(now);
         }

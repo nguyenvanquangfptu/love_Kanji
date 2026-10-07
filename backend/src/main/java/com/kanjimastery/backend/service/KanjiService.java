@@ -20,6 +20,8 @@ import com.kanjimastery.backend.model.Tag;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.repository.TagRepository;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -29,6 +31,7 @@ public class KanjiService {
 
     private final KanjiRepository kanjiRepository;
     private final TagRepository tagRepository;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public Page<KanjiResponse> search(String level, String keyword, Long tagId, Pageable pageable) {
@@ -50,6 +53,7 @@ public class KanjiService {
     public KanjiResponse create(KanjiRequest request) {
         ensureNotDuplicatedInSameLesson(request, null);
         Kanji kanji = new Kanji();
+        kanji.setCreatedAt(LocalDateTime.now(clock));
         applyRequest(kanji, request);
         return toResponseWithTags(kanjiRepository.save(kanji));
     }

@@ -23,6 +23,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -65,6 +67,7 @@ public class PassageDraftService {
     private final ExamQuestionRepository questionRepository;
     private final JlptBlueprintProperties blueprints;
     private final TransactionTemplate transactionTemplate;
+    private final Clock clock;
 
     /**
      * @param passageId id đoạn văn đã lưu
@@ -105,6 +108,7 @@ public class PassageDraftService {
                 .title(title.isEmpty() ? null : title.substring(0, Math.min(title.length(), MAX_TITLE_LENGTH)))
                 .content(content)
                 .source(ExamQuestionSource.AI)
+                .createdAt(LocalDateTime.now(clock))
                 .build();
 
         Map<String, Long> pointIds = points.stream().collect(Collectors.toMap(GrammarPoint::getPattern,

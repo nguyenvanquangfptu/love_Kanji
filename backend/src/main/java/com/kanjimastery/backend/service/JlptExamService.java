@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -64,6 +65,7 @@ public class JlptExamService {
     private final UserExamAttemptRepository attemptRepository;
     private final UserExamAnswerRepository answerRepository;
     private final ExamService examService;
+    private final Clock clock;
 
     /** Các cấp độ có cấu trúc đề, kèm số câu đã duyệt hiện có của từng dạng. */
     @Transactional(readOnly = true)
@@ -135,7 +137,7 @@ public class JlptExamService {
                 .userId(userId)
                 .jlptLevel(level)
                 .sections(sections.stream().map(ExamSection::name).collect(Collectors.joining(",")))
-                .startedAt(LocalDateTime.now())
+                .startedAt(LocalDateTime.now(clock))
                 .build());
         return startSection(sitting, sections.get(0), new HashSet<>());
     }
@@ -263,7 +265,7 @@ public class JlptExamService {
         }
         List<UserExamAttempt> attempts = attemptRepository.findBySittingIdOrderByIdAsc(sittingId);
         if (allSectionsFinished(sitting, attempts)
-                && sittingRepository.finishIfInProgress(sittingId, ExamSittingStatus.COMPLETED, LocalDateTime.now()) > 0) {
+                && sittingRepository.finishIfInProgress(sittingId, ExamSittingStatus.COMPLETED, LocalDateTime.now(clock)) > 0) {
             return completedSitting(sitting, attempts);
         }
         return Optional.empty();
@@ -285,7 +287,7 @@ public class JlptExamService {
         }
         boolean finished = allSectionsFinished(sitting, attempts);
         int updated = sittingRepository.finishIfInProgress(sittingId,
-                finished ? ExamSittingStatus.COMPLETED : ExamSittingStatus.ABANDONED, LocalDateTime.now());
+                finished ? ExamSittingStatus.COMPLETED : ExamSittingStatus.ABANDONED, LocalDateTime.now(clock));
         return finished && updated > 0 ? completedSitting(sitting, attempts) : Optional.empty();
     }
 

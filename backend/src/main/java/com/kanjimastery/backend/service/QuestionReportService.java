@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -38,6 +39,7 @@ public class QuestionReportService {
     private final ExamQuestionRepository questionRepository;
     private final ExamPassageRepository passageRepository;
     private final UserExamAnswerRepository answerRepository;
+    private final Clock clock;
 
     @Transactional
     public void report(Long userId, Long questionId, QuestionReportReason reason, String note) {
@@ -51,7 +53,7 @@ public class QuestionReportService {
         report.setReason(reason);
         report.setNote(StringUtils.hasText(note) ? note.strip() : null);
         report.setStatus(QuestionReportStatus.OPEN);
-        report.setCreatedAt(LocalDateTime.now());
+        report.setCreatedAt(LocalDateTime.now(clock));
         report.setResolvedAt(null);
         reportRepository.save(report);
 

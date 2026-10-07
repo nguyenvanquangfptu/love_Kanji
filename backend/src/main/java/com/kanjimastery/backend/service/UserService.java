@@ -1,5 +1,7 @@
 package com.kanjimastery.backend.service;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.ResourceNotFoundException;
 import com.kanjimastery.backend.dto.ChangePasswordRequest;
@@ -17,6 +19,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final Clock clock;
 
     @Transactional
     public User register(RegisterRequest request) {
@@ -32,6 +35,7 @@ public class UserService {
                 .email(request.getEmail())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role("ROLE_USER")
+                .createdAt(LocalDateTime.now(clock))
                 .build();
 
         return userRepository.save(user);

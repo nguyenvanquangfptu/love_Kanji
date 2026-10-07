@@ -6,6 +6,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -46,6 +47,7 @@ public class ExamFinalizationService {
     private final UserExamAnswerRepository answerRepository;
     private final ExamSessionStore examSessionStore;
     private final ApplicationEventPublisher eventPublisher;
+    private final Clock clock;
 
     @Transactional
     public void finalize(Long attemptId, ExamAttemptStatus resultingStatus) {
@@ -62,6 +64,7 @@ public class ExamFinalizationService {
         Map<Long, ExamQuestion> questionsById = questionRepository.findAllById(questionIds).stream()
                 .collect(Collectors.toMap(ExamQuestion::getId, Function.identity()));
 
+        LocalDateTime now = LocalDateTime.now(clock);
         int score = 0;
         List<UserExamAnswer> answerRows = new ArrayList<>();
         for (Long questionId : questionIds) {
@@ -79,13 +82,14 @@ public class ExamFinalizationService {
                     .questionId(questionId)
                     .selectedOption(selected)
                     .isCorrect(correct)
+                    .answeredAt(now)
                     .build());
         }
 
-        int timeSpentSeconds = (int) Duration.between(attempt.getStartedAt(), LocalDateTime.now()).getSeconds();
+        int timeSpentSeconds = (int) Duration.between(attempt.getStartedAt(), now).getSeconds();
 
         int rowsAffected = attemptRepository.finalizeIfInProgress(
-                attemptId, resultingStatus, score, timeSpentSeconds, LocalDateTime.now());
+                attemptId, resultingStatus, score, timeSpentSeconds, now);
 
         if (rowsAffected == 0) {
             log.debug("Attempt {} đã được luồng khác chốt điểm trước - bỏ qua.", attemptId);

@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 import com.kanjimastery.backend.config.ExamProperties;
@@ -27,12 +28,13 @@ public class ExamReconciliationJob {
     private final UserExamAttemptRepository attemptRepository;
     private final ExamFinalizationService examFinalizationService;
     private final ExamProperties examProperties;
+    private final Clock clock;
 
     @Scheduled(fixedDelayString = "${app.exam.reconciliation-interval-ms:90000}")
     public void reconcileExpiredAttempts() {
         // Mỗi lượt có thời gian làm bài riêng (các phần đề JLPT ngắn hơn thi nhanh): lấy mọi lượt đã quá 1 phút rồi lọc
         // theo thời gian của từng lượt.
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         List<UserExamAttempt> staleAttempts = attemptRepository
                 .findByStatusAndStartedAtLessThanEqual(ExamAttemptStatus.IN_PROGRESS, now.minusMinutes(1)).stream()
                 .filter(attempt -> !attempt.getStartedAt().plusSeconds(examProperties.durationOf(attempt)).isAfter(now))

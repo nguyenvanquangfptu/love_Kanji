@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -37,6 +38,7 @@ public class ExamPassageReviewService {
     private final ExamQuestionRepository questionRepository;
     private final ExamQuestionReviewService questionReviewService;
     private final ExamQuestionReportRepository reportRepository;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public Page<AdminExamPassageResponse> search(String level, ExamQuestionStatus status, int page, int size) {
@@ -85,7 +87,7 @@ public class ExamPassageReviewService {
                 throw new BadRequestException("Chưa duyệt được, đoạn văn cần sửa: " + String.join("; ", problems));
             }
         }
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(clock);
         passage.getReview().decide(status, now);
         if (StringUtils.hasText(note)) {
             passage.getReview().replaceNote(note.strip());

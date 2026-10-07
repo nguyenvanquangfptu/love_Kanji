@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -38,11 +39,12 @@ public class GrammarPracticeService {
 
     private final GrammarPointRepository grammarPointRepository;
     private final ExamQuestionRepository questionRepository;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public List<WeakGrammarResponse> weakPoints(Long userId, String level) {
         return grammarPointRepository.findMistakesOfLearner(userId, normalize(level),
-                        LocalDateTime.now().minusDays(MISTAKE_DAYS), MAX_WEAK_POINTS).stream()
+                        LocalDateTime.now(clock).minusDays(MISTAKE_DAYS), MAX_WEAK_POINTS).stream()
                 .map(row -> new WeakGrammarResponse(row.getId(), row.getPattern(), row.getMeaningVi(),
                         row.getWrong().intValue(), row.getAnswered().intValue()))
                 .toList();
