@@ -70,8 +70,21 @@ class ResponseTimeRaterTest {
         assertThat(rater.rateCorrectAnswer(7L, DIRECTION, 12_001)).isEqualTo(ReviewRating.HARD);
     }
 
+    @Test
+    void rateCorrectAnswer_shouldAllowMoreTime_forTypedReadings() {
+        givenStats(QuizDirection.TYPE_READING, null, 0);
+
+        assertThat(rater.rateCorrectAnswer(7L, QuizDirection.TYPE_READING, 5_000)).isEqualTo(ReviewRating.EASY);
+        assertThat(rater.rateCorrectAnswer(7L, QuizDirection.TYPE_READING, 12_000)).isEqualTo(ReviewRating.GOOD);
+        assertThat(rater.rateCorrectAnswer(7L, QuizDirection.TYPE_READING, 15_001)).isEqualTo(ReviewRating.HARD);
+    }
+
     private void givenStats(Double medianMs, long samples) {
-        when(reviewLogRepository.correctQuizResponseTimes(7L, DIRECTION.name(), ResponseTimeRater.RECENT_SAMPLES))
+        givenStats(DIRECTION, medianMs, samples);
+    }
+
+    private void givenStats(QuizDirection direction, Double medianMs, long samples) {
+        when(reviewLogRepository.correctQuizResponseTimes(7L, direction.name(), ResponseTimeRater.RECENT_SAMPLES))
                 .thenReturn(new ResponseTimeStats() {
                     @Override
                     public Double getMedianMs() {

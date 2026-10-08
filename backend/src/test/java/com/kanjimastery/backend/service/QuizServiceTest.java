@@ -129,6 +129,42 @@ class QuizServiceTest {
     }
 
     @Test
+    void generate_shouldAskEveryWordWithKanjiToBeTyped_withoutSendingItsReadingOrMeaning() {
+        givenQuizAllowed();
+        Kanji see = word(4L, "見", "み(る)", null);
+        when(kanjiRepository.findAllByFilters(null, TAG_ID))
+                .thenReturn(List.of(readyWord, see, kanaWord(5L, "テレビ", "Ti vi")));
+
+        List<QuizQuestionResponse> questions = quizService.generate("taro", TAG_ID, null, 10, QuizService.MODE_RANDOM,
+                false, null, QuizService.ANSWER_TYPING);
+
+        assertThat(questions).extracting(QuizQuestionResponse::getKanjiId).containsExactlyInAnyOrder(3L, 4L);
+        assertThat(questions).allSatisfy(question -> {
+            assertThat(question.getDirection()).isEqualTo(QuizDirection.TYPE_READING);
+            assertThat(question.getChoices()).isEmpty();
+            assertThat(question.getCorrectIndex()).isEqualTo(-1);
+            assertThat(question.getReading()).isNull();
+            assertThat(question.getMeaning()).isNull();
+        });
+        // Chữ Hán đơn có đuôi trong ngoặc của cách đọc thì hỏi kèm đuôi; câu ví dụ chứa từ được giữ để gạch chân.
+        assertThat(questions).filteredOn(question -> question.getKanjiId() == 4L).singleElement()
+                .extracting(QuizQuestionResponse::getPrompt).isEqualTo("見る");
+        assertThat(questions).filteredOn(question -> question.getKanjiId() == 3L).singleElement()
+                .extracting(QuizQuestionResponse::getSentence).isEqualTo("この肉は固い。");
+    }
+
+    @Test
+    void generate_shouldRefuseTypingQuiz_whenNoWordHasKanji_andUnknownAnswerKinds() {
+        givenQuizAllowed();
+        when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(kanaWord(5L, "テレビ", "Ti vi")));
+
+        assertThatThrownBy(() -> quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null,
+                QuizService.ANSWER_TYPING)).isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null, "voice"))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
     void generate_shouldNotReadLearningHistory_inRandomMode() {
         givenQuizAllowed();
         when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(readyWord));

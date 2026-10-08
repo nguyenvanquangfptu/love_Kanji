@@ -20,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -142,6 +143,76 @@ class QuizAnswerServiceTest {
         when(kanjiRepository.findById(2L)).thenReturn(Optional.of(katakanaWord));
 
         assertThatThrownBy(() -> quizAnswerService.submit("taro", request(2L, QuizDirection.KANJI_TO_READING, "テレビ", 1_000)))
+                .isInstanceOf(BadRequestException.class);
+        verifyNoInteractions(srsService);
+    }
+
+    @Test
+    void submitTyped_shouldAcceptTheReadingOfAnyEntrySpelledTheSame_andLogTheKanaUnderstood() {
+        givenAllowed();
+        when(kanjiRepository.findById(1L)).thenReturn(Optional.of(aku));
+        // Câu gõ không hiện nghĩa nên không biết đang hỏi dòng 開く nào: cách đọc của dòng nào cũng đúng.
+        when(kanjiRepository.findAllByCharacter("開く")).thenReturn(List.of(aku, word(3L, "開く", "ひらく", "Mở ra")));
+        when(responseTimeRater.rateCorrectAnswer(USER_ID, QuizDirection.TYPE_READING, 4_000)).thenReturn(ReviewRating.GOOD);
+        when(srsService.recordQuizAnswer(eq(USER_ID), eq(1L), any())).thenReturn(Optional.empty());
+
+        QuizAnswerResponse response = quizAnswerService.submit("taro", request(1L, QuizDirection.TYPE_READING, "hiraku", 4_000));
+
+        assertThat(response.isCorrect()).isTrue();
+        assertThat(response.getTypedKana()).isEqualTo("ひらく");
+        assertThat(response.getCorrectAnswer()).isEqualTo("あく");
+        assertThat(response.getMeaning()).isEqualTo("Mở (cửa)");
+        SrsService.Answer answer = recordedAnswer();
+        assertThat(answer.direction()).isEqualTo(QuizDirection.TYPE_READING);
+        assertThat(answer.rating()).isEqualTo(ReviewRating.GOOD);
+        assertThat(answer.chosenAnswer()).isEqualTo("ひらく");
+    }
+
+    @Test
+    void submitTyped_shouldCountANearMissAsForgotten_andNameTheMistake() {
+        givenAllowed();
+        Kanji shusshin = word(4L, "出身", "しゅっしん", "Xuất thân");
+        when(kanjiRepository.findById(4L)).thenReturn(Optional.of(shusshin));
+        when(kanjiRepository.findAllByCharacter("出身")).thenReturn(List.of(shusshin));
+        when(srsService.recordQuizAnswer(eq(USER_ID), eq(4L), any())).thenReturn(Optional.of(LocalDateTime.now()));
+
+        QuizAnswerResponse response = quizAnswerService.submit("taro", request(4L, QuizDirection.TYPE_READING, "shushin", 3_000));
+
+        assertThat(response.isCorrect()).isFalse();
+        assertThat(response.getMistake()).isEqualTo(ReadingMatcher.Mistake.SOKUON);
+        assertThat(response.getTypedKana()).isEqualTo("しゅしん");
+        assertThat(recordedAnswer().rating()).isEqualTo(ReviewRating.AGAIN);
+        verify(responseTimeRater, never()).rateCorrectAnswer(anyLong(), any(), anyInt());
+    }
+
+    @Test
+    void submitTyped_shouldCountGivingUpAsForgotten_withoutAnyTypedAnswer() {
+        givenAllowed();
+        when(kanjiRepository.findById(1L)).thenReturn(Optional.of(aku));
+        when(srsService.recordQuizAnswer(eq(USER_ID), eq(1L), any())).thenReturn(Optional.of(LocalDateTime.now()));
+        QuizAnswerRequest gaveUp = request(1L, QuizDirection.TYPE_READING, null, 9_000);
+        gaveUp.setGaveUp(true);
+
+        QuizAnswerResponse response = quizAnswerService.submit("taro", gaveUp);
+
+        assertThat(response.isCorrect()).isFalse();
+        assertThat(response.getTypedKana()).isNull();
+        assertThat(response.getCorrectAnswer()).isEqualTo("あく");
+        SrsService.Answer answer = recordedAnswer();
+        assertThat(answer.rating()).isEqualTo(ReviewRating.AGAIN);
+        assertThat(answer.chosenAnswer()).isNull();
+    }
+
+    @Test
+    void submitTyped_shouldRefuseUnreadableInput_andWordsWithoutKanji_withoutLoggingAnything() {
+        when(rateLimiter.tryAcquire(anyString(), anyInt(), any())).thenReturn(true);
+        when(kanjiRepository.findById(1L)).thenReturn(Optional.of(aku));
+        when(kanjiRepository.findAllByCharacter("開く")).thenReturn(List.of(aku));
+        when(kanjiRepository.findById(2L)).thenReturn(Optional.of(katakanaWord));
+
+        assertThatThrownBy(() -> quizAnswerService.submit("taro", request(1L, QuizDirection.TYPE_READING, "aku2", 2_000)))
+                .isInstanceOf(BadRequestException.class).hasMessageContaining("romaji");
+        assertThatThrownBy(() -> quizAnswerService.submit("taro", request(2L, QuizDirection.TYPE_READING, "terebi", 2_000)))
                 .isInstanceOf(BadRequestException.class);
         verifyNoInteractions(srsService);
     }

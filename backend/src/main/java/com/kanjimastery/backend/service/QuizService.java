@@ -40,6 +40,7 @@ import java.util.random.RandomGenerator;
 import static com.kanjimastery.backend.model.QuizDirection.KANJI_TO_READING;
 import static com.kanjimastery.backend.model.QuizDirection.MEANING;
 import static com.kanjimastery.backend.model.QuizDirection.READING_TO_KANJI;
+import static com.kanjimastery.backend.model.QuizDirection.TYPE_READING;
 
 /**
  * Sinh bộ câu hỏi trắc nghiệm ôn tập (kết quả từng câu được ghi qua {@link QuizAnswerService}) từ
@@ -56,6 +57,9 @@ public class QuizService {
 
     public static final String MODE_ADAPTIVE = "adaptive";
     public static final String MODE_RANDOM = "random";
+    /** Kiểu trả lời: chọn trong 4 đáp án, hoặc tự gõ cách đọc. */
+    public static final String ANSWER_CHOICE = "choice";
+    public static final String ANSWER_TYPING = "typing";
     private static final int DEFAULT_QUESTIONS = 10;
     /** Trắc nghiệm cả cấp độ có hàng nghìn từ - chặn số câu mỗi lượt để một request không dựng quá nhiều câu hỏi. */
     private static final int MAX_QUESTIONS = 50;
@@ -91,6 +95,20 @@ public class QuizService {
     @Transactional(readOnly = true)
     public List<QuizQuestionResponse> generate(String username, Long tagId, String level, Integer size, String mode,
                                                boolean hardWords, List<Long> kanjiIds) {
+        return generate(username, tagId, level, size, mode, hardWords, kanjiIds, ANSWER_CHOICE);
+    }
+
+    /**
+     * @param answer {@link #ANSWER_TYPING}: mọi câu hỏi gõ cách đọc, chỉ lấy từ có chữ Hán và cách đọc
+     */
+    @Transactional(readOnly = true)
+    public List<QuizQuestionResponse> generate(String username, Long tagId, String level, Integer size, String mode,
+                                               boolean hardWords, List<Long> kanjiIds, String answer) {
+        boolean typing = switch (answer == null ? ANSWER_CHOICE : answer) {
+            case ANSWER_CHOICE -> false;
+            case ANSWER_TYPING -> true;
+            default -> throw new BadRequestException("answer phải là " + ANSWER_CHOICE + " hoặc " + ANSWER_TYPING);
+        };
         boolean adaptive = switch (mode == null ? MODE_ADAPTIVE : mode) {
             case MODE_ADAPTIVE -> true;
             case MODE_RANDOM -> false;
@@ -127,6 +145,17 @@ public class QuizService {
             }
         }
 
+        if (typing) {
+            // Từ chỉ có kana thì gõ lại chính nó: chỉ hỏi từ có chữ Hán.
+            pool = pool.stream().filter(QuizAnswerService::typeable).toList();
+            if (givenWords != null) {
+                givenWords = givenWords.stream().filter(QuizAnswerService::typeable).toList();
+            }
+            if (pool.isEmpty() || givenWords != null && givenWords.isEmpty()) {
+                throw new BadRequestException("Không có từ nào có chữ Hán để gõ cách đọc");
+            }
+        }
+
         int requested = size == null || size < 1 ? DEFAULT_QUESTIONS : Math.min(size, MAX_QUESTIONS);
         RandomGenerator random = ThreadLocalRandom.current();
         // Chế độ ngẫu nhiên không cần lịch sử học: null = chọn từ và hướng hỏi ngẫu nhiên đều.
@@ -151,7 +180,9 @@ public class QuizService {
         Map<Long, Map<QuizDirection, List<PastMistake>>> pastMistakes =
                 learnerHistoryService.pastMistakes(userId, selected.stream().map(Kanji::getId).toList());
         List<PlannedQuestion> plans = selected.stream()
-                .map(kanji -> plan(kanji, history, pastMistakes.getOrDefault(kanji.getId(), Map.of()), random))
+                .map(kanji -> typing
+                        ? questionBuilder.plan(kanji, TYPE_READING, List.of())
+                        : plan(kanji, history, pastMistakes.getOrDefault(kanji.getId(), Map.of()), random))
                 .toList();
         Map<String, List<Kanji>> existingWords = questionBuilder.existingWords(plans);
 
@@ -270,6 +301,8 @@ public class QuizService {
         Kanji kanji = question.kanji();
         PastMistake trap = question.shownTrap();
         Kanji trapWord = question.trapWord();
+        // Câu gõ: không gửi cách đọc (là đáp án) và nghĩa trước khi chấm - trả trong kết quả chấm.
+        boolean typing = question.direction() == TYPE_READING;
         return QuizQuestionResponse.builder()
                 .kanjiId(kanji.getId())
                 .direction(question.direction())
@@ -278,8 +311,8 @@ public class QuizService {
                 .choices(question.choices())
                 .correctIndex(question.correctIndex())
                 .character(kanji.getCharacter())
-                .reading(kanji.getReading())
-                .meaning(kanji.getMeaning())
+                .reading(typing ? null : kanji.getReading())
+                .meaning(typing ? null : kanji.getMeaning())
                 .personalTrap(trap == null ? null : trap.answer())
                 .personalTrapCount(trap == null ? 0 : (int) trap.times())
                 .personalTrapReading(trapWord == null ? null : trapWord.getReading())

@@ -117,7 +117,7 @@ public class ExamService {
      */
     private List<ExamQuestion> pickQuestions(JlptLevel level, int count) {
         List<List<ExamQuestion>> candidates = new ArrayList<>();
-        for (QuizDirection skill : QuizDirection.values()) {
+        for (QuizDirection skill : QuizDirection.examSkills()) {
             candidates.add(questionRepository.findRandomByLevelAndSkill(level.name(), skill.name(), count * 2));
         }
         candidates.add(questionRepository.findRandomUnclassifiedByLevel(level.name(), count * 2));
@@ -322,7 +322,7 @@ public class ExamService {
     /** Số câu đúng trên số câu theo từng kỹ năng, theo thứ tự khai báo của {@link QuizDirection}: đọc, viết, rồi nghĩa. */
     static List<ExamReviewResponse.SkillScore> skillScores(List<QuestionReviewItem> items) {
         Map<QuizDirection, int[]> bySkill = new EnumMap<>(QuizDirection.class);
-        for (QuizDirection skill : QuizDirection.values()) {
+        for (QuizDirection skill : QuizDirection.examSkills()) {
             bySkill.put(skill, new int[2]);
         }
         for (QuestionReviewItem item : items) {
