@@ -36,6 +36,8 @@ const SKILL_LABELS: Record<QuizDirection, string> = {
   KANJI_TO_READING: 'Đọc chữ Hán',
   READING_TO_KANJI: 'Chọn cách viết',
   MEANING: 'Hiểu nghĩa',
+  // Không phải kỹ năng câu thi - chỉ để đủ kiểu.
+  TYPE_READING: 'Gõ cách đọc',
 }
 
 const STATUS_LABEL: Record<string, string> = {

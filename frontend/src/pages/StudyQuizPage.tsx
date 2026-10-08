@@ -4,12 +4,13 @@ import { useQuery } from '@tanstack/react-query'
 import { Check, CheckCircle2, Flame, Layers, Plus, RotateCcw, Target, Trophy, X } from 'lucide-react'
 import { quizApi } from '@/api/quiz'
 import { extractErrorMessage } from '@/api/client'
-import type { QuizDirection, QuizMode, QuizQuestionResponse } from '@/api/types'
+import type { QuizAnswerKind, QuizAnswerResponse, QuizDirection, QuizMode, QuizQuestionResponse } from '@/api/types'
 import { useLessonParams, useLevelQuizParams } from '@/lib/lesson'
 import { describeAddResult, useAddToReview } from '@/lib/review'
 import { cn } from '@/lib/utils'
 import { SessionHeader } from '@/components/SessionHeader'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
+import { TypedReadingFeedback, TypedReadingInput } from '@/components/TypedReadingAnswer'
 import { SpeakButton } from '@/components/SpeakButton'
 import { StatTile } from '@/components/StatTile'
 import { EmptyState } from '@/components/EmptyState'
@@ -31,12 +32,17 @@ const INSTRUCTIONS: Record<QuizDirection, { withSentence: string; standalone: st
     withSentence: 'Từ được gạch chân có nghĩa là gì?',
     standalone: 'Từ này có nghĩa là gì?',
   },
+  TYPE_READING: {
+    withSentence: 'Gõ cách đọc của từ được gạch chân',
+    standalone: 'Gõ cách đọc của từ này',
+  },
 }
 
 const CHOICE_TEXT: Record<QuizDirection, string> = {
   KANJI_TO_READING: 'font-jp text-lg',
   READING_TO_KANJI: 'font-jp text-2xl',
   MEANING: 'text-base',
+  TYPE_READING: 'font-jp text-lg',
 }
 
 const PRAISES = ['Chính xác!', 'Tuyệt vời!', 'Giỏi lắm!', 'Xuất sắc!', 'Quá đỉnh!']
@@ -59,6 +65,8 @@ export function StudyQuizPage() {
   const levelQuiz = !wordsQuiz && !hardWordsQuiz && tagId === null ? level : null
   // Mặc định ưu tiên từ người học hay sai; ?mode=random để kiểm tra đều cả bài.
   const mode: QuizMode = searchParams.get('mode') === 'random' ? 'random' : 'adaptive'
+  // ?answer=typing: hiện chữ Hán, người học tự gõ cách đọc thay vì chọn đáp án.
+  const answerKind: QuizAnswerKind = searchParams.get('answer') === 'typing' ? 'typing' : 'choice'
 
   const [index, setIndex] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
@@ -69,20 +77,26 @@ export function StudyQuizPage() {
   // Từ làm sai mà server chưa nhận được kết quả (lỗi mạng) - chưa tự vào Ôn tập, cần thêm tay.
   const [unsyncedMistakeIds, setUnsyncedMistakeIds] = useState<number[]>([])
   const [attempt, setAttempt] = useState(0)
+  // Câu gõ cách đọc: kết quả server chấm (đáp án chỉ có sau khi chấm), đang gửi, lỗi mạng.
+  const [typedResult, setTypedResult] = useState<QuizAnswerResponse | null>(null)
+  const [typedPending, setTypedPending] = useState(false)
+  const [typedError, setTypedError] = useState<unknown>(null)
   const shownAt = useRef(0)
 
   const { data: questions, isLoading, isError, error } = useQuery({
-    queryKey: ['study-quiz', tagId, levelQuiz, hardWordsQuiz, kanjiIds, size, mode, attempt],
+    queryKey: ['study-quiz', tagId, levelQuiz, hardWordsQuiz, kanjiIds, size, mode, answerKind, attempt],
     queryFn: () =>
-      quizApi.generate(
-        wordsQuiz
-          ? { kanjiIds, size: kanjiIds.split(',').length, mode }
+      quizApi.generate({
+        ...(wordsQuiz
+          ? { kanjiIds, size: kanjiIds.split(',').length }
           : hardWordsQuiz
-            ? { hardWords: true, size: 10, mode }
+            ? { hardWords: true, size: 10 }
             : levelQuiz
-              ? { level: levelQuiz, size, mode }
-              : { tagId: tagId ?? undefined, size: 10, mode },
-      ),
+              ? { level: levelQuiz, size }
+              : { tagId: tagId ?? undefined, size: 10 }),
+        mode,
+        answer: answerKind,
+      }),
     enabled: wordsQuiz || hardWordsQuiz || tagId !== null || levelQuiz !== null,
     staleTime: Infinity,
     gcTime: 0,
@@ -91,7 +105,7 @@ export function StudyQuizPage() {
   const total = questions?.length ?? 0
   const current = questions?.[index]
   const isDone = total > 0 && index >= total
-  const answered = selected !== null
+  const answered = selected !== null || typedResult !== null
 
   useEffect(() => {
     shownAt.current = performance.now()
@@ -126,8 +140,43 @@ export function StudyQuizPage() {
     [current, selected, streak],
   )
 
+  /** Câu gõ: chờ server chấm (đáp án không có sẵn ở trình duyệt); lỗi mạng thì giữ câu để gửi lại. */
+  const submitTyped = useCallback(
+    async (typed: string | null) => {
+      if (!current || typedResult !== null || typedPending) return
+      setTypedPending(true)
+      setTypedError(null)
+      try {
+        const result = await quizApi.submitAnswer({
+          kanjiId: current.kanjiId,
+          direction: current.direction,
+          ...(typed === null ? { gaveUp: true } : { chosenAnswer: typed }),
+          responseMs: Math.round(performance.now() - shownAt.current),
+        })
+        setTypedResult(result)
+        if (result.correct) {
+          const nextStreak = streak + 1
+          setScore((s) => s + 1)
+          setStreak(nextStreak)
+          setBestStreak((best) => Math.max(best, nextStreak))
+        } else {
+          setStreak(0)
+          // Câu gõ không có sẵn cách đọc và nghĩa: lấy từ kết quả chấm cho danh sách từ cần ôn.
+          setMistakes((list) => [...list, { ...current, reading: result.correctAnswer, meaning: result.meaning }])
+        }
+      } catch (err) {
+        setTypedError(err)
+      } finally {
+        setTypedPending(false)
+      }
+    },
+    [current, typedResult, typedPending, streak],
+  )
+
   const next = useCallback(() => {
     setSelected(null)
+    setTypedResult(null)
+    setTypedError(null)
     setIndex((i) => i + 1)
   }, [])
 
@@ -147,6 +196,8 @@ export function StudyQuizPage() {
   function restart() {
     setIndex(0)
     setSelected(null)
+    setTypedResult(null)
+    setTypedError(null)
     setScore(0)
     setStreak(0)
     setBestStreak(0)
@@ -160,6 +211,19 @@ export function StudyQuizPage() {
       (params) => {
         if (next === 'random') params.set('mode', 'random')
         else params.delete('mode')
+        return params
+      },
+      { replace: true },
+    )
+    restart()
+  }
+
+  function switchAnswerKind(next: QuizAnswerKind) {
+    if (next === answerKind) return
+    setSearchParams(
+      (params) => {
+        if (next === 'typing') params.set('answer', 'typing')
+        else params.delete('answer')
         return params
       },
       { replace: true },
@@ -197,6 +261,7 @@ export function StudyQuizPage() {
       />
 
       <main className="mx-auto max-w-2xl px-4 pb-64 sm:pb-44">
+        {!isDone && <AnswerKindSwitch value={answerKind} disabled={typedPending} onChange={switchAnswerKind} />}
         {isLoading && <PageSpinner label="Đang soạn câu hỏi..." />}
         {isError && <Alert>{extractErrorMessage(error)}</Alert>}
         {questions && total === 0 && (
@@ -262,6 +327,18 @@ export function StudyQuizPage() {
               )}
             </div>
 
+            {current.direction === 'TYPE_READING' && (
+              <>
+                <TypedReadingInput
+                  pending={typedPending}
+                  disabled={typedResult !== null}
+                  onSubmit={(typed) => void submitTyped(typed)}
+                  onGiveUp={() => void submitTyped(null)}
+                />
+                {typedError !== null && <Alert className="mt-3">{extractErrorMessage(typedError)}</Alert>}
+              </>
+            )}
+
             <div className="mt-8 grid gap-3 sm:grid-cols-2">
               {current.choices.map((choice, i) => {
                 const isCorrectChoice = i === current.correctIndex
@@ -301,7 +378,16 @@ export function StudyQuizPage() {
         )}
       </main>
 
-      {answered && current && !isDone && (
+      {typedResult && current && !isDone && (
+        <TypedReadingFeedback
+          question={current}
+          result={typedResult}
+          praise={PRAISES[index % PRAISES.length]}
+          onContinue={next}
+        />
+      )}
+
+      {selected !== null && current && !isDone && (
         <FeedbackBar
           correct={isCorrect}
           question={current}
@@ -311,6 +397,42 @@ export function StudyQuizPage() {
         />
       )}
     </>
+  )
+}
+
+/** Chọn đáp án trong 4 lựa chọn, hay tự gõ cách đọc - đổi thì làm bộ câu hỏi mới. */
+function AnswerKindSwitch({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: QuizAnswerKind
+  disabled: boolean
+  onChange: (value: QuizAnswerKind) => void
+}) {
+  const options: { value: QuizAnswerKind; label: string }[] = [
+    { value: 'choice', label: 'Chọn đáp án' },
+    { value: 'typing', label: 'Gõ cách đọc' },
+  ]
+  return (
+    <div role="radiogroup" aria-label="Kiểu trả lời" className="mb-6 flex gap-1 rounded-2xl bg-muted p-1">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          role="radio"
+          aria-checked={value === option.value}
+          disabled={disabled}
+          onClick={() => onChange(option.value)}
+          className={cn(
+            'flex-1 rounded-xl px-3 py-2 text-sm font-extrabold transition-colors',
+            value === option.value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   )
 }
 
