@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ListChecks, PartyPopper, RotateCcw, Shuffle } from 'lucide-react'
 import { kanjiApi } from '@/api/kanji'
@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
 import { PageSpinner } from '@/components/ui/spinner'
+import { useQuizStart } from '@/lib/quizStart'
 
 function randomPermutation(length: number) {
   const order = Array.from({ length }, (_, i) => i)
@@ -26,7 +27,7 @@ function randomPermutation(length: number) {
 }
 
 export function StudyFlashcardPage() {
-  const navigate = useNavigate()
+  const quiz = useQuizStart()
   const { tagId, name, query } = useLessonParams()
 
   const [index, setIndex] = useState(0)
@@ -89,6 +90,7 @@ export function StudyFlashcardPage() {
 
   return (
     <>
+      {quiz.dialog}
       <SessionHeader
         exitTo={exitTo}
         progress={progress}
@@ -112,7 +114,7 @@ export function StudyFlashcardPage() {
             description={`Bạn đã xem hết ${total} thẻ của ${lessonFullTitle(name)}. Làm bài trắc nghiệm để kiểm tra lại nhé!`}
             action={
               <div className="flex w-full max-w-xs flex-col gap-3">
-                <Button size="lg" onClick={() => navigate(`/study/quiz?${query}`)}>
+                <Button size="lg" onClick={() => quiz.start(`/study/quiz?${query}`)}>
                   <ListChecks className="h-5 w-5" /> Làm trắc nghiệm
                 </Button>
                 <Button variant="outline" onClick={() => restart(false)}>

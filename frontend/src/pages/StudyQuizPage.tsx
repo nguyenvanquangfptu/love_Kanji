@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Check, CheckCircle2, Flame, Layers, Plus, RotateCcw, Target, Trophy, X } from 'lucide-react'
+import { Check, CheckCircle2, Flame, Keyboard, Layers, ListChecks, Plus, RotateCcw, Target, Trophy, X } from 'lucide-react'
 import { quizApi } from '@/api/quiz'
 import { extractErrorMessage } from '@/api/client'
 import type { QuizAnswerKind, QuizAnswerResponse, QuizDirection, QuizMode, QuizQuestionResponse } from '@/api/types'
@@ -65,7 +65,7 @@ export function StudyQuizPage() {
   const levelQuiz = !wordsQuiz && !hardWordsQuiz && tagId === null ? level : null
   // Mặc định ưu tiên từ người học hay sai; ?mode=random để kiểm tra đều cả bài.
   const mode: QuizMode = searchParams.get('mode') === 'random' ? 'random' : 'adaptive'
-  // ?answer=typing: hiện chữ Hán, người học tự gõ cách đọc thay vì chọn đáp án.
+  // ?answer=typing: hiện chữ Hán, người học tự gõ cách đọc - chọn ở hộp "Chọn kiểu trắc nghiệm" trước khi vào trang.
   const answerKind: QuizAnswerKind = searchParams.get('answer') === 'typing' ? 'typing' : 'choice'
 
   const [index, setIndex] = useState(0)
@@ -261,7 +261,6 @@ export function StudyQuizPage() {
       />
 
       <main className="mx-auto max-w-2xl px-4 pb-64 sm:pb-44">
-        {!isDone && <AnswerKindSwitch value={answerKind} disabled={typedPending} onChange={switchAnswerKind} />}
         {isLoading && <PageSpinner label="Đang soạn câu hỏi..." />}
         {isError && <Alert>{extractErrorMessage(error)}</Alert>}
         {questions && total === 0 && (
@@ -286,6 +285,8 @@ export function StudyQuizPage() {
             mistakes={mistakes}
             unsyncedMistakeIds={unsyncedMistakeIds}
             mode={mode}
+            answerKind={answerKind}
+            onSwitchAnswerKind={switchAnswerKind}
             // Danh sách từ cố định (từ làm sai trong bài thi): không có chuyện chọn từ theo điểm yếu hay ngẫu nhiên.
             onSwitchMode={wordsQuiz ? undefined : switchMode}
             onRestart={restart}
@@ -400,42 +401,6 @@ export function StudyQuizPage() {
   )
 }
 
-/** Chọn đáp án trong 4 lựa chọn, hay tự gõ cách đọc - đổi thì làm bộ câu hỏi mới. */
-function AnswerKindSwitch({
-  value,
-  disabled,
-  onChange,
-}: {
-  value: QuizAnswerKind
-  disabled: boolean
-  onChange: (value: QuizAnswerKind) => void
-}) {
-  const options: { value: QuizAnswerKind; label: string }[] = [
-    { value: 'choice', label: 'Chọn đáp án' },
-    { value: 'typing', label: 'Gõ cách đọc' },
-  ]
-  return (
-    <div role="radiogroup" aria-label="Kiểu trả lời" className="mb-6 flex gap-1 rounded-2xl bg-muted p-1">
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          role="radio"
-          aria-checked={value === option.value}
-          disabled={disabled}
-          onClick={() => onChange(option.value)}
-          className={cn(
-            'flex-1 rounded-xl px-3 py-2 text-sm font-extrabold transition-colors',
-            value === option.value ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          {option.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 function FeedbackBar({
   correct,
   question,
@@ -543,6 +508,8 @@ function QuizResults({
   unsyncedMistakeIds,
   mode,
   onSwitchMode,
+  answerKind,
+  onSwitchAnswerKind,
   onRestart,
   onFlashcards,
   exitTo,
@@ -555,6 +522,9 @@ function QuizResults({
   unsyncedMistakeIds: number[]
   mode: QuizMode
   onSwitchMode?: (mode: QuizMode) => void
+  answerKind: QuizAnswerKind
+  /** Làm lại cùng các bộ lọc nhưng bằng kiểu kia - bài đã xong nên đổi không mất gì. */
+  onSwitchAnswerKind: (kind: QuizAnswerKind) => void
   onRestart: () => void
   /** Không có khi làm trắc nghiệm cả cấp độ - thẻ học chỉ mở theo từng bài. */
   onFlashcards?: () => void
@@ -629,6 +599,22 @@ function QuizResults({
           </Button>
         )}
       </div>
+      <Button
+        variant="outline"
+        size="lg"
+        className="mt-3 w-full"
+        onClick={() => onSwitchAnswerKind(answerKind === 'typing' ? 'choice' : 'typing')}
+      >
+        {answerKind === 'typing' ? (
+          <>
+            <ListChecks className="h-5 w-5" /> Làm lại bằng kiểu chọn đáp án
+          </>
+        ) : (
+          <>
+            <Keyboard className="h-5 w-5" /> Làm lại bằng kiểu gõ romaji
+          </>
+        )}
+      </Button>
       {onSwitchMode && (
         <button
           type="button"

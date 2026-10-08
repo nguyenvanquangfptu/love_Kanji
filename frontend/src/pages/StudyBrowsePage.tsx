@@ -15,6 +15,7 @@ import { PageSpinner } from '@/components/ui/spinner'
 import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { LevelTabs, type LevelKey } from '@/components/LevelTabs'
+import { useQuizStart } from '@/lib/quizStart'
 
 const STORAGE_KEY = 'study:selected-level'
 
@@ -36,6 +37,7 @@ function saveLevel(level: LevelKey) {
 
 export function StudyBrowsePage() {
   const navigate = useNavigate()
+  const quiz = useQuizStart()
   const [selected, setSelected] = useState<LevelKey | null>(readSavedLevel)
 
   const { data: tags, isLoading, isError, error } = useQuery({ queryKey: ['tags'], queryFn: tagApi.list })
@@ -64,6 +66,7 @@ export function StudyBrowsePage() {
 
   return (
     <div>
+      {quiz.dialog}
       <PageHeader title="Học bài" subtitle="Chọn cấp độ, rồi chọn một bài để bắt đầu học." />
 
       <LevelTabs
@@ -110,7 +113,7 @@ export function StudyBrowsePage() {
                 key={size}
                 size="sm"
                 variant="outline"
-                onClick={() => navigate(`/study/quiz?${levelQuizQuery(activeLevel, size)}`)}
+                onClick={() => quiz.start(`/study/quiz?${levelQuizQuery(activeLevel, size)}`)}
               >
                 {size} câu
               </Button>
