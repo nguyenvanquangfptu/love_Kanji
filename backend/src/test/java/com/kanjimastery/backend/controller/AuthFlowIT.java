@@ -95,6 +95,19 @@ class AuthFlowIT extends AbstractIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void register_shouldRefuseAPasswordBcryptCannotHold_withA400() throws Exception {
+        String username = "auth-" + UUID.randomUUID().toString().substring(0, 8);
+        usernames.add(username);
+
+        // 30 letters, within the 100-character limit of the form, but 90 bytes in UTF-8.
+        mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("username", username, "email", username + "@example.com",
+                                "password", "ệ".repeat(30)))))
+                .andExpect(status().isBadRequest());
+    }
+
     private static LoginRequest loginRequest(String username, String password) {
         LoginRequest request = new LoginRequest();
         request.setUsername(username);
