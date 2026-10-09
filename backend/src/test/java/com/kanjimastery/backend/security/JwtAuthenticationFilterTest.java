@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.security;
 
+import com.kanjimastery.backend.config.JwtProperties;
 import com.kanjimastery.backend.service.CustomUserDetailsService;
 import com.kanjimastery.backend.service.JwtService;
 import com.kanjimastery.backend.service.TokenBlacklistService;
@@ -19,6 +20,7 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(OutputCaptureExtension.class)
@@ -34,7 +36,7 @@ class JwtAuthenticationFilterTest {
 
     @BeforeEach
     void setUp() {
-        when(jwtService.isTokenValid(TOKEN)).thenReturn(true);
+        when(jwtService.isTokenValid(TOKEN, JwtService.TokenType.ACCESS)).thenReturn(true);
         when(jwtService.extractJti(TOKEN)).thenReturn("jti-1");
         when(jwtService.extractUsername(TOKEN)).thenReturn("alice");
     }
@@ -79,11 +81,34 @@ class JwtAuthenticationFilterTest {
                 .contains("RedisConnectionFailureException");
     }
 
+    @Test
+    void refreshToken_shouldNotAuthenticateTheRequest() throws Exception {
+        JwtProperties properties = new JwtProperties();
+        properties.setSecret("test-only-secret-key-must-be-at-least-32-bytes-long!!");
+        properties.setAccessTokenExpirationMs(900_000L);
+        properties.setRefreshTokenExpirationMs(604_800_000L);
+        JwtService realJwtService = new JwtService(properties);
+        JwtAuthenticationFilter realFilter =
+                new JwtAuthenticationFilter(realJwtService, tokenBlacklistService, userDetailsService);
+        String refreshToken = realJwtService.generateRefreshToken(
+                com.kanjimastery.backend.model.User.builder().id(42L).username("alice").role("ROLE_USER").build()).token();
+
+        MockFilterChain chain = send(realFilter, refreshToken);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+        assertThat(chain.getRequest()).isNotNull();
+        verifyNoInteractions(userDetailsService);
+    }
+
     private MockFilterChain send() throws Exception {
+        return send(filter, TOKEN);
+    }
+
+    private static MockFilterChain send(JwtAuthenticationFilter target, String token) throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/srs/daily");
-        request.addHeader("Authorization", "Bearer " + TOKEN);
+        request.addHeader("Authorization", "Bearer " + token);
         MockFilterChain chain = new MockFilterChain();
-        filter.doFilter(request, new MockHttpServletResponse(), chain);
+        target.doFilter(request, new MockHttpServletResponse(), chain);
         return chain;
     }
 }

@@ -3,9 +3,11 @@ package com.kanjimastery.backend.service;
 import com.kanjimastery.backend.config.JwtProperties;
 import com.kanjimastery.backend.dto.AuthResponse;
 import com.kanjimastery.backend.dto.LoginRequest;
+import com.kanjimastery.backend.dto.RefreshTokenRequest;
 import com.kanjimastery.backend.dto.RegisterRequest;
 import com.kanjimastery.backend.exception.ForbiddenException;
 import com.kanjimastery.backend.exception.TooManyRequestsException;
+import com.kanjimastery.backend.exception.UnauthorizedException;
 import com.kanjimastery.backend.model.User;
 import com.kanjimastery.backend.repository.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -26,6 +28,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -101,6 +104,32 @@ class AuthServiceTest {
         stubTokens(user);
 
         assertThat(authService.register(request).getAccessToken()).isEqualTo("access-token");
+    }
+
+    @Test
+    void refresh_shouldRefuseAnAccessToken_withoutEndingTheLearnersSessions() {
+        when(jwtService.isTokenValid("access-token", JwtService.TokenType.REFRESH)).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.refresh(refreshRequest("access-token")))
+                .isInstanceOf(UnauthorizedException.class);
+        verifyNoInteractions(refreshTokenService);
+    }
+
+    @Test
+    void logout_shouldOnlyBlacklistAnAccessToken_andOnlyRevokeARefreshToken() {
+        // Swapped tokens: neither is of the type expected in its place, so nothing is blacklisted or revoked.
+        when(jwtService.isTokenValid("refresh-token", JwtService.TokenType.ACCESS)).thenReturn(false);
+        when(jwtService.isTokenValid("access-token", JwtService.TokenType.REFRESH)).thenReturn(false);
+
+        authService.logout("refresh-token", "access-token");
+
+        verifyNoInteractions(tokenBlacklistService, refreshTokenService);
+    }
+
+    private static RefreshTokenRequest refreshRequest(String token) {
+        RefreshTokenRequest request = new RefreshTokenRequest();
+        request.setRefreshToken(token);
+        return request;
     }
 
     private void stubTokens(User user) {

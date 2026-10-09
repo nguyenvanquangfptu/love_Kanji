@@ -66,7 +66,8 @@ public class AuthService {
      */
     public AuthResponse refresh(RefreshTokenRequest request) {
         String refreshToken = request.getRefreshToken();
-        if (!jwtService.isTokenValid(refreshToken)) {
+        // An access token sent here is refused up front: it is not a reused refresh token, so no session is revoked.
+        if (!jwtService.isTokenValid(refreshToken, JwtService.TokenType.REFRESH)) {
             throw new UnauthorizedException("Refresh token không hợp lệ hoặc đã hết hạn");
         }
 
@@ -86,14 +87,14 @@ public class AuthService {
     }
 
     public void logout(String accessToken, String refreshToken) {
-        if (accessToken != null && jwtService.isTokenValid(accessToken)) {
+        if (accessToken != null && jwtService.isTokenValid(accessToken, JwtService.TokenType.ACCESS)) {
             String jti = jwtService.extractJti(accessToken);
             Date expiration = jwtService.extractExpiration(accessToken);
             long ttlMs = expiration.getTime() - System.currentTimeMillis();
             tokenBlacklistService.blacklist(jti, Duration.ofMillis(Math.max(ttlMs, 0)));
         }
 
-        if (refreshToken != null && jwtService.isTokenValid(refreshToken)) {
+        if (refreshToken != null && jwtService.isTokenValid(refreshToken, JwtService.TokenType.REFRESH)) {
             Long userId = jwtService.extractUserId(refreshToken);
             String jti = jwtService.extractJti(refreshToken);
             refreshTokenService.revoke(userId, jti);
