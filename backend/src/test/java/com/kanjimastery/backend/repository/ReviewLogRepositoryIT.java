@@ -195,6 +195,22 @@ class ReviewLogRepositoryIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void countReviewsSince_shouldCountScheduledReviewsOfStudiedWords_fromEverySource() {
+        LocalDateTime since = LocalDateTime.now().minusHours(2);
+        saveReview(since.plusMinutes(5), CardState.REVIEW, true);
+        saveReview(since.plusMinutes(6), CardState.RELEARNING, true);
+        reviewLogRepository.save(ReviewLog.builder().userId(userId).kanjiId(kanjiId).source(ReviewSource.QUIZ)
+                .direction(QuizDirection.MEANING).correct(true).rating(ReviewRating.GOOD).stateBefore(CardState.REVIEW)
+                .scheduled(true).reviewedAt(since.plusMinutes(7)).build());
+        saveReview(since.plusMinutes(8), CardState.NEW, true);        // lần học đầu của từ mới - có hạn mức riêng
+        saveReview(since.plusMinutes(9), CardState.REVIEW, false);    // chỉ ghi lại, không vào lịch ôn
+        saveReview(since.minusMinutes(1), CardState.REVIEW, true);    // trước mốc
+
+        assertThat(reviewLogRepository.countReviewsSince(userId, since)).isEqualTo(3);
+        assertThat(reviewLogRepository.countReviewsSince(userId, since.plusMinutes(10))).isZero();
+    }
+
+    @Test
     void topQuizMistakes_shouldKeepTheMostFrequentRecentOnes_upToTheLimit() {
         LocalDateTime now = LocalDateTime.now();
         saveAnswer(now.minusDays(100), DIRECTION, false, "cũ quá");
