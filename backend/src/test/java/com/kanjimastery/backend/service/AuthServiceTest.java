@@ -2,9 +2,11 @@ package com.kanjimastery.backend.service;
 
 import com.kanjimastery.backend.config.JwtProperties;
 import com.kanjimastery.backend.dto.AuthResponse;
+import com.kanjimastery.backend.dto.ChangePasswordRequest;
 import com.kanjimastery.backend.dto.LoginRequest;
 import com.kanjimastery.backend.dto.RefreshTokenRequest;
 import com.kanjimastery.backend.dto.RegisterRequest;
+import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.ForbiddenException;
 import com.kanjimastery.backend.exception.TooManyRequestsException;
 import com.kanjimastery.backend.exception.UnauthorizedException;
@@ -19,12 +21,14 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Duration;
 import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -124,6 +128,30 @@ class AuthServiceTest {
         authService.logout("refresh-token", "access-token");
 
         verifyNoInteractions(tokenBlacklistService, refreshTokenService);
+    }
+
+    @Test
+    void changePassword_shouldEndEverySession_andBlacklistThisAccessToken() {
+        ChangePasswordRequest request = new ChangePasswordRequest();
+        when(userService.changePassword("taro", request)).thenReturn(User.builder().id(7L).username("taro").build());
+        when(jwtService.isTokenValid("access-token", JwtService.TokenType.ACCESS)).thenReturn(true);
+        when(jwtService.extractJti("access-token")).thenReturn("jti-a");
+        when(jwtService.extractExpiration("access-token")).thenReturn(new Date(System.currentTimeMillis() + 60_000));
+
+        authService.changePassword("taro", "access-token", request);
+
+        verify(refreshTokenService).revokeAll(7L);
+        verify(tokenBlacklistService).blacklist(eq("jti-a"), any(Duration.class));
+    }
+
+    @Test
+    void changePassword_shouldKeepTheSessions_whenTheOldPasswordIsWrong() {
+        ChangePasswordRequest request = new ChangePasswordRequest();
+        when(userService.changePassword("taro", request)).thenThrow(new BadRequestException("Mật khẩu hiện tại không đúng"));
+
+        assertThatThrownBy(() -> authService.changePassword("taro", "access-token", request))
+                .isInstanceOf(BadRequestException.class);
+        verifyNoInteractions(refreshTokenService, tokenBlacklistService);
     }
 
     private static RefreshTokenRequest refreshRequest(String token) {

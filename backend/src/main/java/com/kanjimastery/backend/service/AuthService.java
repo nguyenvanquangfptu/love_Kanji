@@ -6,6 +6,7 @@ import com.kanjimastery.backend.model.User;
 import com.kanjimastery.backend.repository.UserRepository;
 import com.kanjimastery.backend.service.UserService;
 import com.kanjimastery.backend.dto.AuthResponse;
+import com.kanjimastery.backend.dto.ChangePasswordRequest;
 import com.kanjimastery.backend.dto.LoginRequest;
 import com.kanjimastery.backend.dto.RefreshTokenRequest;
 import com.kanjimastery.backend.dto.RegisterRequest;
@@ -87,17 +88,32 @@ public class AuthService {
     }
 
     public void logout(String accessToken, String refreshToken) {
-        if (accessToken != null && jwtService.isTokenValid(accessToken, JwtService.TokenType.ACCESS)) {
-            String jti = jwtService.extractJti(accessToken);
-            Date expiration = jwtService.extractExpiration(accessToken);
-            long ttlMs = expiration.getTime() - System.currentTimeMillis();
-            tokenBlacklistService.blacklist(jti, Duration.ofMillis(Math.max(ttlMs, 0)));
-        }
+        blacklistAccessToken(accessToken);
 
         if (refreshToken != null && jwtService.isTokenValid(refreshToken, JwtService.TokenType.REFRESH)) {
             Long userId = jwtService.extractUserId(refreshToken);
             String jti = jwtService.extractJti(refreshToken);
             refreshTokenService.revoke(userId, jti);
+        }
+    }
+
+    /**
+     * A new password ends every session, this one included, so whoever may hold a stolen token loses it: all refresh
+     * tokens are revoked and the access token of this request is blacklisted. Access tokens held on other devices
+     * keep working until they expire (at most 15 minutes), since only their refresh is blocked.
+     */
+    public void changePassword(String username, String accessToken, ChangePasswordRequest request) {
+        User user = userService.changePassword(username, request);
+        refreshTokenService.revokeAll(user.getId());
+        blacklistAccessToken(accessToken);
+    }
+
+    private void blacklistAccessToken(String accessToken) {
+        if (accessToken != null && jwtService.isTokenValid(accessToken, JwtService.TokenType.ACCESS)) {
+            String jti = jwtService.extractJti(accessToken);
+            Date expiration = jwtService.extractExpiration(accessToken);
+            long ttlMs = expiration.getTime() - System.currentTimeMillis();
+            tokenBlacklistService.blacklist(jti, Duration.ofMillis(Math.max(ttlMs, 0)));
         }
     }
 

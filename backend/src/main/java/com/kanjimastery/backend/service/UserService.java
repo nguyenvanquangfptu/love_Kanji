@@ -47,12 +47,12 @@ public class UserService {
     }
 
     @Transactional
-    public void changePassword(String username, ChangePasswordRequest request) {
+    public User changePassword(String username, ChangePasswordRequest request) {
         User user = getByUsername(username);
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPasswordHash())) {
             throw new BadRequestException("Mật khẩu hiện tại không đúng");
         }
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
-        userRepository.save(user);
+        return userRepository.save(user);
     }
 }

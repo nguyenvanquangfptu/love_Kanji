@@ -3,6 +3,7 @@ package com.kanjimastery.backend.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.dto.AuthResponse;
+import com.kanjimastery.backend.dto.LoginRequest;
 import com.kanjimastery.backend.dto.RegisterRequest;
 import com.kanjimastery.backend.repository.UserRepository;
 import com.kanjimastery.backend.service.AuthService;
@@ -24,7 +25,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Real tokens through the real filter chain: what each token opens, and what logging out closes. */
+/** Real tokens through the real filter chain: what each token opens, and what logging out or a new password closes. */
 @AutoConfigureMockMvc
 class AuthFlowIT extends AbstractIntegrationTest {
 
@@ -71,6 +72,34 @@ class AuthFlowIT extends AbstractIntegrationTest {
 
         // Still a valid session: the access token was refused as the wrong type, not treated as a stolen refresh token.
         refresh(tokens.getRefreshToken()).andExpect(status().isOk());
+    }
+
+    @Test
+    void changingThePassword_shouldEndEverySession() throws Exception {
+        AuthResponse thisDevice = newLearner();
+        AuthResponse otherDevice = authService.login(loginRequest(usernames.getLast(), PASSWORD));
+
+        mockMvc.perform(post("/api/v1/auth/change-password")
+                        .header(AUTHORIZATION, "Bearer " + thisDevice.getAccessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("oldPassword", PASSWORD, "newPassword", "mat-khau-moi-2026"))))
+                .andExpect(status().isNoContent());
+
+        callApi(thisDevice.getAccessToken()).andExpect(status().isUnauthorized());
+        refresh(thisDevice.getRefreshToken()).andExpect(status().isUnauthorized());
+        refresh(otherDevice.getRefreshToken()).andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("username", usernames.getLast(), "password", "mat-khau-moi-2026"))))
+                .andExpect(status().isOk());
+    }
+
+    private static LoginRequest loginRequest(String username, String password) {
+        LoginRequest request = new LoginRequest();
+        request.setUsername(username);
+        request.setPassword(password);
+        return request;
     }
 
     private AuthResponse newLearner() {
