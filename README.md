@@ -366,6 +366,8 @@ cd backend
 
 > Lưu ý: `docker-compose.yml` map PostgreSQL ra cổng **5433** (không phải 5432 mặc định) để tránh xung đột nếu máy dev đã có sẵn PostgreSQL native.
 
+> `./mvnw spring-boot:run` tự bật profile `dev`, profile duy nhất có sẵn khoá JWT dùng cho máy dev. Chạy từ IDE thì đặt **Active profiles = `dev`**. Ngoài profile `dev` (kể cả `docker` hay `java -jar`), backend không khởi động nếu thiếu `JWT_SECRET` hoặc khoá ngắn hơn 32 ký tự.
+
 Chạy Frontend riêng (hot reload, Vite dev server proxy `/api` sang `localhost:8080`):
 
 ```bash

@@ -23,6 +23,8 @@
         <springdoc.version>2.6.0</springdoc.version>
         <testcontainers.version>1.21.4</testcontainers.version>
         <kuromoji.version>0.9.0</kuromoji.version>
+        <!-- ./mvnw spring-boot:run is local development; override with -Dspring-boot.run.profiles=... -->
+        <spring-boot.run.profiles>dev</spring-boot.run.profiles>
     </properties>
 
     <dependencies>
