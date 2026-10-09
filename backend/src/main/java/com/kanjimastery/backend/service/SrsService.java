@@ -392,10 +392,13 @@ public class SrsService {
     public SrsStatsResponse getStats(Long userId) {
         LocalDateTime now = calendar.now();
         long total = srsRepository.countByUserId(userId);
-        long due = srsRepository.countByUserIdAndNextReviewAtLessThanEqual(userId, now);
+        // Từ mới chưa học lần nào không phải "cần ôn": chúng chờ theo số từ mới mỗi ngày của kế hoạch. Đếm cả vào đây
+        // thì vừa thêm một bài 50 từ, ô "Cần ôn" đã báo 50 dù kế hoạch hôm nay không có thẻ ôn nào.
+        long newWaiting = srsRepository.countByUserIdAndLastReviewedAtIsNull(userId);
+        long due = srsRepository.countByUserIdAndLastReviewedAtIsNotNullAndNextReviewAtLessThanEqual(userId, now);
         long mastered = srsRepository.countByUserIdAndNextReviewAtAfterAndReviewIntervalDaysGreaterThanEqual(
                 userId, now, MASTERED_INTERVAL_DAYS_THRESHOLD);
-        long learning = total - due - mastered;
+        long learning = total - newWaiting - due - mastered;
 
         return SrsStatsResponse.builder()
                 .totalCardsStarted(total)

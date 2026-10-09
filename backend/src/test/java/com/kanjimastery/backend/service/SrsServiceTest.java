@@ -388,6 +388,24 @@ class SrsServiceTest {
     }
 
     @Test
+    void getStats_shouldNotCountWordsNeverStudied_asDueForReview() {
+        // 60 từ trong Ôn tập: 50 từ của bài vừa thêm chưa học, 4 thẻ đến hạn, 1 thẻ đã thuộc, còn lại đang học.
+        when(srsRepository.countByUserId(USER_ID)).thenReturn(60L);
+        when(srsRepository.countByUserIdAndLastReviewedAtIsNull(USER_ID)).thenReturn(50L);
+        when(srsRepository.countByUserIdAndLastReviewedAtIsNotNullAndNextReviewAtLessThanEqual(eq(USER_ID), any()))
+                .thenReturn(4L);
+        when(srsRepository.countByUserIdAndNextReviewAtAfterAndReviewIntervalDaysGreaterThanEqual(eq(USER_ID), any(),
+                eq(SrsService.MASTERED_INTERVAL_DAYS_THRESHOLD))).thenReturn(1L);
+
+        var stats = srsService.getStats(USER_ID);
+
+        assertThat(stats.getTotalCardsStarted()).isEqualTo(60);
+        assertThat(stats.getDueForReview()).isEqualTo(4);
+        assertThat(stats.getStillLearning()).isEqualTo(5);
+        assertThat(stats.getDeeplyMemorized()).isEqualTo(1);
+    }
+
+    @Test
     void submitReview_shouldNotCountALapse_whenANewCardIsForgotten() {
         UserKanjiSrs neverReviewed = UserKanjiSrs.builder().userId(USER_ID).kanjiId(KANJI_ID)
                 .sm2(new Sm2State(0, new BigDecimal("2.50")))
