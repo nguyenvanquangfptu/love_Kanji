@@ -296,7 +296,7 @@ Sau khi cả 5 container (`postgres`, `redis`, `backend`, `frontend`, `db-backup
 
 - Web app: `http://localhost:3000`. Điện thoại cùng mạng Wi-Fi mở bằng `http://<IP của máy>:3000`.
 - API: `http://localhost:8080`
-- Swagger UI: `http://localhost:8080/swagger-ui.html`
+- Swagger UI: `http://localhost:8080/swagger-ui.html` — tắt mặc định khi chạy bằng Docker; đặt `API_DOCS_ENABLED=true` trong `.env` rồi chạy lại `docker-compose up -d` để bật. Khi chạy dev bằng `./mvnw spring-boot:run` thì luôn bật.
 
 API (8080), PostgreSQL (5433) và Redis (6379) chỉ mở cho chính máy chạy Docker (`127.0.0.1`). Chỉ cổng 3000 của web app mở cho mạng LAN, và mọi request API từ máy khác đều phải đi qua nginx.
 

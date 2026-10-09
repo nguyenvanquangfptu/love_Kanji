@@ -121,6 +121,13 @@ spring:
   data:
     redis:
       host: redis
+# The docker profile is what runs on a server: no map of the whole API there unless asked for.
+# Set API_DOCS_ENABLED=true in .env to use Swagger UI on this machine.
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:false}
 
 ---
 # Local development only: `./mvnw spring-boot:run` turns this profile on (see spring-boot.run.profiles in pom.xml).
