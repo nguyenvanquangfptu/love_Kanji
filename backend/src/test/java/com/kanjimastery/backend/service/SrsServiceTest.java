@@ -356,6 +356,38 @@ class SrsServiceTest {
     }
 
     @Test
+    void recordQuizAnswer_shouldLowerTheEasinessOnlyOnce_forMistakesInARowTheSameDay() {
+        UserKanjiSrs card = card(2, "2.50", 6, LocalDateTime.now().minusHours(10));
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.of(card));
+        when(srsRepository.save(any(UserKanjiSrs.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        for (int i = 0; i < 3; i++) {
+            srsService.recordQuizAnswer(USER_ID, KANJI_ID, quizAnswer(false, ReviewRating.AGAIN));
+        }
+
+        // Lần sai đầu: 2,50 - 0,54. Hai lần sai sau trong cùng ngày học không trừ thêm (trước đây: 1,42 rồi 1,30).
+        assertThat(card.getEasinessFactor()).isEqualByComparingTo("1.96");
+        assertThat(card.getRepetitionCount()).isZero();
+        assertThat(card.getReviewIntervalDays()).isEqualTo(1);
+        assertThat(card.getLapseCount()).isEqualTo(1);
+    }
+
+    @Test
+    void submitReview_shouldLowerTheEasinessAgain_whenTheWordIsForgottenAgainOnAnotherDay() {
+        // Quên từ hôm qua (EF đã bị trừ một lần), hôm nay đến hạn và lại quên: ngày học mới thì trừ tiếp.
+        UserKanjiSrs card = UserKanjiSrs.builder().userId(USER_ID).kanjiId(KANJI_ID)
+                .sm2(new Sm2State(0, new BigDecimal("1.96"))).reviewIntervalDays(1)
+                .lastReviewedAt(LocalDateTime.now().minusDays(1)).nextReviewAt(LocalDateTime.now().minusHours(1)).build();
+        when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.of(card));
+        givenSaveReturnsCard();
+
+        srsService.submitReview(USER_ID, reviewRequest(ReviewRating.AGAIN, 1_000));
+
+        assertThat(card.getEasinessFactor()).isEqualByComparingTo("1.42");
+    }
+
+    @Test
     void submitReview_shouldNotCountALapse_whenANewCardIsForgotten() {
         UserKanjiSrs neverReviewed = UserKanjiSrs.builder().userId(USER_ID).kanjiId(KANJI_ID)
                 .sm2(new Sm2State(0, new BigDecimal("2.50")))

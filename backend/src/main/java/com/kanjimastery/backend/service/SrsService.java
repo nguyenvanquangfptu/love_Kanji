@@ -242,7 +242,8 @@ public class SrsService {
      * Tính lịch ôn mới (thẻ chưa có thì tạo) và ghi lại lần trả lời trong cùng transaction.
      * "Quên" một thẻ đang ôn bình thường (đã nhớ lại được kể từ lần quên trước) được đếm vào số lần quên - đủ số lần
      * thì thành từ khó. Quên tiếp khi đang học lại không tính thêm: trắc nghiệm thích ứng hay hỏi lại từ vừa sai, nên
-     * sai nhiều lần liền trong một buổi vẫn chỉ là một lần quên.
+     * sai nhiều lần liền trong một buổi vẫn chỉ là một lần quên - và trong cùng ngày học, SM-2 cũng chỉ trừ hệ số dễ
+     * (EF) một lần.
      */
     private UserKanjiSrs schedule(Long userId, Long kanjiId, UserKanjiSrs card, Answer answer, LocalDateTime now,
                                   SchedulingSettings settings) {
@@ -281,6 +282,13 @@ public class SrsService {
                 card == null ? new BigDecimal("2.50") : card.getEasinessFactor(),
                 card == null ? 0 : card.getReviewIntervalDays(),
                 rating.sm2Quality());
+        if (rating == ReviewRating.AGAIN && forgottenEarlierToday(card, now)) {
+            // SM-2 đã trừ hệ số dễ (EF) ở lần quên đầu tiên trong ngày. Quên tiếp trong cùng ngày học thì không trừ thêm,
+            // giống cách đếm số lần quên: trắc nghiệm hay hỏi lại từ vừa sai, và mỗi lần sai trừ 0,54 thì vài câu sai liền
+            // nhau kéo EF xuống mức sàn 1,3 - khoảng ôn về sau chỉ còn nhân 1,3, phải ôn dày gấp mấy lần mãi về sau.
+            sm2 = new SrsCalculatorService.SrsResult(sm2.repetitionCount(), card.getEasinessFactor(),
+                    sm2.reviewIntervalDays());
+        }
         Fsrs fsrs = settings.fsrs();
         Fsrs.Memory before = memoryBefore(card, fsrs);
         Fsrs.Memory memory = before == null ? fsrs.first(rating.value())
@@ -317,6 +325,11 @@ public class SrsService {
         double hardness = (2.5 - card.getEasinessFactor().doubleValue()) / (2.5 - 1.3);
         double difficulty = Math.min(Math.max(easiest + hardness * (10 - easiest), 1), 10);
         return new Fsrs.Memory(Math.max(card.getReviewIntervalDays(), 1), difficulty);
+    }
+
+    /** Thẻ đang học lại (đã quên, chưa nhớ lại được) và lần trả lời trước nằm trong cùng ngày học với {@code now}. */
+    private boolean forgottenEarlierToday(UserKanjiSrs card, LocalDateTime now) {
+        return CardState.RELEARNING.equals(CardState.of(card)) && elapsedDays(card, now) == 0;
     }
 
     /** Số ngày học kể từ lần ôn trước (cùng ngày học = 0). */
