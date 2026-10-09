@@ -30,6 +30,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
@@ -278,8 +279,11 @@ public class QuizService {
             return future.get(SENTENCE_BUDGET_MS, TimeUnit.MILLISECONDS).orElse(Map.of());
         } catch (TimeoutException ex) {
             log.debug("Hết thời gian chờ AI sinh câu ví dụ - quiz lần này dùng câu hỏi không có ngữ cảnh");
-        } catch (Exception ex) {
-            log.warn("Lỗi khi chờ AI sinh câu ví dụ: {}", ex.getMessage());
+        } catch (InterruptedException ex) {
+            // Keep the interrupt so whoever interrupted this thread (e.g. a shutdown) still sees it.
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException ex) {
+            log.warn("Lỗi khi chờ AI sinh câu ví dụ - quiz lần này dùng câu hỏi không có ngữ cảnh", ex.getCause());
         }
         return Map.of();
     }

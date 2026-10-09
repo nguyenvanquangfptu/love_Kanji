@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.Answer;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -253,6 +255,24 @@ class QuizServiceTest {
     }
 
     @Test
+    void generate_shouldKeepInterruptFlag_whenInterruptedWhileWaitingForSentences() {
+        CountDownLatch release = new CountDownLatch(1);
+        givenLessonWithGemini(invocation -> {
+            release.await();
+            return Optional.empty();
+        });
+
+        Thread.currentThread().interrupt();
+        try {
+            assertThat(quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null)).isNotNull();
+            assertThat(Thread.currentThread().isInterrupted()).as("cờ interrupt phải được giữ lại").isTrue();
+        } finally {
+            Thread.interrupted();
+            release.countDown();
+        }
+    }
+
+    @Test
     void generate_shouldCapQuestionCount_forAWholeLevel() {
         givenQuizAllowed();
         List<Kanji> level = IntStream.rangeClosed(1, 80)
@@ -414,13 +434,17 @@ class QuizServiceTest {
     }
 
     private void givenLessonWithGeminiAnswer(Optional<Map<Long, String>> answer) {
+        givenLessonWithGemini(invocation -> answer);
+    }
+
+    private void givenLessonWithGemini(Answer<Optional<Map<Long, String>>> answer) {
         when(rateLimiter.tryAcquire("ratelimit:quiz:taro", 30, Duration.ofSeconds(60))).thenReturn(true);
         when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(failedWord, missingWord, readyWord));
         when(sentenceGenerationService.isEnabled()).thenReturn(true);
         when(rateLimiter.counts(anyList())).thenAnswer(invocation -> invocation.<List<String>>getArgument(0).stream()
                 .map(key -> key.equals("sentence:failures:1") ? 2L : 0L)
                 .toList());
-        when(sentenceGenerationService.generateSentences(anyList())).thenReturn(answer);
+        when(sentenceGenerationService.generateSentences(anyList())).thenAnswer(answer);
     }
 
     private static Kanji word(Long id, String character, String reading, String sentence) {
