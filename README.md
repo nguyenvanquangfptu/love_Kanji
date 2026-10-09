@@ -384,12 +384,13 @@ Mở `http://localhost:5173`.
 
 ```bash
 cd backend
-./mvnw test
+./mvnw test     # chỉ unit test (*Test), không cần Docker
+./mvnw verify   # unit test + integration test (*IT, Testcontainers) - cần Docker đang chạy
 ```
 
 - **Unit test** (không cần Docker): `SrsCalculatorServiceTest`, `JwtServiceTest`, `UserServiceTest`, và phần cá nhân hoá: `AdaptiveQuizPlannerTest` (chọn từ, hướng hỏi), `StudyPlanServiceTest` (kế hoạch hôm nay, mục tiêu), `DailySessionOrderTest`, `StudyCalendarTest` (ngày học theo giờ Việt Nam), `FsrsTest` (golden test với py-fsrs), `FsrsOptimizerTest`, `FsrsParametersServiceTest`, `ExamDiagnosisServiceTest`, `ExamQuestionGeneratorTest`...
 - **Đề JLPT** — unit: `JlptExamAssemblerTest`, `JlptExamServiceTest`, `QuestionDraftServiceTest` / `PassageDraftServiceTest` (Gemini giả lập), `VocabularyLevelCheckerTest`, `KatakanaSpellingTest`, `GrammarPracticeServiceTest`, `LeaderboardServiceTest`; integration: `JlptExamSittingIT` (buổi thi hai phần, không gặp lại câu cũ, bảng xếp hạng), `ExamPassageIT`, `ExamQuestionReviewIT`, `GrammarPracticeIT`, `QuestionReportIT`, `ItemAnalysisIT` (40 lượt thi dựng sẵn), `Admin*ControllerIT` (phân quyền ADMIN).
-- **Integration test** (Testcontainers - tự khởi chạy Postgres + Redis trong container tạm, không phụ thuộc môi trường local): `ExamFinalizationConcurrencyIT` (race condition + rollback), `ExamSessionStoreIT` (TTL buffer), `KanjiMasteryApplicationTests` (context loads), `ReviewLogRepositoryIT` / `TagRepositoryIT` / `UserKanjiSrsRepositoryIT` (các truy vấn native: `percentile_cont`, `FILTER`, `LAG`, `LEAD`, `split_part`), `FsrsParametersRepositoryIT` (JSONB), `ExamQuestionRepositoryIT` (gắn kỹ năng, từ vựng cho câu mẫu), `ExamDiagnosisIT` (nộp bài → từ sai vào lịch ôn, chỉ một lần), `ExamQuestionGeneratorIT`, `FsrsSimulationIT` (mô phỏng 120 ngày, ~90 giây; đổi hạt giống bằng `-Dsimulation.seed=1`, báo cáo và lịch sử ôn ghi ra `backend/target/fsrs-simulation/`).
+- **Integration test** (Testcontainers - tự khởi chạy Postgres + Redis trong container tạm, không phụ thuộc môi trường local): `ExamFinalizationConcurrencyIT` (race condition + rollback), `ExamSessionStoreIT` (TTL buffer), `KanjiMasteryApplicationIT` (context loads), `ReviewLogRepositoryIT` / `TagRepositoryIT` / `UserKanjiSrsRepositoryIT` (các truy vấn native: `percentile_cont`, `FILTER`, `LAG`, `LEAD`, `split_part`), `FsrsParametersRepositoryIT` (JSONB), `ExamQuestionRepositoryIT` (gắn kỹ năng, từ vựng cho câu mẫu), `ExamDiagnosisIT` (nộp bài → từ sai vào lịch ôn, chỉ một lần), `ExamQuestionGeneratorIT`, `FsrsSimulationIT` (mô phỏng 120 ngày, ~90 giây; đổi hạt giống bằng `-Dsimulation.seed=1`, báo cáo và lịch sử ôn ghi ra `backend/target/fsrs-simulation/`).
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) chạy toàn bộ test suite tự động trên mỗi push/PR vào `main`.
 
