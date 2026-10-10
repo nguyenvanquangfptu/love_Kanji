@@ -74,6 +74,11 @@ export function ExamSittingPage() {
           <span className="flex flex-wrap items-center gap-2">
             <Badge variant={status.variant}>{status.label}</Badge>
             {sitting.questionSource === 'IMPORTED' && <Badge variant="outline">Đề tự soạn</Badge>}
+            {sitting.customTime && (
+              <Badge variant="orange" title="Có phần tự đặt giờ nên không tính vào bảng xếp hạng">
+                Giờ tự đặt · không xếp hạng
+              </Badge>
+            )}
             {sitting.sections.map((s) => SECTION_META[s.name].vi).join(' + ')}
           </span>
         }

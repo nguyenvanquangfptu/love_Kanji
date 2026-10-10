@@ -42,6 +42,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -247,6 +248,29 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
                 .filter(found -> LEVEL.equals(found.getJlptLevel()))
                 .findFirst().orElseThrow();
         assertThat(level.getSections()).extracting(JlptLevelResponse.Section::getQuestionCount).containsExactly(2, 1);
+    }
+
+    @Test
+    void aSittingWithItsOwnTimes_shouldTimeEachPartAsChosen_andStayOffTheLeaderboard() {
+        StartJlptExamRequest request = request("VOCABULARY", "GRAMMAR");
+        request.setMinutes(Map.of("VOCABULARY", 40));
+
+        StartExamResponse vocabulary = jlptExamService.startSitting(userId, request);
+        // Giờ tự đặt dùng nguyên: đề chỉ có 3/4 câu vẫn đủ 40 phút (giờ đề thật sẽ là 8 phút).
+        assertThat(vocabulary.getRemainingSeconds()).isEqualTo(40 * 60);
+        assertThat(redisTemplate.getExpire("exam:timeout:" + vocabulary.getAttemptId())).isBetween(2390L, 2400L);
+        examService.submit(userId, vocabulary.getAttemptId());
+
+        // Phần không tự đặt giờ thì theo giờ đề thật.
+        StartExamResponse grammar = jlptExamService.startNextSection(userId, vocabulary.getSittingId());
+        assertThat(grammar.getRemainingSeconds()).isEqualTo(5 * 60);
+        examService.submit(userId, grammar.getAttemptId());
+
+        ExamSittingResponse finished = jlptExamService.getSitting(userId, vocabulary.getSittingId());
+        assertThat(finished.getStatus()).isEqualTo(ExamSittingStatus.COMPLETED);
+        assertThat(finished.isCustomTime()).isTrue();
+        assertThat(leaderboardService.getMyJlptRank(LEVEL.name(), userId).rank())
+                .as("làm với giờ tự đặt thì không so điểm với người làm đúng giờ").isNull();
     }
 
     @Test

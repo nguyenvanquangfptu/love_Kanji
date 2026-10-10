@@ -17,6 +17,7 @@ import lombok.Setter;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 /** Một buổi làm đề JLPT gồm một hoặc nhiều phần - xem V22__add_exam_sittings.sql. */
 @Entity
@@ -59,7 +60,28 @@ public class ExamSitting {
     @Column(name = "question_source", length = 10)
     private ExamQuestionSource questionSource;
 
+    /** Thời gian tự đặt của từng phần, vd. "VOCABULARY:40,GRAMMAR:30"; phần không có ở đây theo thời gian đề thật. */
+    @Column(name = "section_minutes", length = 60)
+    private String sectionMinutes;
+
     public List<ExamSection> sectionList() {
         return Arrays.stream(sections.split(",")).map(ExamSection::valueOf).toList();
+    }
+
+    /** Số phút người học tự đặt cho một phần, nếu có. */
+    public Optional<Integer> customMinutes(ExamSection section) {
+        if (!hasCustomTime()) {
+            return Optional.empty();
+        }
+        return Arrays.stream(sectionMinutes.split(","))
+                .map(entry -> entry.split(":"))
+                .filter(pair -> pair.length == 2 && pair[0].equals(section.name()))
+                .map(pair -> Integer.parseInt(pair[1]))
+                .findFirst();
+    }
+
+    /** Có phần làm với thời gian tự đặt: kết quả không so được với người làm đúng giờ đề thật. */
+    public boolean hasCustomTime() {
+        return sectionMinutes != null && !sectionMinutes.isBlank();
     }
 }

@@ -25,6 +25,8 @@ public class ExamSittingResponse {
     private LocalDateTime finishedAt;
     /** Nguồn câu đã chọn (vd. IMPORTED - các đề tự soạn); null = mọi câu đã duyệt. */
     private ExamQuestionSource questionSource;
+    /** Có phần làm với thời gian tự đặt: buổi thi không được tính vào bảng xếp hạng. */
+    private boolean customTime;
     /** Các phần đã chọn, theo thứ tự làm bài. */
     private List<Section> sections;
     /** Phần làm tiếp theo; null khi đang làm dở một phần, đã làm hết, hoặc buổi thi đã kết thúc. */

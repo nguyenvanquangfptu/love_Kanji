@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.List;
+import java.util.Map;
 
 @Getter
 @Setter
@@ -21,4 +22,10 @@ public class StartJlptExamRequest {
 
     /** Chỉ lấy câu của nguồn này (vd. IMPORTED - các đề tự soạn); bỏ trống = mọi câu đã duyệt. */
     private ExamQuestionSource source;
+
+    /**
+     * Thời gian tự đặt (phút) cho từng phần đã chọn, vd. {"VOCABULARY": 40}; phần không có ở đây làm theo thời gian đề
+     * thật. Có phần tự đặt giờ thì buổi thi không được tính vào bảng xếp hạng.
+     */
+    private Map<String, Integer> minutes;
 }

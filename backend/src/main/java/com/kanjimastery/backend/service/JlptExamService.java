@@ -30,6 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -49,6 +51,9 @@ public class JlptExamService {
 
     /** Thang điểm ước tính của buổi thi. */
     static final int ESTIMATED_SCALE = 60;
+    /** Khoảng thời gian người học được tự đặt cho một phần (phút). */
+    static final int MIN_CUSTOM_MINUTES = 5;
+    static final int MAX_CUSTOM_MINUTES = 120;
 
     /**
      * Một buổi thi vừa hoàn thành với đủ các phần của cấp độ - để đưa lên bảng xếp hạng đề JLPT.
@@ -143,9 +148,42 @@ public class JlptExamService {
                 .jlptLevel(level)
                 .sections(sections.stream().map(ExamSection::name).collect(Collectors.joining(",")))
                 .questionSource(request.getSource())
+                .sectionMinutes(sectionMinutes(request.getMinutes(), sections))
                 .startedAt(LocalDateTime.now(clock))
                 .build());
         return startSection(sitting, sections.get(0), new HashSet<>());
+    }
+
+    /**
+     * Thời gian tự đặt dạng lưu trong buổi thi ("VOCABULARY:40,GRAMMAR:30", theo thứ tự làm bài); null nếu mọi phần
+     * theo thời gian đề thật. Chỉ đặt được cho phần đã chọn, mỗi phần {@value #MIN_CUSTOM_MINUTES}-
+     * {@value #MAX_CUSTOM_MINUTES} phút.
+     */
+    static String sectionMinutes(Map<String, Integer> minutes, List<ExamSection> sections) {
+        if (minutes == null) {
+            return null;
+        }
+        Map<ExamSection, Integer> bySection = new EnumMap<>(ExamSection.class);
+        minutes.forEach((name, value) -> {
+            ExamSection section = Arrays.stream(ExamSection.values())
+                    .filter(candidate -> candidate.name().equalsIgnoreCase(name))
+                    .findFirst()
+                    .filter(sections::contains)
+                    .orElseThrow(() -> new BadRequestException("Chỉ đặt giờ được cho phần đã chọn: " + name));
+            if (value == null) {
+                return;
+            }
+            if (value < MIN_CUSTOM_MINUTES || value > MAX_CUSTOM_MINUTES) {
+                throw new BadRequestException("Thời gian mỗi phần từ " + MIN_CUSTOM_MINUTES + " đến "
+                        + MAX_CUSTOM_MINUTES + " phút");
+            }
+            bySection.put(section, value);
+        });
+        String stored = sections.stream()
+                .filter(bySection::containsKey)
+                .map(section -> section.name() + ":" + bySection.get(section))
+                .collect(Collectors.joining(","));
+        return stored.isEmpty() ? null : stored;
     }
 
     /** Bắt đầu phần kế tiếp của buổi thi, sau khi phần trước đã nộp hoặc hết giờ. */
@@ -186,7 +224,10 @@ public class JlptExamService {
                 .jlptLevel(sitting.getJlptLevel())
                 .sittingId(sitting.getId())
                 .section(sectionName)
-                .durationSeconds(durationSeconds(section, questions.size()))
+                // Giờ tự đặt dùng nguyên như người học chọn; không thì giờ đề thật, giảm theo tỉ lệ khi đề ít câu hơn.
+                .durationSeconds(sitting.customMinutes(sectionName)
+                        .map(minutes -> minutes * 60)
+                        .orElseGet(() -> durationSeconds(section, questions.size())))
                 .build();
         return examService.begin(attempt, questions, mondai.stream()
                 .map(part -> new ExamMondaiResponse(part.number(), part.type(), part.questions().size(),
@@ -253,6 +294,7 @@ public class JlptExamService {
                 .startedAt(sitting.getStartedAt())
                 .finishedAt(sitting.getFinishedAt())
                 .questionSource(sitting.getQuestionSource())
+                .customTime(sitting.hasCustomTime())
                 .sections(sections)
                 .nextSection(canContinue ? nextSection(sitting, attempts) : null)
                 .estimatedScore(total > 0 ? estimatedScore(correct, total) : null)
@@ -299,8 +341,14 @@ public class JlptExamService {
         return finished && updated > 0 ? completedSitting(sitting, attempts) : Optional.empty();
     }
 
-    /** Kết quả cả buổi thi, chỉ khi buổi thi gồm mọi phần trong cấu trúc đề của cấp độ (đề trọn vẹn). */
+    /**
+     * Kết quả cả buổi thi để lên bảng xếp hạng: chỉ khi buổi thi gồm mọi phần trong cấu trúc đề của cấp độ (đề trọn vẹn)
+     * và làm đúng giờ đề thật - có thêm giờ thì điểm không so được với người khác.
+     */
     private Optional<CompletedSitting> completedSitting(ExamSitting sitting, List<UserExamAttempt> attempts) {
+        if (sitting.hasCustomTime()) {
+            return Optional.empty();
+        }
         JlptBlueprintProperties.Level blueprint = blueprints.getLevels().get(sitting.getJlptLevel());
         List<ExamSection> allSections = blueprint == null
                 ? List.of()

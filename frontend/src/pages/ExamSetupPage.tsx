@@ -91,6 +91,8 @@ function JlptSetup() {
   const [unchecked, setUnchecked] = useState<ExamSectionName[]>([])
   /** undefined = mọi câu đã duyệt; IMPORTED = chỉ câu của các đề tự soạn. */
   const [source, setSource] = useState<ExamQuestionSource | undefined>(undefined)
+  /** Phần tự đặt giờ → số phút đang gõ (chuỗi để gõ dở được); phần không có ở đây theo giờ đề thật. */
+  const [customMinutes, setCustomMinutes] = useState<Partial<Record<ExamSectionName, string>>>({})
 
   const levelsQuery = useQuery({
     queryKey: ['jlpt-levels', source ?? 'ALL'],
@@ -115,9 +117,24 @@ function JlptSetup() {
     levels.find((l) => l.sections.some((s) => s.questionCount > 0)) ??
     levels[0]
   const chosen = current.sections.filter((s) => s.questionCount > 0 && !unchecked.includes(s.name))
+  // Giờ tự đặt của các phần đã chọn; phần gõ chưa hợp lệ thì chưa cho bắt đầu.
+  const timed = chosen.filter((s) => customMinutes[s.name] !== undefined)
+  const invalidTime = timed.some((s) => !validMinutes(customMinutes[s.name]))
+  const minutes = timed.length
+    ? Object.fromEntries(timed.map((s) => [s.name, Number(customMinutes[s.name])]))
+    : undefined
 
   function toggle(name: ExamSectionName) {
     setUnchecked((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]))
+  }
+
+  function setTime(name: ExamSectionName, value: string | undefined) {
+    setCustomMinutes((prev) => {
+      const next = { ...prev }
+      if (value === undefined) delete next[name]
+      else next[name] = value
+      return next
+    })
   }
 
   return (
@@ -183,41 +200,55 @@ function JlptSetup() {
               const ready = s.questionCount > 0
               const checked = ready && !unchecked.includes(s.name)
               return (
-                <label
-                  key={s.name}
-                  className={cn(
-                    'flex items-center gap-3 rounded-2xl border-2 px-4 py-3',
-                    checked ? 'border-secondary bg-secondary-soft' : 'border-border bg-card',
-                    ready ? 'cursor-pointer' : 'cursor-not-allowed opacity-60',
-                  )}
-                >
-                  <input
-                    type="checkbox"
-                    className="h-5 w-5 accent-secondary"
-                    checked={checked}
-                    disabled={!ready}
-                    onChange={() => toggle(s.name)}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-jp font-black">{SECTION_META[s.name].jp}</span>
-                    <span className="block text-sm font-bold">
-                      {SECTION_META[s.name].vi} ·{' '}
-                      {ready ? (
-                        `${s.questionCount} câu · ${s.minutes} phút`
-                      ) : (
-                        <span className="text-muted-foreground">Chưa có câu hỏi</span>
+                <div key={s.name} className="flex flex-col gap-2">
+                  <label
+                    className={cn(
+                      'flex items-center gap-3 rounded-2xl border-2 px-4 py-3',
+                      checked ? 'border-secondary bg-secondary-soft' : 'border-border bg-card',
+                      ready ? 'cursor-pointer' : 'cursor-not-allowed opacity-60',
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 accent-secondary"
+                      checked={checked}
+                      disabled={!ready}
+                      onChange={() => toggle(s.name)}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-jp font-black">{SECTION_META[s.name].jp}</span>
+                      <span className="block text-sm font-bold">
+                        {SECTION_META[s.name].vi} ·{' '}
+                        {ready ? (
+                          `${s.questionCount} câu · ${s.minutes} phút`
+                        ) : (
+                          <span className="text-muted-foreground">Chưa có câu hỏi</span>
+                        )}
+                      </span>
+                      {ready && s.questionCount < s.plannedQuestions && (
+                        <span className="block text-xs font-semibold text-muted-foreground">
+                          Đề thật {s.plannedQuestions} câu · {s.plannedMinutes} phút
+                        </span>
                       )}
                     </span>
-                    {ready && s.questionCount < s.plannedQuestions && (
-                      <span className="block text-xs font-semibold text-muted-foreground">
-                        Đề thật {s.plannedQuestions} câu · {s.plannedMinutes} phút
-                      </span>
-                    )}
-                  </span>
-                </label>
+                  </label>
+                  {checked && (
+                    <SectionTime
+                      sectionLabel={SECTION_META[s.name].vi}
+                      standardMinutes={s.minutes}
+                      value={customMinutes[s.name]}
+                      onChange={(value) => setTime(s.name, value)}
+                    />
+                  )}
+                </div>
               )
             })}
           </div>
+          {timed.length > 0 && (
+            <p className="mt-2 rounded-xl bg-orange-soft px-3 py-2 text-xs font-semibold text-orange-dark">
+              Có phần tự đặt giờ: kết quả vẫn được chấm và lưu, nhưng không tính vào bảng xếp hạng.
+            </p>
+          )}
         </section>
 
         <ul className="flex flex-col gap-2 text-sm font-bold text-muted-foreground">
@@ -236,9 +267,14 @@ function JlptSetup() {
         <Button
           size="lg"
           className="w-full"
-          disabled={startMutation.isPending || chosen.length === 0}
+          disabled={startMutation.isPending || chosen.length === 0 || invalidTime}
           onClick={() =>
-            startMutation.mutate({ jlptLevel: current.jlptLevel, sections: chosen.map((s) => s.name), source })
+            startMutation.mutate({
+              jlptLevel: current.jlptLevel,
+              sections: chosen.map((s) => s.name),
+              source,
+              minutes,
+            })
           }
         >
           <Play className="h-5 w-5 fill-current" />
@@ -255,6 +291,77 @@ function JlptSetup() {
           <JlptLeaderboard level={current.jlptLevel} />
         </Card>
       </div>
+    </div>
+  )
+}
+
+const MIN_MINUTES = 5
+const MAX_MINUTES = 120
+
+/** Số phút tự đặt hợp lệ: số nguyên trong khoảng cho phép. */
+function validMinutes(value: string | undefined) {
+  if (value === undefined || !/^\d+$/.test(value.trim())) return false
+  const minutes = Number(value)
+  return minutes >= MIN_MINUTES && minutes <= MAX_MINUTES
+}
+
+/** Đồng hồ của một phần: giờ chuẩn (theo đề thật) hoặc tự đặt số phút. */
+function SectionTime({
+  sectionLabel,
+  standardMinutes,
+  value,
+  onChange,
+}: {
+  sectionLabel: string
+  standardMinutes: number
+  /** undefined = giờ chuẩn. */
+  value: string | undefined
+  onChange: (value: string | undefined) => void
+}) {
+  const custom = value !== undefined
+  const chip = (selected: boolean) =>
+    cn(
+      'rounded-xl border-2 px-3 py-1.5 text-sm font-extrabold',
+      selected ? 'border-secondary bg-secondary-soft text-secondary-dark' : 'border-border bg-card',
+    )
+  return (
+    <div className="flex flex-wrap items-center gap-2 pl-4" role="group" aria-label={`Thời gian phần ${sectionLabel}`}>
+      <Timer className="h-4 w-4 shrink-0 text-orange" strokeWidth={3} aria-hidden />
+      <button type="button" aria-pressed={!custom} className={chip(!custom)} onClick={() => onChange(undefined)}>
+        Giờ chuẩn · {standardMinutes} phút
+      </button>
+      <button
+        type="button"
+        aria-pressed={custom}
+        className={chip(custom)}
+        onClick={() => onChange(value ?? String(standardMinutes))}
+      >
+        Tự đặt
+      </button>
+      {custom && (
+        <label className="flex items-center gap-1.5 text-sm font-bold">
+          <input
+            type="number"
+            inputMode="numeric"
+            min={MIN_MINUTES}
+            max={MAX_MINUTES}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            aria-label={`Số phút phần ${sectionLabel}`}
+            aria-invalid={!validMinutes(value)}
+            className={cn(
+              'h-9 w-20 rounded-xl border-2 bg-card px-2 text-center font-black',
+              validMinutes(value) ? 'border-border' : 'border-destructive',
+            )}
+          />
+          phút
+          {!validMinutes(value) && (
+            <span className="text-destructive-dark">
+              ({MIN_MINUTES}-{MAX_MINUTES} phút)
+            </span>
+          )}
+        </label>
+      )}
     </div>
   )
 }

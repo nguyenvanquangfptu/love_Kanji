@@ -312,6 +312,8 @@ export interface StartJlptExamRequest {
   sections: ExamSectionName[]
   /** Chỉ lấy câu của nguồn này (vd. IMPORTED - các đề tự soạn); bỏ trống = mọi câu đã duyệt. */
   source?: ExamQuestionSource
+  /** Thời gian tự đặt (5-120 phút) của từng phần; phần không có ở đây theo giờ đề thật. */
+  minutes?: Partial<Record<ExamSectionName, number>>
 }
 
 /** Cấu trúc đề JLPT của một cấp độ và số câu hỏi hiện có. */
@@ -340,6 +342,8 @@ export interface ExamSittingResponse {
   finishedAt: string | null
   /** Nguồn câu đã chọn (IMPORTED = các đề tự soạn); null = mọi câu đã duyệt. */
   questionSource: ExamQuestionSource | null
+  /** Có phần làm với thời gian tự đặt: buổi thi không được tính vào bảng xếp hạng. */
+  customTime: boolean
   sections: {
     name: ExamSectionName
     /** null = chưa làm. */

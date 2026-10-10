@@ -33,6 +33,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.IntStream;
@@ -111,6 +112,35 @@ class JlptExamServiceTest {
         assertThat(JlptExamService.durationSeconds(vocabulary, 20)).isEqualTo(18 * 60);
         assertThat(JlptExamService.durationSeconds(vocabulary, 1)).isEqualTo(60);
         assertThat(JlptExamService.durationSeconds(vocabulary, 0)).isZero();
+    }
+
+    @Test
+    void sectionMinutes_shouldKeepTheChosenTimes_inTheOrderOfTheTest() {
+        List<ExamSection> both = List.of(ExamSection.VOCABULARY, ExamSection.GRAMMAR);
+        Map<String, Integer> minutes = new LinkedHashMap<>();
+        minutes.put("grammar", 30);
+        minutes.put("VOCABULARY", 45);
+
+        assertThat(JlptExamService.sectionMinutes(minutes, both)).isEqualTo("VOCABULARY:45,GRAMMAR:30");
+        // Không ghi số phút = theo giờ đề thật.
+        Map<String, Integer> standardGrammar = new LinkedHashMap<>();
+        standardGrammar.put("VOCABULARY", 40);
+        standardGrammar.put("GRAMMAR", null);
+        assertThat(JlptExamService.sectionMinutes(standardGrammar, both)).isEqualTo("VOCABULARY:40");
+        assertThat(JlptExamService.sectionMinutes(null, both)).isNull();
+        assertThat(JlptExamService.sectionMinutes(Map.of(), both)).isNull();
+    }
+
+    @Test
+    void sectionMinutes_shouldRefuseTimesOutOfRange_orForAPartNotChosen() {
+        List<ExamSection> vocabularyOnly = List.of(ExamSection.VOCABULARY);
+
+        assertThatThrownBy(() -> JlptExamService.sectionMinutes(Map.of("VOCABULARY", 4), vocabularyOnly))
+                .isInstanceOf(BadRequestException.class).hasMessage("Thời gian mỗi phần từ 5 đến 120 phút");
+        assertThatThrownBy(() -> JlptExamService.sectionMinutes(Map.of("VOCABULARY", 121), vocabularyOnly))
+                .isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> JlptExamService.sectionMinutes(Map.of("GRAMMAR", 30), vocabularyOnly))
+                .isInstanceOf(BadRequestException.class).hasMessage("Chỉ đặt giờ được cho phần đã chọn: GRAMMAR");
     }
 
     @Test
