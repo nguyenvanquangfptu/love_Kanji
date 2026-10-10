@@ -5,10 +5,13 @@ import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.dto.AdminExamQuestionRequest;
 import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
 import com.kanjimastery.backend.dto.BulkApproveRequest;
+import com.kanjimastery.backend.dto.ExamImportRequest;
+import com.kanjimastery.backend.dto.ExamImportResponse;
 import com.kanjimastery.backend.dto.ExamQuestionStatusRequest;
 import com.kanjimastery.backend.dto.QuestionBankStatsResponse;
 import com.kanjimastery.backend.dto.QuestionDraftRequest;
 import com.kanjimastery.backend.dto.VocabularyDraftRequest;
+import com.kanjimastery.backend.service.ExamImportService;
 import com.kanjimastery.backend.service.ExamQuestionReviewService;
 import com.kanjimastery.backend.service.ItemAnalysisService;
 import com.kanjimastery.backend.service.QuestionDraftService;
@@ -33,6 +36,7 @@ public class AdminExamQuestionController {
     private final ExamQuestionReviewService reviewService;
     private final QuestionDraftService draftService;
     private final ItemAnalysisService itemAnalysisService;
+    private final ExamImportService importService;
 
     @Operation(summary = "Lọc câu thi đề JLPT", description = "Mới nhất trước. Chỉ câu thuộc một dạng đề JLPT.")
     @GetMapping
@@ -116,5 +120,15 @@ public class AdminExamQuestionController {
             @Valid @RequestBody VocabularyDraftRequest request) {
         return ResponseEntity.ok(draftService.draftVocabulary(request.getLevel(), request.getType(),
                 request.getCount()));
+    }
+
+    @Operation(summary = "Nhập một đề tự soạn",
+            description = "Một đề (phần Từ vựng và/hoặc Ngữ pháp) dạng JSON. Mặc định dryRun=true: chỉ kiểm tra và trả "
+                    + "báo cáo (lỗi, cảnh báo, số câu sẽ nhập). dryRun=false mới ghi - có lỗi thì không ghi gì. Câu "
+                    + "vào kho ở trạng thái DRAFT; câu đã nhập ở lần trước (cùng mã đề và số câu) được bỏ qua.")
+    @PostMapping("/import")
+    public ResponseEntity<ExamImportResponse> importTest(@RequestBody ExamImportRequest request,
+                                                         @RequestParam(defaultValue = "true") boolean dryRun) {
+        return ResponseEntity.ok(importService.importTest(request, dryRun));
     }
 }

@@ -66,7 +66,7 @@ public class QuestionDraftService {
     /** Mục từ là cả một cụm (có dấu cách, dấu câu) thì không hỏi được. */
     private static final Pattern PHRASE = Pattern.compile("[\\s、。,.!?！？〜~]");
     /** Ô trống AI hay viết lệch: （ ）, (　　), （　）... */
-    private static final Pattern LOOSE_BLANK = Pattern.compile("[（(][\\s　]*[）)]");
+    static final Pattern LOOSE_BLANK = Pattern.compile("[（(][\\s　]*[）)]");
 
     private final GeminiClient geminiClient;
     private final DraftReviewer reviewer;

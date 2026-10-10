@@ -21,6 +21,9 @@ public interface GrammarPointRepository extends JpaRepository<GrammarPoint, Long
 
     Optional<GrammarPoint> findByJlptLevelAndPattern(JlptLevel jlptLevel, String pattern);
 
+    /** Mẫu ngữ pháp ở mọi cấp độ - đề N3 vẫn hỏi cả mẫu của N4, N5. */
+    List<GrammarPoint> findByPattern(String pattern);
+
     /** Số câu thi gắn với mỗi điểm ngữ pháp, theo trạng thái duyệt. */
     interface QuestionCount {
         Long getGrammarPointId();

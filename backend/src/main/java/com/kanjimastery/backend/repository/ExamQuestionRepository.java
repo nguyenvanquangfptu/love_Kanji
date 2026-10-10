@@ -162,6 +162,18 @@ public interface ExamQuestionRepository
         return withGrammarPoints(findAllWithWordsByPassageIdIn(passageIds));
     }
 
+    /** Các mã câu đề gốc (cột source_ref) trong {@code refs} đã có trong kho - để nhập lại một đề không tạo câu trùng. */
+    @Query("SELECT q.sourceRef FROM ExamQuestion q WHERE q.sourceRef IN :refs")
+    List<String> findExistingSourceRefs(@Param("refs") Collection<String> refs);
+
+    /** Câu (cột sentence) trong {@code sentences} đã có ở cấp độ đó và chưa bị loại - để báo câu trùng nội dung. */
+    @Query("""
+            SELECT q.sentence FROM ExamQuestion q
+            WHERE q.jlptLevel = :level AND q.sentence IN :sentences
+              AND q.review.status <> com.kanjimastery.backend.model.ExamQuestionStatus.REJECTED
+            """)
+    List<String> findExistingSentences(@Param("level") JlptLevel level, @Param("sentences") Collection<String> sentences);
+
     private List<ExamQuestion> withGrammarPoints(List<ExamQuestion> questions) {
         if (!questions.isEmpty()) {
             fetchGrammarPoints(questions);

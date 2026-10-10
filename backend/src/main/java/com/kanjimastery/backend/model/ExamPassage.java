@@ -51,6 +51,10 @@ public class ExamPassage {
     @Builder.Default
     private ExamQuestionSource source = ExamQuestionSource.MANUAL;
 
+    /** Đoạn văn nào của đề gốc (vd. N3-05/NP/19-23) với đoạn nhập từ file đề; null với nguồn khác. */
+    @Column(name = "source_ref", length = 60)
+    private String sourceRef;
+
     @Column(name = "created_at", nullable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

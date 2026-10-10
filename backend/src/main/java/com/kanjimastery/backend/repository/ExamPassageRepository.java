@@ -34,4 +34,6 @@ public interface ExamPassageRepository extends JpaRepository<ExamPassage, Long> 
     Page<ExamPassage> findByJlptLevelOrderByIdDesc(JlptLevel jlptLevel, Pageable pageable);
 
     Page<ExamPassage> findByJlptLevelAndReviewStatusOrderByIdDesc(JlptLevel jlptLevel, ExamQuestionStatus status, Pageable pageable);
+
+    boolean existsBySourceRef(String sourceRef);
 }
