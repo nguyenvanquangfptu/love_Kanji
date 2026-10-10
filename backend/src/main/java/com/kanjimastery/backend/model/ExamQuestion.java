@@ -85,6 +85,10 @@ public class ExamQuestion {
     @Builder.Default
     private ExamQuestionSource source = ExamQuestionSource.MANUAL;
 
+    /** Câu nào của đề gốc (vd. N3-05/NP/15) với câu nhập từ file đề; null với câu nguồn khác. */
+    @Column(name = "source_ref", length = 60)
+    private String sourceRef;
+
     /** Các từ vựng câu hỏi kiểm tra - làm sai thì các từ này được đưa vào ôn tập. */
     @ElementCollection
     @CollectionTable(name = "exam_question_kanji", joinColumns = @JoinColumn(name = "question_id"))

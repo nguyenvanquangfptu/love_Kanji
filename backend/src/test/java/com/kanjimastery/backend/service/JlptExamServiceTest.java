@@ -33,6 +33,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.IntStream;
@@ -114,11 +115,40 @@ class JlptExamServiceTest {
     }
 
     @Test
+    void sectionMinutes_shouldKeepTheChosenTimes_inTheOrderOfTheTest() {
+        List<ExamSection> both = List.of(ExamSection.VOCABULARY, ExamSection.GRAMMAR);
+        Map<String, Integer> minutes = new LinkedHashMap<>();
+        minutes.put("grammar", 30);
+        minutes.put("VOCABULARY", 45);
+
+        assertThat(JlptExamService.sectionMinutes(minutes, both)).isEqualTo("VOCABULARY:45,GRAMMAR:30");
+        // Không ghi số phút = theo giờ đề thật.
+        Map<String, Integer> standardGrammar = new LinkedHashMap<>();
+        standardGrammar.put("VOCABULARY", 40);
+        standardGrammar.put("GRAMMAR", null);
+        assertThat(JlptExamService.sectionMinutes(standardGrammar, both)).isEqualTo("VOCABULARY:40");
+        assertThat(JlptExamService.sectionMinutes(null, both)).isNull();
+        assertThat(JlptExamService.sectionMinutes(Map.of(), both)).isNull();
+    }
+
+    @Test
+    void sectionMinutes_shouldRefuseTimesOutOfRange_orForAPartNotChosen() {
+        List<ExamSection> vocabularyOnly = List.of(ExamSection.VOCABULARY);
+
+        assertThatThrownBy(() -> JlptExamService.sectionMinutes(Map.of("VOCABULARY", 4), vocabularyOnly))
+                .isInstanceOf(BadRequestException.class).hasMessage("Thời gian mỗi phần từ 5 đến 120 phút");
+        assertThatThrownBy(() -> JlptExamService.sectionMinutes(Map.of("VOCABULARY", 121), vocabularyOnly))
+                .isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> JlptExamService.sectionMinutes(Map.of("GRAMMAR", 30), vocabularyOnly))
+                .isInstanceOf(BadRequestException.class).hasMessage("Chỉ đặt giờ được cho phần đã chọn: GRAMMAR");
+    }
+
+    @Test
     void levels_shouldTellHowManyQuestionsAndMinutesAnExamWouldHaveNow() {
-        when(questionRepository.countApprovedByType("N4")).thenReturn(List.of(
+        when(questionRepository.countApprovedByType("N4", null)).thenReturn(List.of(
                 new Count(KANJI_READING, 300L), new Count(ORTHOGRAPHY, 3L), new Count(CONTEXT, 200L)));
 
-        List<JlptLevelResponse> levels = jlptExamService.levels();
+        List<JlptLevelResponse> levels = jlptExamService.levels(null);
 
         assertThat(levels).singleElement().extracting(JlptLevelResponse::getJlptLevel).isEqualTo(JlptLevel.N4);
         JlptLevelResponse.Section words = levels.get(0).getSections().get(0);
@@ -139,7 +169,7 @@ class JlptExamServiceTest {
 
     @Test
     void startSitting_shouldTakeTheChosenSectionsInTheRealOrder_andStartTheFirstWithTimeForItsQuestions() {
-        when(questionRepository.countApprovedByType("N4")).thenReturn(List.of(
+        when(questionRepository.countApprovedByType("N4", null)).thenReturn(List.of(
                 new Count(KANJI_READING, 300L), new Count(CONTEXT, 200L), new Count(GRAMMAR_FORM, 50L)));
         when(sittingRepository.save(any(ExamSitting.class))).thenAnswer(invocation -> {
             ExamSitting sitting = invocation.getArgument(0);
@@ -148,7 +178,7 @@ class JlptExamServiceTest {
         });
         List<ExamQuestion> reading = questions(1, 7);
         List<ExamQuestion> context = questions(101, 8);
-        when(assembler.assemble(eq(USER_ID), eq(JlptLevel.N4), eq(vocabulary), any())).thenReturn(List.of(
+        when(assembler.assemble(eq(USER_ID), eq(JlptLevel.N4), eq(vocabulary), any(), any())).thenReturn(List.of(
                 new JlptExamAssembler.Mondai(1, KANJI_READING, 7, reading),
                 new JlptExamAssembler.Mondai(2, ORTHOGRAPHY, 5, List.of()),
                 new JlptExamAssembler.Mondai(3, CONTEXT, 8, context),
@@ -188,7 +218,7 @@ class JlptExamServiceTest {
         assertThatThrownBy(() -> jlptExamService.startSitting(USER_ID, request("N4", "LISTENING")))
                 .isInstanceOf(BadRequestException.class);
 
-        when(questionRepository.countApprovedByType("N4")).thenReturn(List.of(new Count(KANJI_READING, 300L)));
+        when(questionRepository.countApprovedByType("N4", null)).thenReturn(List.of(new Count(KANJI_READING, 300L)));
         assertThatThrownBy(() -> jlptExamService.startSitting(USER_ID, request("N4", "VOCABULARY", "GRAMMAR")))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Ngữ pháp");
@@ -209,7 +239,7 @@ class JlptExamServiceTest {
         when(questionRepository.findAllWithWordsByIdIn(List.of(1L, 2L))).thenReturn(List.of(
                 ExamQuestion.builder().id(1L).kanjiIds(Set.of(10L)).build(),
                 ExamQuestion.builder().id(2L).kanjiIds(Set.of(11L)).build()));
-        when(assembler.assemble(USER_ID, JlptLevel.N4, grammar, Set.of(10L, 11L))).thenReturn(List.of(
+        when(assembler.assemble(USER_ID, JlptLevel.N4, grammar, Set.of(10L, 11L), null)).thenReturn(List.of(
                 new JlptExamAssembler.Mondai(1, GRAMMAR_FORM, 13, questions(201, 1))));
         ArgumentCaptor<UserExamAttempt> attempt = ArgumentCaptor.forClass(UserExamAttempt.class);
         when(examService.begin(attempt.capture(), any(), any())).thenReturn(StartExamResponse.builder().build());

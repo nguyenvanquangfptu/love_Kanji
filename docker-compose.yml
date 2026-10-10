@@ -49,6 +49,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_DAILY_LIMIT: ${GEMINI_DAILY_LIMIT:-100}
       REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
     depends_on:
       - postgres
       - redis

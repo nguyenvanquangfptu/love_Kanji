@@ -37,10 +37,11 @@ export function ExamSittingPage() {
     queryFn: () => examApi.getSitting(sittingId),
   })
   const sitting = sittingQuery.data
-  // Số câu, số phút của phần tiếp theo (đề ghép được lúc này).
+  // Số câu, số phút của phần tiếp theo (đề ghép được lúc này), từ đúng nguồn câu của buổi thi.
+  const source = sitting?.questionSource ?? undefined
   const levelsQuery = useQuery({
-    queryKey: ['jlpt-levels'],
-    queryFn: examApi.jlptLevels,
+    queryKey: ['jlpt-levels', source ?? 'ALL'],
+    queryFn: () => examApi.jlptLevels(source),
     enabled: !!sitting?.nextSection,
   })
   const nextMutation = useMutation({
@@ -72,6 +73,12 @@ export function ExamSittingPage() {
         subtitle={
           <span className="flex flex-wrap items-center gap-2">
             <Badge variant={status.variant}>{status.label}</Badge>
+            {sitting.questionSource === 'IMPORTED' && <Badge variant="outline">Đề tự soạn</Badge>}
+            {sitting.customTime && (
+              <Badge variant="orange" title="Có phần tự đặt giờ nên không tính vào bảng xếp hạng">
+                Giờ tự đặt · không xếp hạng
+              </Badge>
+            )}
             {sitting.sections.map((s) => SECTION_META[s.name].vi).join(' + ')}
           </span>
         }

@@ -102,6 +102,13 @@ public class QuestionBuilder {
         Kanji kanji = plan.kanji();
         QuizDirection direction = plan.direction();
         String reading = kanji.getReading();
+        if (direction == QuizDirection.TYPE_READING) {
+            // Không có lựa chọn: người học tự gõ. Chữ Hán đơn có đuôi trong ngoặc của cách đọc thì hỏi kèm đuôi (見る).
+            String written = ReadingMatcher.writtenForm(kanji.getCharacter(), reading);
+            String sentence = StringUtils.hasText(exampleSentence) && standsAlone(exampleSentence, written)
+                    ? exampleSentence : null;
+            return new BuiltQuestion(kanji, direction, written, sentence, List.of(), -1, null, null);
+        }
         List<Kanji> otherRows = existingWords.getOrDefault(kanji.getCharacter(), List.of()).stream()
                 .filter(row -> !row.getId().equals(kanji.getId()))
                 .toList();

@@ -92,6 +92,44 @@ class StudyPlanServiceTest {
     }
 
     @Test
+    void today_shouldPlanNoMoreReviews_onceTodaysTimeIsUsedUp() {
+        givenPace(null, 0);
+        // Sau kỳ nghỉ dài: đã ôn đủ 150 thẻ của hôm nay, còn 250 thẻ đến hạn.
+        givenLoad(250, 210, 0, 40);
+        givenReviewedToday(150);
+
+        DailyPlanResponse plan = service.today(USER_ID);
+
+        assertThat(plan.getDueReviews()).isEqualTo(250);
+        assertThat(plan.getReviewsToday()).as("250 thẻ còn lại để dành cho những ngày sau").isZero();
+        assertThat(plan.getEstimatedMinutes()).isZero();
+    }
+
+    @Test
+    void today_shouldOnlyPlanWhatIsLeftOfTodaysTime_partwayThroughTheDay() {
+        givenPace(null, 0);
+        givenLoad(300, 210, 0, 40);
+        givenReviewedToday(100);
+
+        assertThat(service.today(USER_ID).getReviewsToday()).isEqualTo(50);
+    }
+
+    @Test
+    void today_shouldKeepTheSameNewWords_asTheDaysReviewsGetDone() {
+        givenPace(null, 0);
+        // Đầu ngày có 130 thẻ đến hạn: (150 - 130) / 4 = 5 từ mới. Ôn xong cả 130 thẻ thì vẫn chỉ 5 từ mới,
+        // không phải (150 - 70 / 7) / 4 = 35 như khi chỉ nhìn số thẻ còn đến hạn.
+        givenLoad(0, 70, 0, 40);
+        givenReviewedToday(130);
+
+        DailyPlanResponse plan = service.today(USER_ID);
+
+        assertThat(plan.getNewPerDay()).isEqualTo(5);
+        assertThat(plan.isNewPerDayLimitedByTime()).isTrue();
+        assertThat(plan.getNewToday()).isEqualTo(5);
+    }
+
+    @Test
     void today_shouldUseTheLearnersOwnPace_onceThereIsEnoughOfIt() {
         // Mỗi thẻ mất khoảng 12 giây: 20 phút chỉ đủ 100 thẻ.
         givenPace(12_000.0, 20);
@@ -260,6 +298,10 @@ class StudyPlanServiceTest {
     }
 
     /** {@code upcoming7Days}: thẻ đã học sẽ đến hạn trong 7 ngày tới. */
+    private void givenReviewedToday(long reviews) {
+        when(reviewLogRepository.countReviewsSince(USER_ID, START_OF_TODAY)).thenReturn(reviews);
+    }
+
     private void givenLoad(long dueReviews, long upcoming7Days, long newLearnedToday, long newWaiting) {
         when(srsRepository.countByUserIdAndLastReviewedAtIsNotNullAndNextReviewAtLessThanEqual(eq(USER_ID), any()))
                 .thenReturn(dueReviews);

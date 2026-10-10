@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.Answer;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -28,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -129,6 +132,42 @@ class QuizServiceTest {
     }
 
     @Test
+    void generate_shouldAskEveryWordWithKanjiToBeTyped_withoutSendingItsReadingOrMeaning() {
+        givenQuizAllowed();
+        Kanji see = word(4L, "見", "み(る)", null);
+        when(kanjiRepository.findAllByFilters(null, TAG_ID))
+                .thenReturn(List.of(readyWord, see, kanaWord(5L, "テレビ", "Ti vi")));
+
+        List<QuizQuestionResponse> questions = quizService.generate("taro", TAG_ID, null, 10, QuizService.MODE_RANDOM,
+                false, null, QuizService.ANSWER_TYPING);
+
+        assertThat(questions).extracting(QuizQuestionResponse::getKanjiId).containsExactlyInAnyOrder(3L, 4L);
+        assertThat(questions).allSatisfy(question -> {
+            assertThat(question.getDirection()).isEqualTo(QuizDirection.TYPE_READING);
+            assertThat(question.getChoices()).isEmpty();
+            assertThat(question.getCorrectIndex()).isEqualTo(-1);
+            assertThat(question.getReading()).isNull();
+            assertThat(question.getMeaning()).isNull();
+        });
+        // Chữ Hán đơn có đuôi trong ngoặc của cách đọc thì hỏi kèm đuôi; câu ví dụ chứa từ được giữ để gạch chân.
+        assertThat(questions).filteredOn(question -> question.getKanjiId() == 4L).singleElement()
+                .extracting(QuizQuestionResponse::getPrompt).isEqualTo("見る");
+        assertThat(questions).filteredOn(question -> question.getKanjiId() == 3L).singleElement()
+                .extracting(QuizQuestionResponse::getSentence).isEqualTo("この肉は固い。");
+    }
+
+    @Test
+    void generate_shouldRefuseTypingQuiz_whenNoWordHasKanji_andUnknownAnswerKinds() {
+        givenQuizAllowed();
+        when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(kanaWord(5L, "テレビ", "Ti vi")));
+
+        assertThatThrownBy(() -> quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null,
+                QuizService.ANSWER_TYPING)).isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null, "voice"))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
     void generate_shouldNotReadLearningHistory_inRandomMode() {
         givenQuizAllowed();
         when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(readyWord));
@@ -214,6 +253,32 @@ class QuizServiceTest {
 
         verify(kanjiRepository).saveExampleSentenceIfAbsent(2L, "のどが渇く。");
         verify(rateLimiter, never()).increment(startsWith("sentence:failures:"), any());
+    }
+
+    @Test
+    void generate_shouldKeepInterruptFlag_whenInterruptedWhileWaitingForSentences() throws InterruptedException {
+        CountDownLatch asked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        givenLessonWithGemini(invocation -> {
+            asked.countDown();
+            release.await();
+            return Optional.empty();
+        });
+
+        try {
+            Thread.currentThread().interrupt();
+            try {
+                assertThat(quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null)).isNotNull();
+                assertThat(Thread.currentThread().isInterrupted()).as("cờ interrupt phải được giữ lại").isTrue();
+            } finally {
+                Thread.interrupted();
+            }
+            // generate() thôi chờ ngay vì bị interrupt, có khi trước cả lúc luồng nền gọi tới Gemini giả: đợi lời gọi đó
+            // để test không kết thúc sớm hơn (Mockito sẽ báo stub "không dùng tới").
+            assertThat(asked.await(5, TimeUnit.SECONDS)).isTrue();
+        } finally {
+            release.countDown();
+        }
     }
 
     @Test
@@ -378,13 +443,17 @@ class QuizServiceTest {
     }
 
     private void givenLessonWithGeminiAnswer(Optional<Map<Long, String>> answer) {
+        givenLessonWithGemini(invocation -> answer);
+    }
+
+    private void givenLessonWithGemini(Answer<Optional<Map<Long, String>>> answer) {
         when(rateLimiter.tryAcquire("ratelimit:quiz:taro", 30, Duration.ofSeconds(60))).thenReturn(true);
         when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(failedWord, missingWord, readyWord));
         when(sentenceGenerationService.isEnabled()).thenReturn(true);
         when(rateLimiter.counts(anyList())).thenAnswer(invocation -> invocation.<List<String>>getArgument(0).stream()
                 .map(key -> key.equals("sentence:failures:1") ? 2L : 0L)
                 .toList());
-        when(sentenceGenerationService.generateSentences(anyList())).thenReturn(answer);
+        when(sentenceGenerationService.generateSentences(anyList())).thenAnswer(answer);
     }
 
     private static Kanji word(Long id, String character, String reading, String sentence) {

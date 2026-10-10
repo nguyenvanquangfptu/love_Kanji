@@ -4,6 +4,7 @@ import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.model.ExamPassage;
 import com.kanjimastery.backend.model.ExamQuestion;
+import com.kanjimastery.backend.model.ExamQuestionSource;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.repository.ExamPassageRepository;
@@ -42,10 +43,12 @@ public class JlptExamAssembler {
      * nhiêu. Câu người học chưa gặp được lấy trước (ngẫu nhiên), hết thì tới câu gặp lâu nhất - làm nhiều đề ít gặp
      * lại câu cũ. Mỗi từ chỉ được hỏi một câu trong cả buổi thi: {@code askedWords} là các từ đã hỏi ở phần trước,
      * được thêm dần các từ của phần này. 文章の文法 lấy trọn đoạn văn (mọi câu hỏi của đoạn, theo thứ tự chỗ trống).
-     * Kết quả theo thứ tự 問題1, 問題2..., kể cả 問題 không có câu nào.
+     * Kết quả theo thứ tự 問題1, 問題2..., kể cả 問題 không có câu nào. {@code source} null = câu của mọi nguồn, không
+     * thì chỉ câu của nguồn đó (vd. chỉ các đề tự soạn).
      */
     public List<Mondai> assemble(Long userId, JlptLevel level, JlptBlueprintProperties.Section section,
-                                 Set<Long> askedWords) {
+                                 Set<Long> askedWords, ExamQuestionSource source) {
+        String sourceName = source == null ? null : source.name();
         List<Mondai> mondai = new ArrayList<>();
         int number = 0;
         for (Map.Entry<JlptQuestionType, Integer> entry : section.getQuestions().entrySet()) {
@@ -53,11 +56,12 @@ public class JlptExamAssembler {
             int planned = entry.getValue();
             if (JlptQuestionType.TEXT_GRAMMAR.equals(entry.getKey())) {
                 mondai.add(new Mondai(number, entry.getKey(), planned,
-                        passageQuestions(userId, level, planned, askedWords)));
+                        passageQuestions(userId, level, planned, askedWords, sourceName)));
                 continue;
             }
             List<Long> candidateIds = questionRepository
-                    .findForLearnerByLevelAndType(userId, level.name(), entry.getKey().name(), planned * 2 + SPARE_CANDIDATES)
+                    .findForLearnerByLevelAndType(userId, level.name(), entry.getKey().name(), sourceName,
+                            planned * 2 + SPARE_CANDIDATES)
                     .stream()
                     .map(ExamQuestion::getId)
                     .toList();
@@ -85,8 +89,10 @@ public class JlptExamAssembler {
     /**
      * Các đoạn văn đã duyệt (đoạn chưa gặp trước), lấy trọn từng đoạn sao cho tổng số câu không quá {@code planned}.
      */
-    private List<ExamQuestion> passageQuestions(Long userId, JlptLevel level, int planned, Set<Long> askedWords) {
-        List<ExamPassage> passages = passageRepository.findApprovedForLearner(userId, level.name(), CANDIDATE_PASSAGES);
+    private List<ExamQuestion> passageQuestions(Long userId, JlptLevel level, int planned, Set<Long> askedWords,
+                                                String source) {
+        List<ExamPassage> passages = passageRepository.findApprovedForLearner(userId, level.name(), source,
+                CANDIDATE_PASSAGES);
         if (passages.isEmpty()) {
             return List.of();
         }

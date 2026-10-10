@@ -70,7 +70,10 @@ public class StudyPlanService {
         long dueReviews = srsRepository.countByUserIdAndLastReviewedAtIsNotNullAndNextReviewAtLessThanEqual(userId, now);
         double upcomingPerDay = srsRepository.countByUserIdAndLastReviewedAtIsNotNullAndNextReviewAtBetween(
                 userId, now, now.plusDays(FORECAST_DAYS)) / (double) FORECAST_DAYS;
-        int reviewsToday = (int) Math.min(dueReviews, capacity);
+        // Lượt ôn đã làm hôm nay đã dùng một phần thời gian của ngày: kế hoạch chỉ còn phần còn lại. Không trừ thì ôn
+        // xong phần của hôm nay, mở lại trang lại có thêm một phiên đầy đủ, và giới hạn theo thời gian không bao giờ dừng.
+        long reviewedToday = reviewLogRepository.countReviewsSince(userId, calendar.startOfToday());
+        int reviewsToday = (int) Math.min(dueReviews, Math.max(0, capacity - reviewedToday));
 
         Long wordsToLearn = null;
         if (targetLevel != null) {
@@ -91,8 +94,10 @@ public class StudyPlanService {
             wanted = srsProperties.getDefaultNewWordsPerDay();
             source = SOURCE_DEFAULT;
         }
-        // Chỗ còn lại sau phần ôn nặng hơn trong hai mức: hôm nay, hoặc trung bình tuần tới.
-        int roomForNewWords = (int) (Math.max(0, capacity - Math.max(dueReviews, upcomingPerDay)) / REVIEWS_PER_NEW_WORD);
+        // Chỗ còn lại sau phần ôn nặng hơn trong hai mức: hôm nay (đã ôn + còn đến hạn - không co lại khi người học ôn
+        // dần, nên số từ mới không tăng lên giữa ngày), hoặc trung bình tuần tới.
+        long reviewLoadToday = reviewedToday + dueReviews;
+        int roomForNewWords = (int) (Math.max(0, capacity - Math.max(reviewLoadToday, upcomingPerDay)) / REVIEWS_PER_NEW_WORD);
         // Số người học tự đặt được giữ nguyên: họ đã chọn đánh đổi thời gian.
         int newPerDay = SOURCE_CUSTOM.equals(source) ? wanted : Math.min(wanted, roomForNewWords);
         long newLearnedToday = reviewLogRepository.countNewWordsLearnedSince(userId, calendar.startOfToday());

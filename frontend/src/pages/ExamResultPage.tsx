@@ -31,11 +31,14 @@ import { Meter } from '@/components/Meter'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
 import { PassageText } from '@/components/PassageText'
 import { ReportQuestionDialog } from '@/components/ReportQuestionDialog'
+import { useQuizStart } from '@/lib/quizStart'
 
 const SKILL_LABELS: Record<QuizDirection, string> = {
   KANJI_TO_READING: 'Đọc chữ Hán',
   READING_TO_KANJI: 'Chọn cách viết',
   MEANING: 'Hiểu nghĩa',
+  // Không phải kỹ năng câu thi - chỉ để đủ kiểu.
+  TYPE_READING: 'Gõ cách đọc',
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -252,7 +255,7 @@ export function ExamResultPage() {
 
 /** Từ của các câu làm sai: đã vào Ôn tập, và luyện lại ngay bằng trắc nghiệm chỉ gồm các từ đó. */
 function WrongWordsCard({ review }: { review: ExamReviewResponse }) {
-  const navigate = useNavigate()
+  const quiz = useQuizStart()
   const words = review.wrongWords
   const kanjiIds = words.map((w) => w.kanjiId).join(',')
 
@@ -274,10 +277,11 @@ function WrongWordsCard({ review }: { review: ExamReviewResponse }) {
           </li>
         ))}
       </ul>
+      {quiz.dialog}
       <Button
         className="mt-4"
         variant="secondary"
-        onClick={() => navigate(`/study/quiz?kanjiIds=${kanjiIds}&exam=${review.attemptId}`)}
+        onClick={() => quiz.start(`/study/quiz?kanjiIds=${kanjiIds}&exam=${review.attemptId}`)}
       >
         <Target className="h-5 w-5" /> Luyện lại các từ này
       </Button>

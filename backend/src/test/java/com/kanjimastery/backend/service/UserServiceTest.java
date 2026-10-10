@@ -86,6 +86,42 @@ class UserServiceTest {
     }
 
     @Test
+    void register_shouldAcceptA72BytePassword() {
+        registerRequest.setPassword("a".repeat(72));
+        when(passwordEncoder.encode("a".repeat(72))).thenReturn("hashed-password");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        assertThat(userService.register(registerRequest).getPasswordHash()).isEqualTo("hashed-password");
+    }
+
+    @Test
+    void register_shouldRefuseAPasswordLongerThan72Bytes_countingDiacriticsAsSeveralBytes() {
+        // 25 letters, but "ệ" takes 3 bytes in UTF-8: 75 bytes.
+        registerRequest.setPassword("ệ".repeat(25));
+
+        assertThatThrownBy(() -> userService.register(registerRequest))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("72 byte");
+        verify(passwordEncoder, never()).encode(any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void changePassword_shouldRefuseANewPasswordLongerThan72Bytes() {
+        User existing = User.builder().id(1L).username("taro").passwordHash("old-hash").build();
+        ChangePasswordRequest request = new ChangePasswordRequest();
+        request.setOldPassword("old-password");
+        request.setNewPassword("a".repeat(73));
+        when(userRepository.findByUsername("taro")).thenReturn(Optional.of(existing));
+        when(passwordEncoder.matches("old-password", "old-hash")).thenReturn(true);
+
+        assertThatThrownBy(() -> userService.changePassword("taro", request))
+                .isInstanceOf(BadRequestException.class);
+        assertThat(existing.getPasswordHash()).isEqualTo("old-hash");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
     void changePassword_shouldUpdateHash_whenOldPasswordMatches() {
         User existing = User.builder()
                 .id(1L)

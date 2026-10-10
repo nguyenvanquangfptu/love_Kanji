@@ -130,6 +130,7 @@ public class ExamPassageReviewService {
                 .content(passage.getContent())
                 .status(passage.getStatus())
                 .source(passage.getSource())
+                .sourceRef(passage.getSourceRef())
                 .flag(passage.getFlag())
                 .reviewNote(passage.getReviewNote())
                 .reviewedAt(passage.getReviewedAt())

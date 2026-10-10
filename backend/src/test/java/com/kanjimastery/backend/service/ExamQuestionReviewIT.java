@@ -146,7 +146,7 @@ class ExamQuestionReviewIT extends AbstractIntegrationTest {
     }
 
     private List<Long> examPool() {
-        return questionRepository.findForLearnerByLevelAndType(0L, "N5", JlptQuestionType.GRAMMAR_FORM.name(), 1000).stream()
+        return questionRepository.findForLearnerByLevelAndType(0L, "N5", JlptQuestionType.GRAMMAR_FORM.name(), null, 1000).stream()
                 .map(ExamQuestion::getId).toList();
     }
 

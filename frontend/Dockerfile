@@ -13,5 +13,7 @@ RUN npm run build
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Outside conf.d on purpose: everything in conf.d is loaded at http level, this file is included per location.
+COPY security-headers.conf /etc/nginx/security-headers.conf
 
 EXPOSE 80

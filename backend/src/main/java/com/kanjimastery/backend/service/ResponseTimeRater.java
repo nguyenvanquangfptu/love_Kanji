@@ -22,6 +22,9 @@ public class ResponseTimeRater {
     static final int MIN_SAMPLES = 30;
     static final int DEFAULT_EASY_MS = 3_000;
     static final int DEFAULT_HARD_MS = 10_000;
+    /** Gõ cách đọc lâu hơn bấm chọn: ngưỡng mặc định riêng, tới khi đủ số câu để dùng trung vị của chính người học. */
+    static final int TYPING_EASY_MS = 5_000;
+    static final int TYPING_HARD_MS = 15_000;
     static final double EASY_FACTOR = 0.6;
     static final double HARD_FACTOR = 1.5;
 
@@ -41,8 +44,9 @@ public class ResponseTimeRater {
             return ReviewRating.GOOD;
         }
         ResponseTimeStats stats = reviewLogRepository.correctQuizResponseTimes(userId, direction.name(), RECENT_SAMPLES);
-        double easyUpTo = DEFAULT_EASY_MS;
-        double hardAbove = DEFAULT_HARD_MS;
+        boolean typing = direction == QuizDirection.TYPE_READING;
+        double easyUpTo = typing ? TYPING_EASY_MS : DEFAULT_EASY_MS;
+        double hardAbove = typing ? TYPING_HARD_MS : DEFAULT_HARD_MS;
         if (stats != null && stats.getMedianMs() != null && stats.getSamples() >= MIN_SAMPLES) {
             easyUpTo = stats.getMedianMs() * EASY_FACTOR;
             hardAbove = stats.getMedianMs() * HARD_FACTOR;

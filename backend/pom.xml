@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.5</version>
+        <version>3.3.13</version>
         <relativePath/>
     </parent>
 
@@ -23,6 +23,8 @@
         <springdoc.version>2.6.0</springdoc.version>
         <testcontainers.version>1.21.4</testcontainers.version>
         <kuromoji.version>0.9.0</kuromoji.version>
+        <!-- ./mvnw spring-boot:run is local development; override with -Dspring-boot.run.profiles=... -->
+        <spring-boot.run.profiles>dev</spring-boot.run.profiles>
     </properties>
 
     <dependencies>
@@ -145,6 +147,19 @@
                         </exclude>
                     </excludes>
                 </configuration>
+            </plugin>
+            <!-- Runs the *IT classes (Testcontainers) on ./mvnw verify; surefire only picks up *Test/*Tests. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

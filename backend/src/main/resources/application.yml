@@ -46,7 +46,8 @@ server:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:dev-only-change-this-super-secret-key-min-32-bytes-long!!}
+    # No default: a deployment that forgets JWT_SECRET must not start with a key anyone can read in this repo.
+    secret: ${JWT_SECRET}
     access-token-expiration-ms: 900000       # 15 phút
     refresh-token-expiration-ms: 604800000   # 7 ngày
   auth:
@@ -120,3 +121,20 @@ spring:
   data:
     redis:
       host: redis
+# The docker profile is what runs on a server: no map of the whole API there unless asked for.
+# Set API_DOCS_ENABLED=true in .env to use Swagger UI on this machine.
+springdoc:
+  api-docs:
+    enabled: ${API_DOCS_ENABLED:false}
+  swagger-ui:
+    enabled: ${API_DOCS_ENABLED:false}
+
+---
+# Local development only: `./mvnw spring-boot:run` turns this profile on (see spring-boot.run.profiles in pom.xml).
+spring:
+  config:
+    activate:
+      on-profile: dev
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-change-this-super-secret-key-min-32-bytes-long!!}

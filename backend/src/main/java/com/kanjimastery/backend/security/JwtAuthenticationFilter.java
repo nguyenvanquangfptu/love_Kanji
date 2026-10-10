@@ -1,14 +1,17 @@
 package com.kanjimastery.backend.security;
 
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -18,6 +21,7 @@ import com.kanjimastery.backend.service.CustomUserDetailsService;
 import com.kanjimastery.backend.service.JwtService;
 import com.kanjimastery.backend.service.TokenBlacklistService;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -38,7 +42,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = header.substring(7);
         try {
-            if (jwtService.isTokenValid(token)) {
+            if (jwtService.isTokenValid(token, JwtService.TokenType.ACCESS)) {
                 String jti = jwtService.extractJti(token);
                 if (!tokenBlacklistService.isBlacklisted(jti)
                         && SecurityContextHolder.getContext().getAuthentication() == null) {
@@ -51,7 +55,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             }
-        } catch (Exception ex) {
+        } catch (JwtException | UsernameNotFoundException ex) {
+            // Token expired between checks, or its account was deleted after sign-in: stay unauthenticated.
+            SecurityContextHolder.clearContext();
+        } catch (RuntimeException ex) {
+            // Redis or the database failed: still unauthenticated, but leave a trace instead of a silent 401.
+            log.warn("Không xác thực được request {} {} - coi như chưa đăng nhập",
+                    request.getMethod(), request.getRequestURI(), ex);
             SecurityContextHolder.clearContext();
         }
 

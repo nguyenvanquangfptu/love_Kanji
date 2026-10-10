@@ -4,7 +4,13 @@ import { Check, ChevronLeft, ChevronRight, Pencil, RotateCcw, Sparkles, Undo2, X
 import { examAdminApi } from '@/api/examAdmin'
 import { extractErrorMessage } from '@/api/client'
 import type { AdminExamPassage, AdminExamQuestion, AdminExamQuestionRequest, ExamQuestionStatus } from '@/api/types'
-import { FLAG_LABEL, SOURCE_LABEL, STATUS_BADGE, passageDraftSummary } from '@/lib/questionReview'
+import { FLAG_LABEL, SOURCE_LABEL, STATUS_BADGE, passageDraftSummary, sourceRefLabel } from '@/lib/questionReview'
+
+/** Đoạn văn nhập từ đề tự soạn (mã "N3-05/NP/19-23"): chỗ trống n ghi theo số câu trong đề gốc (19, 20...). */
+function firstQuestionLabel(sourceRef: string | null): ((blankNo: number) => number) | undefined {
+  const first = Number(sourceRef?.split('/')[2]?.split('-')[0])
+  return Number.isInteger(first) && first > 0 ? (blankNo) => first + blankNo - 1 : undefined
+}
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
@@ -129,12 +135,14 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
                   <span className="text-sm font-black text-muted-foreground">Đoạn #{passage.id}</span>
                   <Badge variant={badge.variant}>{badge.label}</Badge>
                   {passage.flag && <Badge variant="orange">⚠ {FLAG_LABEL[passage.flag]}</Badge>}
-                  <Badge variant="outline">{SOURCE_LABEL[passage.source] ?? passage.source}</Badge>
+                  <Badge variant="outline">
+                    {passage.sourceRef ? sourceRefLabel(passage.sourceRef) : (SOURCE_LABEL[passage.source] ?? passage.source)}
+                  </Badge>
                   <Badge variant="outline">{passage.questions.length} chỗ trống</Badge>
                 </div>
                 {passage.title && <h3 className="mb-1 text-center font-jp font-black">{passage.title}</h3>}
                 <div className="rounded-2xl bg-muted px-4 py-3">
-                  <PassageText content={passage.content} />
+                  <PassageText content={passage.content} labelOf={firstQuestionLabel(passage.sourceRef)} />
                 </div>
                 {passage.reviewNote && (
                   <p

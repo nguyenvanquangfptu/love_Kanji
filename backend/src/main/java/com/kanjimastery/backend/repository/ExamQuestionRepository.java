@@ -43,6 +43,7 @@ public interface ExamQuestionRepository
     /**
      * Câu đã duyệt của một dạng câu trong đề JLPT ({@link com.kanjimastery.backend.model.JlptQuestionType}) cho một
      * người học: câu người đó chưa gặp trong lượt thi nào đứng trước (ngẫu nhiên), rồi tới câu gặp lâu nhất.
+     * {@code source} null = mọi nguồn, không thì chỉ câu của nguồn đó (vd. IMPORTED - các đề tự soạn).
      */
     @Query(value = """
             SELECT q.* FROM exam_questions q
@@ -54,11 +55,13 @@ public interface ExamQuestionRepository
                 GROUP BY answer.question_id
             ) seen ON seen.question_id = q.id
             WHERE q.jlpt_level = :level AND q.question_type = :type AND q.status = 'APPROVED'
+              AND (CAST(:source AS VARCHAR) IS NULL OR q.source = CAST(:source AS VARCHAR))
             ORDER BY seen.seen_at NULLS FIRST, RANDOM()
             LIMIT :count
             """, nativeQuery = true)
     List<ExamQuestion> findForLearnerByLevelAndType(@Param("userId") Long userId, @Param("level") String level,
-                                                    @Param("type") String type, @Param("count") int count);
+                                                    @Param("type") String type, @Param("source") String source,
+                                                    @Param("count") int count);
 
     /** Số câu đã duyệt của một dạng câu JLPT. */
     interface TypeCount {
@@ -67,12 +70,14 @@ public interface ExamQuestionRepository
         Long getCount();
     }
 
+    /** {@code source} null = mọi nguồn, không thì chỉ câu của nguồn đó. */
     @Query(value = """
             SELECT question_type AS "type", COUNT(*) AS "count" FROM exam_questions
             WHERE jlpt_level = :level AND question_type IS NOT NULL AND status = 'APPROVED'
+              AND (CAST(:source AS VARCHAR) IS NULL OR source = CAST(:source AS VARCHAR))
             GROUP BY question_type
             """, nativeQuery = true)
-    List<TypeCount> countApprovedByType(@Param("level") String level);
+    List<TypeCount> countApprovedByType(@Param("level") String level, @Param("source") String source);
 
     /** Một câu thi đã sinh: kiểm tra từ nào, theo dạng câu JLPT (hoặc kỹ năng, với câu hỏi nghĩa của thi nhanh). */
     interface GeneratedQuestionWord {
@@ -161,6 +166,18 @@ public interface ExamQuestionRepository
     default List<ExamQuestion> findAllWithLinksByPassageIdIn(Collection<Long> passageIds) {
         return withGrammarPoints(findAllWithWordsByPassageIdIn(passageIds));
     }
+
+    /** Các mã câu đề gốc (cột source_ref) trong {@code refs} đã có trong kho - để nhập lại một đề không tạo câu trùng. */
+    @Query("SELECT q.sourceRef FROM ExamQuestion q WHERE q.sourceRef IN :refs")
+    List<String> findExistingSourceRefs(@Param("refs") Collection<String> refs);
+
+    /** Câu (cột sentence) trong {@code sentences} đã có ở cấp độ đó và chưa bị loại - để báo câu trùng nội dung. */
+    @Query("""
+            SELECT q.sentence FROM ExamQuestion q
+            WHERE q.jlptLevel = :level AND q.sentence IN :sentences
+              AND q.review.status <> com.kanjimastery.backend.model.ExamQuestionStatus.REJECTED
+            """)
+    List<String> findExistingSentences(@Param("level") JlptLevel level, @Param("sentences") Collection<String> sentences);
 
     private List<ExamQuestion> withGrammarPoints(List<ExamQuestion> questions) {
         if (!questions.isEmpty()) {

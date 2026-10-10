@@ -14,7 +14,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
-import com.kanjimastery.backend.service.UserService;
 
 @RestController
 @RequestMapping("/api/v1/auth")
@@ -23,7 +22,6 @@ import com.kanjimastery.backend.service.UserService;
 public class AuthController {
 
     private final AuthService authService;
-    private final UserService userService;
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
@@ -46,18 +44,24 @@ public class AuthController {
     public ResponseEntity<Void> logout(
             @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
             @RequestBody(required = false) RefreshTokenRequest request) {
-        String accessToken = (authorizationHeader != null && authorizationHeader.startsWith("Bearer "))
-                ? authorizationHeader.substring(7)
-                : null;
         String refreshToken = request != null ? request.getRefreshToken() : null;
-        authService.logout(accessToken, refreshToken);
+        authService.logout(bearerToken(authorizationHeader), refreshToken);
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "Đổi mật khẩu",
+            description = "Đăng xuất mọi phiên, kể cả phiên đang gọi: client phải đăng nhập lại bằng mật khẩu mới.")
     @PostMapping("/change-password")
     public ResponseEntity<Void> changePassword(Authentication authentication,
+                                                @RequestHeader(value = "Authorization", required = false) String authorizationHeader,
                                                 @Valid @RequestBody ChangePasswordRequest request) {
-        userService.changePassword(authentication.getName(), request);
+        authService.changePassword(authentication.getName(), bearerToken(authorizationHeader), request);
         return ResponseEntity.noContent().build();
+    }
+
+    private static String bearerToken(String authorizationHeader) {
+        return authorizationHeader != null && authorizationHeader.startsWith("Bearer ")
+                ? authorizationHeader.substring(7)
+                : null;
     }
 }

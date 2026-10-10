@@ -7,6 +7,7 @@ import com.kanjimastery.backend.dto.PracticeQuestionResponse;
 import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.dto.StartJlptExamRequest;
 import com.kanjimastery.backend.dto.WeakGrammarResponse;
+import com.kanjimastery.backend.model.ExamQuestionSource;
 import com.kanjimastery.backend.service.GrammarPracticeService;
 import com.kanjimastery.backend.service.JlptExamService;
 import com.kanjimastery.backend.service.LeaderboardService;
@@ -34,10 +35,10 @@ public class JlptExamController {
 
     @Operation(summary = "Cấu trúc đề theo cấp độ",
             description = "Các phần, các 問題 với số câu của đề thật và số câu đã duyệt hiện có; đề ghép được lúc này "
-                    + "có bao nhiêu câu, bao nhiêu phút.")
+                    + "có bao nhiêu câu, bao nhiêu phút. source (vd. IMPORTED) thì chỉ đếm câu của nguồn đó.")
     @GetMapping("/levels")
-    public ResponseEntity<List<JlptLevelResponse>> levels() {
-        return ResponseEntity.ok(jlptExamService.levels());
+    public ResponseEntity<List<JlptLevelResponse>> levels(@RequestParam(required = false) ExamQuestionSource source) {
+        return ResponseEntity.ok(jlptExamService.levels(source));
     }
 
     @Operation(summary = "Bắt đầu làm đề",

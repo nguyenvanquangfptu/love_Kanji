@@ -9,7 +9,7 @@ import lombok.Getter;
 @AllArgsConstructor
 public class SrsStatsResponse {
     private long totalCardsStarted;
-    private long dueForReview;      // "Cần ôn tập gấp"
+    private long dueForReview;      // "Cần ôn": thẻ đã học và đến hạn - không tính từ mới chưa học lần nào
     private long stillLearning;     // "Đang học dở"
     private long deeplyMemorized;   // "Đã ghi nhớ sâu" (interval >= 21 ngày)
     private long hardWords;         // "Từ khó": quên từ app.srs.hard-word-lapses lần trở lên

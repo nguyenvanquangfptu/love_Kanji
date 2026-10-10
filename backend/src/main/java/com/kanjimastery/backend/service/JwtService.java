@@ -18,17 +18,22 @@ import com.kanjimastery.backend.config.JwtProperties;
 @RequiredArgsConstructor
 public class JwtService {
 
+    /** Access tokens call the API; refresh tokens only get a new pair from /auth/refresh-token. */
+    public enum TokenType { ACCESS, REFRESH }
+
+    private static final String TYPE_CLAIM = "type";
+
     private final JwtProperties jwtProperties;
 
     public GeneratedToken generateAccessToken(User user) {
-        return generate(user, jwtProperties.getAccessTokenExpirationMs());
+        return generate(user, TokenType.ACCESS, jwtProperties.getAccessTokenExpirationMs());
     }
 
     public GeneratedToken generateRefreshToken(User user) {
-        return generate(user, jwtProperties.getRefreshTokenExpirationMs());
+        return generate(user, TokenType.REFRESH, jwtProperties.getRefreshTokenExpirationMs());
     }
 
-    private GeneratedToken generate(User user, long expirationMs) {
+    private GeneratedToken generate(User user, TokenType type, long expirationMs) {
         String jti = UUID.randomUUID().toString();
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
@@ -38,6 +43,7 @@ public class JwtService {
                 .id(jti)
                 .claim("userId", user.getId())
                 .claim("role", user.getRole())
+                .claim(TYPE_CLAIM, type.name())
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(signingKey())
@@ -54,10 +60,14 @@ public class JwtService {
                 .getPayload();
     }
 
-    public boolean isTokenValid(String token) {
+    /**
+     * Signed by this app, not expired, and of the given type. Both types share the signing key, so without the type
+     * check a refresh token (7 days, still usable after logout) would pass as an access token. Tokens issued before
+     * the type claim existed have none and are refused, so their owners sign in again once.
+     */
+    public boolean isTokenValid(String token, TokenType type) {
         try {
-            parseClaims(token);
-            return true;
+            return type.name().equals(parseClaims(token).get(TYPE_CLAIM, String.class));
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }

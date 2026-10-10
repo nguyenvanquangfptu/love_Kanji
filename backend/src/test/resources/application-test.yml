@@ -6,3 +6,7 @@ spring:
       # một số luồng sẽ phải xếp hàng chờ connection thay vì thật sự chạy đua
       # ở tầng DB, khiến test không còn phản ánh đúng race condition cần kiểm chứng.
       maximum-pool-size: 20
+
+app:
+  jwt:
+    secret: test-only-signing-key-at-least-32-bytes-long

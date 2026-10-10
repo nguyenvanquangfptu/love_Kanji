@@ -126,7 +126,7 @@ public class ExamQuestionGenerator {
         return switch (skill) {
             case KANJI_TO_READING -> JlptQuestionType.KANJI_READING.name();
             case READING_TO_KANJI -> JlptQuestionType.ORTHOGRAPHY.name();
-            case MEANING -> skill.name();
+            case MEANING, TYPE_READING -> skill.name();
         };
     }
 

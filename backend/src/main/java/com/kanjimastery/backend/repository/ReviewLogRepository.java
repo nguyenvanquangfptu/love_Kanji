@@ -77,6 +77,16 @@ public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
             """, nativeQuery = true)
     long countNewWordsLearnedSince(@Param("userId") Long userId, @Param("since") LocalDateTime since);
 
+    /**
+     * Số lượt ôn tính vào lịch của từ đã học (không tính lần học đầu của từ mới - phần đó có hạn mức riêng) từ
+     * {@code since}, ở mọi nguồn: thẻ ôn, trắc nghiệm, bài thi.
+     */
+    @Query(value = """
+            SELECT COUNT(*) FROM review_logs
+            WHERE user_id = :userId AND state_before <> 'NEW' AND scheduled AND reviewed_at >= :since
+            """, nativeQuery = true)
+    long countReviewsSince(@Param("userId") Long userId, @Param("since") LocalDateTime since);
+
     /** Lượt trả lời một từ theo một hướng hỏi ({@code direction} null = thẻ ôn tập). */
     interface WordDirectionStats {
         Long getKanjiId();

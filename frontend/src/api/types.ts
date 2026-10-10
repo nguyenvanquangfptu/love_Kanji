@@ -310,6 +310,10 @@ export interface StartExamResponse {
 export interface StartJlptExamRequest {
   jlptLevel: string
   sections: ExamSectionName[]
+  /** Chỉ lấy câu của nguồn này (vd. IMPORTED - các đề tự soạn); bỏ trống = mọi câu đã duyệt. */
+  source?: ExamQuestionSource
+  /** Thời gian tự đặt (5-120 phút) của từng phần; phần không có ở đây theo giờ đề thật. */
+  minutes?: Partial<Record<ExamSectionName, number>>
 }
 
 /** Cấu trúc đề JLPT của một cấp độ và số câu hỏi hiện có. */
@@ -336,6 +340,10 @@ export interface ExamSittingResponse {
   status: ExamSittingStatus
   startedAt: string
   finishedAt: string | null
+  /** Nguồn câu đã chọn (IMPORTED = các đề tự soạn); null = mọi câu đã duyệt. */
+  questionSource: ExamQuestionSource | null
+  /** Có phần làm với thời gian tự đặt: buổi thi không được tính vào bảng xếp hạng. */
+  customTime: boolean
   sections: {
     name: ExamSectionName
     /** null = chưa làm. */
@@ -480,23 +488,31 @@ export interface MyRankResponse {
 export const JLPT_LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'] as const
 export type JlptLevel = (typeof JLPT_LEVELS)[number]
 
-export type QuizDirection = 'KANJI_TO_READING' | 'READING_TO_KANJI' | 'MEANING'
+/** TYPE_READING: cho chữ Hán, người học tự gõ cách đọc (chỉ có ở phần học, không có câu thi). */
+export type QuizDirection = 'KANJI_TO_READING' | 'READING_TO_KANJI' | 'MEANING' | 'TYPE_READING'
 
 /** adaptive: ưu tiên từ người học hay sai (mặc định); random: chọn đều trong cả bài. */
 export type QuizMode = 'adaptive' | 'random'
 
+/** choice: chọn 1 trong 4 đáp án (mặc định); typing: hiện chữ Hán, tự gõ cách đọc. */
+export type QuizAnswerKind = 'choice' | 'typing'
+
 export interface QuizQuestionResponse {
   kanjiId: number
   direction: QuizDirection
-  /** Từ cần hỏi: dạng Kanji, hoặc hiragana nếu direction = READING_TO_KANJI. */
+  /** Từ cần hỏi: dạng Kanji, hoặc hiragana nếu direction = READING_TO_KANJI. Câu gõ: kèm đuôi (見る). */
   prompt: string
   /** Câu ví dụ kiểu đề JLPT có chứa nguyên văn `prompt` (cần gạch chân); null nếu chưa có. */
   sentence: string | null
+  /** Rỗng với câu gõ cách đọc. */
   choices: string[]
+  /** -1 với câu gõ cách đọc. */
   correctIndex: number
   character: string
+  /** Null với câu gõ cách đọc: cách đọc là đáp án, chỉ có trong kết quả chấm. */
   reading: string | null
-  meaning: string
+  /** Null với câu gõ cách đọc cho tới khi chấm. */
+  meaning: string | null
   /** Đáp án sai bạn từng chọn nhiều nhất cho từ này (theo hướng hỏi này), có trong `choices`; null nếu chưa từng nhầm. */
   personalTrap: string | null
   personalTrapCount: number
@@ -508,16 +524,27 @@ export interface QuizQuestionResponse {
 export interface QuizAnswerRequest {
   kanjiId: number
   direction: QuizDirection
-  chosenAnswer: string
+  /** Câu gõ cách đọc: chuỗi người học gõ (romaji hoặc kana). */
+  chosenAnswer?: string
+  /** Câu gõ cách đọc: bấm "Không nhớ" - tính là sai. */
+  gaveUp?: boolean
   /** Thời gian từ lúc hiện câu hỏi tới lúc chọn đáp án (ms). */
   responseMs?: number
 }
+
+/** Lỗi gõ cách đọc hay gặp khi gõ gần đúng. */
+export type ReadingMistake = 'LONG_VOWEL' | 'SOKUON' | 'DAKUTEN' | 'SMALL_KANA' | 'N_BEFORE_VOWEL'
 
 export interface QuizAnswerResponse {
   correct: boolean
   /** Từ có nằm trong lịch ôn không - từ làm sai luôn được đưa vào. */
   inReview: boolean
   nextReviewAt: string | null
+  /** Câu gõ cách đọc: cách đọc đúng, kana server hiểu từ chuỗi đã gõ, loại lỗi khi gõ gần đúng, nghĩa. */
+  correctAnswer: string | null
+  typedKana: string | null
+  mistake: ReadingMistake | null
+  meaning: string | null
 }
 
 /** Một điểm ngữ pháp (〜てから...) của một cấp độ. */
@@ -572,7 +599,9 @@ export interface AdminExamQuestion {
   flag: ExamQuestionFlag | null
   reviewNote: string | null
   reviewedAt: string | null
-  source: 'MANUAL' | 'GENERATED' | 'AI'
+  source: ExamQuestionSource
+  /** Câu nào của đề tự soạn (vd. N3-05/NP/15) với câu nhập từ file đề; null với nguồn khác. */
+  sourceRef: string | null
   questionText: string
   sentence: string | null
   highlight: string | null
@@ -635,6 +664,23 @@ export interface QuestionDraftResult {
 }
 
 /** Kết quả nhờ AI viết một đoạn văn 文章の文法: chờ duyệt, hoặc bị loại vì sai cấu trúc (lý do ở ghi chú của đoạn). */
+/** Nguồn của câu thi: soạn tay, sinh từ kho từ, AI viết nháp, hay nhập từ file đề tự soạn. */
+export type ExamQuestionSource = 'MANUAL' | 'GENERATED' | 'AI' | 'IMPORTED'
+
+/** Kết quả nhập một đề tự soạn; có lỗi thì không ghi gì, chạy thử (dryRun) thì chỉ kiểm tra. */
+export interface ExamImportResult {
+  testCode: string
+  dryRun: boolean
+  imported: boolean
+  /** Số câu đã ghi, hoặc sẽ ghi khi chạy thử. */
+  questions: number
+  passages: number
+  /** Số câu đã có từ lần nhập trước, được bỏ qua. */
+  alreadyImported: number
+  errors: string[]
+  warnings: string[]
+}
+
 export interface PassageDraftResult {
   passageId: number
   status: 'DRAFT' | 'REJECTED'
@@ -650,7 +696,9 @@ export interface AdminExamPassage {
   title: string | null
   content: string
   status: ExamQuestionStatus
-  source: 'MANUAL' | 'GENERATED' | 'AI'
+  source: ExamQuestionSource
+  /** Đoạn văn nào của đề tự soạn (vd. N3-05/NP/19-23); null với nguồn khác. */
+  sourceRef: string | null
   flag: ExamQuestionFlag | null
   reviewNote: string | null
   reviewedAt: string | null

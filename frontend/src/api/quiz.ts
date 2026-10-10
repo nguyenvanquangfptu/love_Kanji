@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { QuizAnswerRequest, QuizAnswerResponse, QuizMode, QuizQuestionResponse } from './types'
+import type { QuizAnswerKind, QuizAnswerRequest, QuizAnswerResponse, QuizMode, QuizQuestionResponse } from './types'
 
 export const quizApi = {
   /** `kanjiIds`: danh sách id cách nhau bởi dấu phẩy - hỏi đúng các từ này. */
@@ -10,6 +10,7 @@ export const quizApi = {
     mode?: QuizMode
     hardWords?: boolean
     kanjiIds?: string
+    answer?: QuizAnswerKind
   }) =>
     apiClient.get<QuizQuestionResponse[]>('/quiz/generate', { params }).then((r) => r.data),
 

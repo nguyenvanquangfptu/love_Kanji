@@ -13,9 +13,11 @@ import { PageSpinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/EmptyState'
 import { SpeakButton } from '@/components/SpeakButton'
 import { LessonReviewCard } from '@/components/LessonReviewCard'
+import { useQuizStart } from '@/lib/quizStart'
 
 export function StudyVocabListPage() {
   const navigate = useNavigate()
+  const quiz = useQuizStart()
   const { tagId, name, query } = useLessonParams()
   const { level, lesson } = parseTagName(name)
   const style = levelStyle(level)
@@ -32,6 +34,7 @@ export function StudyVocabListPage() {
 
   return (
     <div>
+      {quiz.dialog}
       <Link
         to="/study"
         className="mb-4 inline-flex items-center gap-1 rounded-xl py-1 pr-2 text-sm font-extrabold text-muted-foreground hover:text-foreground"
@@ -67,7 +70,7 @@ export function StudyVocabListPage() {
           <Layers className="h-5 w-5" strokeWidth={2.5} />
           Học bằng thẻ
         </Button>
-        <Button disabled={words.length === 0} onClick={() => navigate(`/study/quiz?${query}`)}>
+        <Button disabled={words.length === 0} onClick={() => quiz.start(`/study/quiz?${query}`)}>
           <ListChecks className="h-5 w-5" strokeWidth={2.5} />
           Trắc nghiệm
         </Button>

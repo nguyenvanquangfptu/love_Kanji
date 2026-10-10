@@ -139,7 +139,7 @@ class ExamPassageIT extends AbstractIntegrationTest {
         ExamPassage unseen = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).content("【1】")
                 .review(new ReviewState(ExamQuestionStatus.APPROVED)).build());
         try {
-            assertThat(passageRepository.findApprovedForLearner(userId, LEVEL.name(), 10)).extracting(ExamPassage::getId)
+            assertThat(passageRepository.findApprovedForLearner(userId, LEVEL.name(), null, 10)).extracting(ExamPassage::getId)
                     .containsExactly(unseen.getId(), passage.getId());
         } finally {
             passageRepository.deleteById(unseen.getId());

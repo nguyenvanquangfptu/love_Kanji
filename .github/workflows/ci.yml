@@ -31,12 +31,15 @@ jobs:
           cache: maven
 
       # Testcontainers cần Docker - runner ubuntu-latest có sẵn Docker Engine qua Unix socket.
+      # verify = unit test (surefire) + integration test *IT (failsafe); `test` bỏ qua các class *IT.
       - name: Run tests (bao gồm Testcontainers - Postgres + Redis thật)
-        run: ./mvnw -B clean test
+        run: ./mvnw -B clean verify
 
       - name: Publish test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: surefire-reports
-          path: backend/target/surefire-reports/
+          name: test-reports
+          path: |
+            backend/target/surefire-reports/
+            backend/target/failsafe-reports/

@@ -2,7 +2,7 @@ package com.kanjimastery.backend;
 
 import org.junit.jupiter.api.Test;
 
-class KanjiMasteryApplicationTests extends AbstractIntegrationTest {
+class KanjiMasteryApplicationIT extends AbstractIntegrationTest {
 
     @Test
     void contextLoads() {

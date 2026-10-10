@@ -16,6 +16,7 @@ export const authApi = {
   logout: (refreshToken: string) =>
     apiClient.post<void>('/auth/logout', { refreshToken }).then((r) => r.data),
 
+  /** Ends every session, this one included: clear the session and send the user to /login afterwards. */
   changePassword: (payload: ChangePasswordRequest) =>
     apiClient.post<void>('/auth/change-password', payload).then((r) => r.data),
 }

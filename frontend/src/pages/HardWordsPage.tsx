@@ -12,15 +12,18 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
 import { PageSpinner } from '@/components/ui/spinner'
+import { useQuizStart } from '@/lib/quizStart'
 
 /** Từ người học quên đi quên lại - luyện riêng bằng trắc nghiệm chỉ gồm những từ này. */
 export function HardWordsPage() {
   const navigate = useNavigate()
+  const quiz = useQuizStart()
   const { data, isLoading, isError, error } = useQuery({ queryKey: ['srs', 'hard-words'], queryFn: srsApi.getHardWords })
   const words = data?.words ?? []
 
   return (
     <div>
+      {quiz.dialog}
       <PageHeader
         title="Từ khó của tôi"
         subtitle={
@@ -28,7 +31,7 @@ export function HardWordsPage() {
         }
         action={
           words.length > 0 && (
-            <Button onClick={() => navigate('/study/quiz?hardWords=1')}>
+            <Button onClick={() => quiz.start('/study/quiz?hardWords=1')}>
               <ListChecks className="h-5 w-5" strokeWidth={2.5} />
               Luyện trắc nghiệm
             </Button>

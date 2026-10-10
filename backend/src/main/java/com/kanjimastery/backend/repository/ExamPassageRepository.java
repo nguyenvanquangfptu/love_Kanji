@@ -13,7 +13,10 @@ import java.util.List;
 
 public interface ExamPassageRepository extends JpaRepository<ExamPassage, Long> {
 
-    /** Đoạn văn đã duyệt cho một người học: đoạn chưa gặp đứng trước (ngẫu nhiên), rồi tới đoạn gặp lâu nhất. */
+    /**
+     * Đoạn văn đã duyệt cho một người học: đoạn chưa gặp đứng trước (ngẫu nhiên), rồi tới đoạn gặp lâu nhất.
+     * {@code source} null = mọi nguồn, không thì chỉ đoạn của nguồn đó.
+     */
     @Query(value = """
             SELECT p.* FROM exam_passages p
             LEFT JOIN (
@@ -25,13 +28,16 @@ public interface ExamPassageRepository extends JpaRepository<ExamPassage, Long> 
                 GROUP BY question.passage_id
             ) seen ON seen.passage_id = p.id
             WHERE p.jlpt_level = :level AND p.status = 'APPROVED'
+              AND (CAST(:source AS VARCHAR) IS NULL OR p.source = CAST(:source AS VARCHAR))
             ORDER BY seen.seen_at NULLS FIRST, RANDOM()
             LIMIT :count
             """, nativeQuery = true)
     List<ExamPassage> findApprovedForLearner(@Param("userId") Long userId, @Param("level") String level,
-                                             @Param("count") int count);
+                                             @Param("source") String source, @Param("count") int count);
 
     Page<ExamPassage> findByJlptLevelOrderByIdDesc(JlptLevel jlptLevel, Pageable pageable);
 
     Page<ExamPassage> findByJlptLevelAndReviewStatusOrderByIdDesc(JlptLevel jlptLevel, ExamQuestionStatus status, Pageable pageable);
+
+    boolean existsBySourceRef(String sourceRef);
 }

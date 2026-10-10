@@ -38,4 +38,6 @@ backend_src_backup_*/
 # Tài liệu & công cụ cá nhân - không đưa lên repo
 CommitRule.md
 k_ho_ch_tri_n_khai_d_n_spring_boot.md
+CLAUDE.md
+ke_hoach_*.md
 db-backup/

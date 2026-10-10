@@ -29,8 +29,6 @@ public interface UserKanjiSrsRepository extends JpaRepository<UserKanjiSrs, Long
 
     List<UserKanjiSrs> findByUserIdAndLapseCountGreaterThanEqualOrderByLapseCountDesc(Long userId, Integer minLapses);
 
-    long countByUserIdAndNextReviewAtLessThanEqual(Long userId, LocalDateTime now);
-
     /** Thẻ ôn đến hạn (đã học ít nhất một lần - không tính từ mới đang chờ). */
     long countByUserIdAndLastReviewedAtIsNotNullAndNextReviewAtLessThanEqual(Long userId, LocalDateTime now);
 

@@ -121,6 +121,7 @@ Mọi lần người học trả lời một từ — lật thẻ ôn tập, là
 | Chấm điểm khách quan | Trắc nghiệm do server chấm; mức Dễ/Nhớ/Khó suy từ thời gian trả lời so với **trung vị của chính người học** (200 câu đúng gần nhất theo hướng hỏi). Đúng khi thẻ chưa đến hạn chỉ được ghi lại, vì SM-2 không tính tới ôn sớm. |
 | Trắc nghiệm thích ứng | ~60% từ yếu (đến hạn, sai 14 ngày qua, EF thấp), ~25% từ chưa gặp, ~15% từ đã thuộc; bốc theo trọng số không lặp ([`AdaptiveQuizPlanner`](backend/src/main/java/com/kanjimastery/backend/service/AdaptiveQuizPlanner.java)). Hướng hỏi nghiêng về chiều người học hay sai. |
 | Đáp án nhiễu cá nhân | Tối đa 2 đáp án sai người học từng chọn cho chính từ đó được đưa lại vào câu hỏi, trừ khi chúng cũng "đúng" (từ đồng âm, nghĩa/cách đọc của dòng khác cùng cách viết). |
+| Gõ cách đọc | Kiểu trắc nghiệm thứ hai: hiện chữ Hán, người học **tự gõ cách đọc** bằng romaji (Hepburn hay kiểu bàn phím: `shusshin`, `syussin`, `han'i`, `kitte`) hoặc bằng bàn phím tiếng Nhật. Server tự đổi romaji sang kana ([`RomajiConverter`](backend/src/main/java/com/kanjimastery/backend/service/RomajiConverter.java)) rồi chấm với cách đọc của mọi mục cùng chữ ([`ReadingMatcher`](backend/src/main/java/com/kanjimastery/backend/service/ReadingMatcher.java)); gõ gần đúng vẫn là sai nhưng được gọi tên lỗi (trường âm, っ, âm đục, âm ghép, ん trước nguyên âm). Cách đọc không được gửi trước; thời gian trả lời thống kê riêng. |
 | Từ khó | Đếm số lần quên một thẻ đang ôn bình thường (như leech của Anki); quên 6 lần là từ khó, có trang riêng và trắc nghiệm riêng. Mẹo nhớ dựa trên **âm Hán Việt** do Gemini sinh một lần cho mỗi từ, kèm ghi chú riêng của người học. |
 | Kế hoạch hôm nay | Nhịp ôn đo từ khoảng cách giữa các lần chấm thẻ; số thẻ ôn vừa với số phút mỗi ngày, thẻ dễ quên nhất (trễ nhiều khoảng ôn nhất) trước; từ mới chỉ thêm khi còn chỗ (nạp n từ/ngày ≈ 4n lượt ôn/ngày) và xen giữa các thẻ ôn. "Hôm nay" tính theo giờ Việt Nam, bắt đầu lúc 4 giờ sáng ([`StudyPlanService`](backend/src/main/java/com/kanjimastery/backend/service/StudyPlanService.java)). |
 | Mục tiêu & ngày thi | Từ chưa học của mọi bài từ N5 tới cấp mục tiêu chia đều tới 2 tuần trước kỳ thi; dự báo ngày học xong theo nhịp 2 tuần gần nhất; gợi ý bài tiếp theo khi sắp hết từ mới. |
@@ -252,7 +253,7 @@ Tài liệu API đầy đủ, tương tác được (có nút **Authorize** đ�
 | Auth | `POST /api/v1/auth/register` `/login` `/refresh-token` `/logout` `/change-password` | Đăng ký/đăng nhập, Refresh Token Rotation, JWT Blacklist khi logout |
 | Kanji | `GET /api/v1/kanji` `/{id}` `POST /{id}/mnemonic` | Tra cứu từ điển (có phân trang, cache Redis); mẹo nhớ Hán Việt do AI sinh |
 | SRS | `GET /api/v1/srs/daily-plan` `/daily-cards` `POST /review` `GET /stats` `/hard-words` `PUT /cards/{kanjiId}/note` | Kế hoạch và phiên ôn hôm nay, chấm thẻ SM-2, từ khó, ghi chú riêng |
-| Quiz | `GET /api/v1/quiz/generate` `POST /answers` | Trắc nghiệm thích ứng (hoặc `mode=random`, `hardWords=true`, `kanjiIds=1,2,3` cho đúng các từ đó); server chấm từng câu và cập nhật lịch ôn |
+| Quiz | `GET /api/v1/quiz/generate` `POST /answers` | Trắc nghiệm thích ứng (hoặc `mode=random`, `hardWords=true`, `kanjiIds=1,2,3` cho đúng các từ đó; `answer=typing` để tự gõ cách đọc); server chấm từng câu và cập nhật lịch ôn |
 | Mục tiêu & tiến bộ | `GET` `PUT /api/v1/profile/learning` `POST /learning/fsrs/optimize` · `GET /api/v1/progress` | Cấp độ, ngày thi, số phút mỗi ngày, SM-2/FSRS và tỉ lệ nhớ; tối ưu FSRS theo lịch sử ôn; tỉ lệ nhớ theo tuần, hoạt động 14 ngày, chỗ hay nhầm, FSRS dự đoán so với thực tế |
 | Exam | `POST /api/v1/exams/start` `PUT .../answers` `GET .../session` `POST .../submit` `GET .../review` · `POST /questions/generate` (ADMIN) | Thi thử, auto-save, resume, nộp bài, xem lại kèm điểm theo kỹ năng và từ cần ôn; sinh câu thi từ kho từ vựng |
 | Leaderboard | `GET /api/v1/exams/leaderboard` `/my-rank` | Bảng xếp hạng real-time (Redis ZSET) |
@@ -295,7 +296,7 @@ Sau khi cả 5 container (`postgres`, `redis`, `backend`, `frontend`, `db-backup
 
 - Web app: `http://localhost:3000`. Điện thoại cùng mạng Wi-Fi mở bằng `http://<IP của máy>:3000`.
 - API: `http://localhost:8080`
-- Swagger UI: `http://localhost:8080/swagger-ui.html`
+- Swagger UI: `http://localhost:8080/swagger-ui.html` — tắt mặc định khi chạy bằng Docker; đặt `API_DOCS_ENABLED=true` trong `.env` rồi chạy lại `docker-compose up -d` để bật. Khi chạy dev bằng `./mvnw spring-boot:run` thì luôn bật.
 
 API (8080), PostgreSQL (5433) và Redis (6379) chỉ mở cho chính máy chạy Docker (`127.0.0.1`). Chỉ cổng 3000 của web app mở cho mạng LAN, và mọi request API từ máy khác đều phải đi qua nginx.
 
@@ -365,6 +366,8 @@ cd backend
 
 > Lưu ý: `docker-compose.yml` map PostgreSQL ra cổng **5433** (không phải 5432 mặc định) để tránh xung đột nếu máy dev đã có sẵn PostgreSQL native.
 
+> `./mvnw spring-boot:run` tự bật profile `dev`, profile duy nhất có sẵn khoá JWT dùng cho máy dev. Chạy từ IDE thì đặt **Active profiles = `dev`**. Ngoài profile `dev` (kể cả `docker` hay `java -jar`), backend không khởi động nếu thiếu `JWT_SECRET` hoặc khoá ngắn hơn 32 ký tự.
+
 Chạy Frontend riêng (hot reload, Vite dev server proxy `/api` sang `localhost:8080`):
 
 ```bash
@@ -381,12 +384,13 @@ Mở `http://localhost:5173`.
 
 ```bash
 cd backend
-./mvnw test
+./mvnw test     # chỉ unit test (*Test), không cần Docker
+./mvnw verify   # unit test + integration test (*IT, Testcontainers) - cần Docker đang chạy
 ```
 
 - **Unit test** (không cần Docker): `SrsCalculatorServiceTest`, `JwtServiceTest`, `UserServiceTest`, và phần cá nhân hoá: `AdaptiveQuizPlannerTest` (chọn từ, hướng hỏi), `StudyPlanServiceTest` (kế hoạch hôm nay, mục tiêu), `DailySessionOrderTest`, `StudyCalendarTest` (ngày học theo giờ Việt Nam), `FsrsTest` (golden test với py-fsrs), `FsrsOptimizerTest`, `FsrsParametersServiceTest`, `ExamDiagnosisServiceTest`, `ExamQuestionGeneratorTest`...
 - **Đề JLPT** — unit: `JlptExamAssemblerTest`, `JlptExamServiceTest`, `QuestionDraftServiceTest` / `PassageDraftServiceTest` (Gemini giả lập), `VocabularyLevelCheckerTest`, `KatakanaSpellingTest`, `GrammarPracticeServiceTest`, `LeaderboardServiceTest`; integration: `JlptExamSittingIT` (buổi thi hai phần, không gặp lại câu cũ, bảng xếp hạng), `ExamPassageIT`, `ExamQuestionReviewIT`, `GrammarPracticeIT`, `QuestionReportIT`, `ItemAnalysisIT` (40 lượt thi dựng sẵn), `Admin*ControllerIT` (phân quyền ADMIN).
-- **Integration test** (Testcontainers - tự khởi chạy Postgres + Redis trong container tạm, không phụ thuộc môi trường local): `ExamFinalizationConcurrencyIT` (race condition + rollback), `ExamSessionStoreIT` (TTL buffer), `KanjiMasteryApplicationTests` (context loads), `ReviewLogRepositoryIT` / `TagRepositoryIT` / `UserKanjiSrsRepositoryIT` (các truy vấn native: `percentile_cont`, `FILTER`, `LAG`, `LEAD`, `split_part`), `FsrsParametersRepositoryIT` (JSONB), `ExamQuestionRepositoryIT` (gắn kỹ năng, từ vựng cho câu mẫu), `ExamDiagnosisIT` (nộp bài → từ sai vào lịch ôn, chỉ một lần), `ExamQuestionGeneratorIT`, `FsrsSimulationIT` (mô phỏng 120 ngày, ~90 giây; đổi hạt giống bằng `-Dsimulation.seed=1`, báo cáo và lịch sử ôn ghi ra `backend/target/fsrs-simulation/`).
+- **Integration test** (Testcontainers - tự khởi chạy Postgres + Redis trong container tạm, không phụ thuộc môi trường local): `ExamFinalizationConcurrencyIT` (race condition + rollback), `ExamSessionStoreIT` (TTL buffer), `KanjiMasteryApplicationIT` (context loads), `ReviewLogRepositoryIT` / `TagRepositoryIT` / `UserKanjiSrsRepositoryIT` (các truy vấn native: `percentile_cont`, `FILTER`, `LAG`, `LEAD`, `split_part`), `FsrsParametersRepositoryIT` (JSONB), `ExamQuestionRepositoryIT` (gắn kỹ năng, từ vựng cho câu mẫu), `ExamDiagnosisIT` (nộp bài → từ sai vào lịch ôn, chỉ một lần), `ExamQuestionGeneratorIT`, `FsrsSimulationIT` (mô phỏng 120 ngày, ~90 giây; đổi hạt giống bằng `-Dsimulation.seed=1`, báo cáo và lịch sử ôn ghi ra `backend/target/fsrs-simulation/`).
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) chạy toàn bộ test suite tự động trên mỗi push/PR vào `main`.
 

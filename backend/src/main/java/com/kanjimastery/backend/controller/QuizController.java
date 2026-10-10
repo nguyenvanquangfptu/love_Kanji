@@ -28,7 +28,8 @@ public class QuizController {
             description = "mode=adaptive (mặc định): khoảng 60% từ đang yếu, 25% từ chưa gặp, 15% từ đã thuộc, hướng hỏi "
                     + "nghiêng về chiều người học hay sai. mode=random: chọn từ và hướng hỏi ngẫu nhiên đều. "
                     + "hardWords=true: chỉ lấy từ khó của người học (bỏ qua tagId/level). "
-                    + "kanjiIds=1,2,3: hỏi đúng các từ này, vd. các từ làm sai trong một bài thi (bỏ qua các bộ lọc khác).")
+                    + "kanjiIds=1,2,3: hỏi đúng các từ này, vd. các từ làm sai trong một bài thi (bỏ qua các bộ lọc khác). "
+                    + "answer=typing: hiện chữ Hán, người học tự gõ cách đọc (chỉ từ có chữ Hán; không gửi cách đọc trước).")
     @GetMapping("/generate")
     public ResponseEntity<List<QuizQuestionResponse>> generate(
             Authentication authentication,
@@ -37,9 +38,10 @@ public class QuizController {
             @RequestParam(required = false, defaultValue = "10") Integer size,
             @RequestParam(required = false, defaultValue = QuizService.MODE_ADAPTIVE) String mode,
             @RequestParam(required = false, defaultValue = "false") boolean hardWords,
-            @RequestParam(required = false) List<Long> kanjiIds) {
+            @RequestParam(required = false) List<Long> kanjiIds,
+            @RequestParam(required = false, defaultValue = QuizService.ANSWER_CHOICE) String answer) {
         return ResponseEntity.ok(quizService.generate(authentication.getName(), tagId, level, size, mode, hardWords,
-                kanjiIds));
+                kanjiIds, answer));
     }
 
     @Operation(summary = "Gửi kết quả một câu trắc nghiệm",
