@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -255,19 +256,27 @@ class QuizServiceTest {
     }
 
     @Test
-    void generate_shouldKeepInterruptFlag_whenInterruptedWhileWaitingForSentences() {
+    void generate_shouldKeepInterruptFlag_whenInterruptedWhileWaitingForSentences() throws InterruptedException {
+        CountDownLatch asked = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         givenLessonWithGemini(invocation -> {
+            asked.countDown();
             release.await();
             return Optional.empty();
         });
 
-        Thread.currentThread().interrupt();
         try {
-            assertThat(quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null)).isNotNull();
-            assertThat(Thread.currentThread().isInterrupted()).as("cờ interrupt phải được giữ lại").isTrue();
+            Thread.currentThread().interrupt();
+            try {
+                assertThat(quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null)).isNotNull();
+                assertThat(Thread.currentThread().isInterrupted()).as("cờ interrupt phải được giữ lại").isTrue();
+            } finally {
+                Thread.interrupted();
+            }
+            // generate() thôi chờ ngay vì bị interrupt, có khi trước cả lúc luồng nền gọi tới Gemini giả: đợi lời gọi đó
+            // để test không kết thúc sớm hơn (Mockito sẽ báo stub "không dùng tới").
+            assertThat(asked.await(5, TimeUnit.SECONDS)).isTrue();
         } finally {
-            Thread.interrupted();
             release.countDown();
         }
     }
