@@ -1,7 +1,19 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { BarChart3, Check, CheckCheck, ChevronLeft, ChevronRight, Pencil, RotateCcw, ShieldCheck, Undo2, X } from 'lucide-react'
+import {
+  BarChart3,
+  Check,
+  CheckCheck,
+  ChevronLeft,
+  ChevronRight,
+  FileUp,
+  Pencil,
+  RotateCcw,
+  ShieldCheck,
+  Undo2,
+  X,
+} from 'lucide-react'
 import { examAdminApi } from '@/api/examAdmin'
 import { extractErrorMessage } from '@/api/client'
 import {
@@ -14,7 +26,7 @@ import {
 } from '@/api/types'
 import { LEVEL_META } from '@/lib/levels'
 import { QUESTION_TYPE_META, SECTION_META } from '@/lib/jlpt'
-import { FLAG_LABEL, SOURCE_LABEL, STATUS_BADGE } from '@/lib/questionReview'
+import { FLAG_LABEL, SOURCE_LABEL, STATUS_BADGE, sourceRefLabel } from '@/lib/questionReview'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
@@ -31,6 +43,7 @@ import { PassageReviewList } from '@/components/PassageReviewList'
 import { QuestionReports } from '@/components/QuestionReports'
 import { QuestionStats } from '@/components/QuestionStats'
 import { VocabularyDraftPanel } from '@/components/VocabularyDraftPanel'
+import { ExamImportPanel } from '@/components/ExamImportPanel'
 
 const STATUS_TABS: { value: ExamQuestionStatus | ''; label: string }[] = [
   { value: 'DRAFT', label: 'Chờ duyệt' },
@@ -44,6 +57,8 @@ const OPTIONS = ['A', 'B', 'C', 'D'] as const
 /** Dạng câu từ vựng nhờ AI viết nháp được theo từ trong bài. */
 const VOCABULARY_DRAFT_TYPES: JlptQuestionType[] = ['PARAPHRASE', 'USAGE']
 const PAGE_SIZE = 20
+/** Một đề tự soạn có tới 58 câu (N3): lọc theo đề thì cả đề trên một trang, duyệt cả trang là duyệt cả đề. */
+const TEST_PAGE_SIZE = 60
 
 /** Một thao tác cần ghi lý do: loại câu (bắt buộc) hoặc rút khỏi đề. */
 interface PendingNote {
@@ -61,7 +76,10 @@ export function AdminQuestionsPage() {
   const flagged = params.get('flagged') === 'true'
   const reported = params.get('reported') === 'true'
   const grammarPointId = params.get('grammarPointId') ? Number(params.get('grammarPointId')) : undefined
+  /** Mã đề tự soạn (vd. N3-05): chỉ câu của đề đó, theo thứ tự câu, cả đề trên một trang để duyệt một lượt. */
+  const test = params.get('test') ?? undefined
   const page = Number(params.get('page') ?? 0)
+  const [showImport, setShowImport] = useState(false)
 
   const [editing, setEditing] = useState<AdminExamQuestion | null>(null)
   const [editKey, setEditKey] = useState(0)
@@ -80,7 +98,17 @@ export function AdminQuestionsPage() {
     setParams(next, { replace: true })
   }
 
-  const filter = { level, type, status: status || undefined, flagged, reported, grammarPointId, page, size: PAGE_SIZE }
+  const filter = {
+    level,
+    type,
+    status: status || undefined,
+    flagged,
+    reported,
+    grammarPointId,
+    test,
+    page,
+    size: test ? TEST_PAGE_SIZE : PAGE_SIZE,
+  }
   const questionsQuery = useQuery({
     queryKey: ['admin', 'exam-questions', filter],
     queryFn: () => examAdminApi.search(filter),
@@ -148,7 +176,7 @@ export function AdminQuestionsPage() {
             type="button"
             role="tab"
             aria-selected={level === lv}
-            onClick={() => update({ level: lv, type: undefined, grammarPointId: undefined })}
+            onClick={() => update({ level: lv, type: undefined, grammarPointId: undefined, test: undefined })}
             className={cn(
               'rounded-2xl border-2 border-b-4 py-2 text-lg font-black transition-all active:translate-y-[2px] active:border-b-2',
               level === lv ? LEVEL_META[lv].style.solid : 'border-border bg-card hover:bg-muted',
@@ -219,6 +247,28 @@ export function AdminQuestionsPage() {
         </Card>
       )}
 
+      <div className="mb-4 flex justify-end">
+        <Button size="sm" variant="outline" aria-expanded={showImport} onClick={() => setShowImport((open) => !open)}>
+          <FileUp className="h-4 w-4" /> {showImport ? 'Đóng phần nhập đề' : 'Nhập đề tự soạn'}
+        </Button>
+      </div>
+      {showImport && (
+        <ExamImportPanel
+          onImported={refresh}
+          onReview={(code, testLevel) =>
+            update({
+              test: code,
+              level: testLevel ?? level,
+              status: 'DRAFT',
+              type: undefined,
+              grammarPointId: undefined,
+              flagged: undefined,
+              reported: undefined,
+            })
+          }
+        />
+      )}
+
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Trạng thái">
           {STATUS_TABS.map((tab) => (
@@ -250,6 +300,17 @@ export function AdminQuestionsPage() {
             </option>
           ))}
         </select>
+        <input
+          key={test ?? ''}
+          defaultValue={test ?? ''}
+          placeholder="Mã đề, vd. N3-05"
+          aria-label="Lọc theo mã đề tự soạn (Enter để lọc)"
+          title="Gõ mã đề tự soạn rồi Enter; để trống rồi Enter để bỏ lọc"
+          className="h-10 w-40 rounded-xl border-2 border-border bg-card px-3 text-sm font-bold"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') update({ test: e.currentTarget.value.trim() || undefined })
+          }}
+        />
         <label className="flex items-center gap-2 text-sm font-bold">
           <input
             type="checkbox"
@@ -423,7 +484,9 @@ function QuestionReviewCard({
         <span className="text-sm font-semibold text-muted-foreground">· {meta.vi}</span>
         <Badge variant={badge.variant}>{badge.label}</Badge>
         {question.flag && <Badge variant="orange">⚠ {FLAG_LABEL[question.flag]}</Badge>}
-        <Badge variant="outline">{SOURCE_LABEL[question.source] ?? question.source}</Badge>
+        <Badge variant="outline">
+          {question.sourceRef ? sourceRefLabel(question.sourceRef) : (SOURCE_LABEL[question.source] ?? question.source)}
+        </Badge>
       </div>
 
       {(!question.sentence || question.questionType === 'USAGE') && (

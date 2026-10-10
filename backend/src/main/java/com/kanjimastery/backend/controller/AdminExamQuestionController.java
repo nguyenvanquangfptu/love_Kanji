@@ -38,7 +38,9 @@ public class AdminExamQuestionController {
     private final ItemAnalysisService itemAnalysisService;
     private final ExamImportService importService;
 
-    @Operation(summary = "Lọc câu thi đề JLPT", description = "Mới nhất trước. Chỉ câu thuộc một dạng đề JLPT.")
+    @Operation(summary = "Lọc câu thi đề JLPT",
+            description = "Mới nhất trước; lọc theo mã đề tự soạn (test, vd. N3-05) thì theo thứ tự câu trong đề. "
+                    + "Chỉ câu thuộc một dạng đề JLPT.")
     @GetMapping
     public ResponseEntity<Page<AdminExamQuestionResponse>> search(
             @RequestParam(required = false) String level,
@@ -47,10 +49,11 @@ public class AdminExamQuestionController {
             @RequestParam(defaultValue = "false") boolean flagged,
             @RequestParam(required = false) Long grammarPointId,
             @RequestParam(defaultValue = "false") boolean reported,
+            @RequestParam(required = false) String test,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         ExamQuestionReviewService.Filter filter =
-                new ExamQuestionReviewService.Filter(level, type, status, flagged, grammarPointId, reported);
+                new ExamQuestionReviewService.Filter(level, type, status, flagged, grammarPointId, reported, test);
         return ResponseEntity.ok(reviewService.search(filter, page, Math.min(Math.max(size, 1), 100)));
     }
 

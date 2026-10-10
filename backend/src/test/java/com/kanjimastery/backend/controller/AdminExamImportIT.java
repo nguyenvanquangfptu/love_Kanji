@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -88,6 +89,24 @@ class AdminExamImportIT extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.alreadyImported").value(58));
         assertThat(imported()).as("nhập lại không tạo câu trùng").hasSize(58);
         assertThat(importedPassages()).hasSize(1);
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void anImportedTest_shouldBeListedByItsCode_inTheOrderOfTheTest() throws Exception {
+        mockMvc.perform(post(URL).param("dryRun", "false").contentType(MediaType.APPLICATION_JSON).content(testJson()))
+                .andExpect(jsonPath("$.imported").value(true));
+
+        // 53 câu đứng riêng; 5 câu của đoạn văn được duyệt theo cả đoạn ở danh sách đoạn văn.
+        mockMvc.perform(get("/api/v1/admin/exam-questions").param("level", "N3").param("test", CODE)
+                        .param("size", "60"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(53))
+                .andExpect(jsonPath("$.content[0].sourceRef").value(CODE + "/TV/1"))
+                .andExpect(jsonPath("$.content[0].source").value("IMPORTED"))
+                .andExpect(jsonPath("$.content[52].sourceRef").value(CODE + "/NP/18"));
+        mockMvc.perform(get("/api/v1/admin/exam-questions").param("level", "N3").param("test", "IT-KHONG-CO"))
+                .andExpect(jsonPath("$.totalElements").value(0));
     }
 
     @Test

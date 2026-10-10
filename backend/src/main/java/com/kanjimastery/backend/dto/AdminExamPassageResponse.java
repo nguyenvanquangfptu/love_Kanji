@@ -25,6 +25,8 @@ public class AdminExamPassageResponse {
     private ExamQuestionStatus status;
     /** {@link com.kanjimastery.backend.model.ExamQuestionSource} */
     private ExamQuestionSource source;
+    /** Đoạn văn nào của đề tự soạn (vd. N3-05/NP/19-23); null với nguồn khác. */
+    private String sourceRef;
     /** {@link com.kanjimastery.backend.model.ExamQuestionFlag}; null = không có cảnh báo. */
     private ExamQuestionFlag flag;
     private String reviewNote;

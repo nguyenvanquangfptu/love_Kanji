@@ -4,6 +4,7 @@ import type {
   AdminExamQuestion,
   AdminExamQuestionRequest,
   BulkApprovalResult,
+  ExamImportResult,
   ExamQuestionStatus,
   JlptQuestionType,
   Page,
@@ -20,6 +21,8 @@ export interface ExamQuestionFilter {
   grammarPointId?: number
   /** Chỉ câu có báo lỗi của người học đang chờ xem. */
   reported?: boolean
+  /** Chỉ câu của một đề tự soạn (mã đề, vd. N3-05), theo thứ tự câu trong đề. */
+  test?: string
   page?: number
   size?: number
 }
@@ -51,6 +54,12 @@ export const examAdminApi = {
       .then((r) => r.data),
 
   stats: () => apiClient.get<QuestionBankStats[]>('/admin/exam-questions/stats').then((r) => r.data),
+
+  /** Nhập một đề tự soạn (nội dung file JSON); dryRun = chỉ kiểm tra. Có lỗi thì không ghi gì. */
+  importTest: (test: unknown, dryRun: boolean) =>
+    apiClient
+      .post<ExamImportResult>('/admin/exam-questions/import', test, { params: { dryRun }, timeout: 60_000 })
+      .then((r) => r.data),
 
   /** Nhờ AI viết nháp câu ngữ pháp cho một điểm ngữ pháp (tốn 2 request Gemini); câu nháp chờ người duyệt. */
   draft: (grammarPointId: number, type: JlptQuestionType, count: number) =>

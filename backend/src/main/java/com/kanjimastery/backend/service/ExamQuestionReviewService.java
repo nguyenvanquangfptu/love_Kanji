@@ -66,9 +66,15 @@ public class ExamQuestionReviewService {
      * Bộ lọc của trang duyệt; trường null = không lọc. Chỉ có câu thuộc một dạng đề JLPT.
      *
      * @param reportedOnly chỉ câu có báo lỗi của người học đang chờ xem
+     * @param testCode     chỉ câu nhập từ một đề tự soạn (mã đề, vd. N3-05), xếp theo thứ tự câu trong đề
      */
     public record Filter(String level, JlptQuestionType type, ExamQuestionStatus status, boolean flaggedOnly, Long grammarPointId,
-                         boolean reportedOnly) {
+                         boolean reportedOnly, String testCode) {
+
+        public Filter(String level, JlptQuestionType type, ExamQuestionStatus status, boolean flaggedOnly,
+                      Long grammarPointId, boolean reportedOnly) {
+            this(level, type, status, flaggedOnly, grammarPointId, reportedOnly, null);
+        }
     }
 
     /**
@@ -83,8 +89,10 @@ public class ExamQuestionReviewService {
 
     @Transactional(readOnly = true)
     public Page<AdminExamQuestionResponse> search(Filter filter, int page, int size) {
+        // Mới nhất trước; lọc theo một đề thì theo thứ tự câu trong đề (câu được nhập theo đúng thứ tự đó) để đối chiếu.
+        Sort.Direction direction = StringUtils.hasText(filter.testCode()) ? Sort.Direction.ASC : Sort.Direction.DESC;
         Page<ExamQuestion> found = questionRepository.findAll(specification(filter),
-                PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "id")));
+                PageRequest.of(page, size, Sort.by(direction, "id")));
         Map<Long, ExamQuestion> withLinks = found.isEmpty()
                 ? Map.of()
                 : questionRepository.findAllWithLinksByIdIn(found.map(ExamQuestion::getId).getContent()).stream()
@@ -114,6 +122,9 @@ public class ExamQuestionReviewService {
             }
             if (filter.grammarPointId() != null) {
                 predicates.add(builder.isMember(filter.grammarPointId(), root.<Set<Long>>get("grammarPointIds")));
+            }
+            if (StringUtils.hasText(filter.testCode())) {
+                predicates.add(builder.like(root.get("sourceRef"), filter.testCode().strip() + "/%"));
             }
             if (filter.reportedOnly()) {
                 Subquery<Long> openReports = query.subquery(Long.class);
@@ -326,6 +337,7 @@ public class ExamQuestionReviewService {
                 .reviewNote(question.getReviewNote())
                 .reviewedAt(question.getReviewedAt())
                 .source(question.getSource())
+                .sourceRef(question.getSourceRef())
                 .questionText(question.getQuestionText())
                 .sentence(question.getSentence())
                 .highlight(question.getHighlight())

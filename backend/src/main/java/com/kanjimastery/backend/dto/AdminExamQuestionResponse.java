@@ -32,6 +32,8 @@ public class AdminExamQuestionResponse {
     private LocalDateTime reviewedAt;
     /** {@link com.kanjimastery.backend.model.ExamQuestionSource} */
     private ExamQuestionSource source;
+    /** Câu nào của đề tự soạn (vd. N3-05/NP/15) với câu nhập từ file đề; null với nguồn khác. */
+    private String sourceRef;
     private String questionText;
     private String sentence;
     private String highlight;

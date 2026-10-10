@@ -591,7 +591,9 @@ export interface AdminExamQuestion {
   flag: ExamQuestionFlag | null
   reviewNote: string | null
   reviewedAt: string | null
-  source: 'MANUAL' | 'GENERATED' | 'AI'
+  source: ExamQuestionSource
+  /** Câu nào của đề tự soạn (vd. N3-05/NP/15) với câu nhập từ file đề; null với nguồn khác. */
+  sourceRef: string | null
   questionText: string
   sentence: string | null
   highlight: string | null
@@ -654,6 +656,23 @@ export interface QuestionDraftResult {
 }
 
 /** Kết quả nhờ AI viết một đoạn văn 文章の文法: chờ duyệt, hoặc bị loại vì sai cấu trúc (lý do ở ghi chú của đoạn). */
+/** Nguồn của câu thi: soạn tay, sinh từ kho từ, AI viết nháp, hay nhập từ file đề tự soạn. */
+export type ExamQuestionSource = 'MANUAL' | 'GENERATED' | 'AI' | 'IMPORTED'
+
+/** Kết quả nhập một đề tự soạn; có lỗi thì không ghi gì, chạy thử (dryRun) thì chỉ kiểm tra. */
+export interface ExamImportResult {
+  testCode: string
+  dryRun: boolean
+  imported: boolean
+  /** Số câu đã ghi, hoặc sẽ ghi khi chạy thử. */
+  questions: number
+  passages: number
+  /** Số câu đã có từ lần nhập trước, được bỏ qua. */
+  alreadyImported: number
+  errors: string[]
+  warnings: string[]
+}
+
 export interface PassageDraftResult {
   passageId: number
   status: 'DRAFT' | 'REJECTED'
@@ -669,7 +688,9 @@ export interface AdminExamPassage {
   title: string | null
   content: string
   status: ExamQuestionStatus
-  source: 'MANUAL' | 'GENERATED' | 'AI'
+  source: ExamQuestionSource
+  /** Đoạn văn nào của đề tự soạn (vd. N3-05/NP/19-23); null với nguồn khác. */
+  sourceRef: string | null
   flag: ExamQuestionFlag | null
   reviewNote: string | null
   reviewedAt: string | null

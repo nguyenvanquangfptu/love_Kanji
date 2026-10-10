@@ -39,6 +39,14 @@ export const SOURCE_LABEL: Record<string, string> = {
   MANUAL: 'Soạn tay',
   GENERATED: 'Sinh từ kho từ',
   AI: 'AI viết nháp',
+  IMPORTED: 'Đề tự soạn',
+}
+
+/** Mã câu đề gốc dễ đọc: "N3-05/NP/15" → "N3-05 · Ngữ pháp câu 15" (đoạn văn: "câu 19-23"). */
+export function sourceRefLabel(ref: string): string {
+  const [code, part, number] = ref.split('/')
+  const partLabel = part === 'TV' ? 'Từ vựng' : part === 'NP' ? 'Ngữ pháp' : part
+  return number ? `${code} · ${partLabel} câu ${number}` : ref
 }
 
 /** Tóm tắt một lần nhờ AI viết nháp câu thi. */
