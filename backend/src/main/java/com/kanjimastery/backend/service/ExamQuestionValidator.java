@@ -25,8 +25,8 @@ final class ExamQuestionValidator {
     /** Cột option_a..option_d là VARCHAR(255), highlight là VARCHAR(100). */
     static final int MAX_OPTION_LENGTH = 255;
     static final int MAX_HIGHLIGHT_LENGTH = 100;
-    /** Chỗ trống 【n】 trong đoạn văn 文章の文法. */
-    static final Pattern PASSAGE_BLANK = Pattern.compile("【(\\d+)】");
+    /** Chỗ trống 【n】 trong đoạn văn 文章の文法; câu hỏi điền hai chỗ (a) và (b) thì đánh 【na】 và 【nb】. */
+    static final Pattern PASSAGE_BLANK = Pattern.compile("【(\\d+)([ab]?)】");
 
     private ExamQuestionValidator() {
     }
@@ -83,7 +83,8 @@ final class ExamQuestionValidator {
 
     /**
      * Lỗi của một đoạn văn 文章の文法 có các câu hỏi điền vào chỗ trống {@code blankNos}: chỗ trống phải là 1..n theo
-     * thứ tự, mỗi 【k】 xuất hiện đúng một lần trong đoạn và không thừa chỗ trống nào.
+     * thứ tự, mỗi 【k】 xuất hiện đúng một lần trong đoạn (hoặc đúng một cặp 【ka】【kb】 với câu điền hai chỗ) và không
+     * thừa chỗ trống nào.
      */
     static List<String> passageProblems(String content, List<Integer> blankNos) {
         List<String> problems = new ArrayList<>();
@@ -98,14 +99,19 @@ final class ExamQuestionValidator {
         if (!blankNos.stream().sorted().toList().equals(expected)) {
             problems.add("chỗ trống của các câu hỏi phải là 1.." + blankNos.size());
         }
-        Map<Integer, Integer> markers = new TreeMap<>();
+        // Số chỗ trống -> các hậu tố gặp trong đoạn ("" với 【k】, "a"/"b" với 【ka】/【kb】).
+        Map<Integer, List<String>> markers = new TreeMap<>();
         Matcher matcher = PASSAGE_BLANK.matcher(content);
         while (matcher.find()) {
-            markers.merge(Integer.parseInt(matcher.group(1)), 1, Integer::sum);
+            markers.computeIfAbsent(Integer.parseInt(matcher.group(1)), blank -> new ArrayList<>()).add(matcher.group(2));
         }
         for (int blank : expected) {
-            if (markers.getOrDefault(blank, 0) != 1) {
+            List<String> found = markers.getOrDefault(blank, List.of());
+            boolean pairUsed = found.contains("a") || found.contains("b");
+            if (!pairUsed && found.size() != 1) {
                 problems.add("【" + blank + "】 phải có đúng một lần trong đoạn văn");
+            } else if (pairUsed && !(found.size() == 2 && found.containsAll(List.of("a", "b")))) {
+                problems.add("【" + blank + "a】 và 【" + blank + "b】 phải có mỗi chỗ đúng một lần trong đoạn văn");
             }
         }
         markers.keySet().stream().filter(blank -> !expected.contains(blank))

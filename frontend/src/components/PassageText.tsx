@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 
-/** Chỗ trống 【n】 trong đoạn văn 文章の文法. */
-const BLANK = /【(\d+)】/
+/** Chỗ trống 【n】 trong đoạn văn 文章の文法; câu hỏi điền hai chỗ thì đánh 【na】 và 【nb】. */
+const BLANK = /【(\d+)([ab]?)】/
 
 /**
  * Đoạn văn 文章の文法: mỗi chỗ trống 【n】 vẽ thành ô ghi số câu tương ứng trong bài ({@code labelOf}); chỗ trống của
@@ -19,21 +19,24 @@ export function PassageText({
   currentBlank?: number | null
   onSelect?: (blankNo: number) => void
 }) {
-  // split với nhóm bắt: phần tử ở vị trí lẻ là số của chỗ trống.
+  // split với hai nhóm bắt: mỗi chỗ trống thành 3 phần tử liền nhau - chữ đứng trước, số, rồi hậu tố a/b (có thể rỗng).
   const parts = content.split(BLANK)
   return (
     <p className="whitespace-pre-line font-jp text-lg leading-loose">
       {parts.map((part, i) => {
-        if (i % 2 === 0) return part
+        if (i % 3 === 0) return part
+        if (i % 3 === 2) return null
         const blankNo = Number(part)
+        const suffix = parts[i + 1] ?? ''
         const current = blankNo === currentBlank
+        const label = `${labelOf ? labelOf(blankNo) : blankNo}${suffix}`
         return (
           <button
             key={i}
             type="button"
             disabled={!onSelect}
             onClick={() => onSelect?.(blankNo)}
-            aria-label={`Chỗ trống câu ${labelOf ? labelOf(blankNo) : blankNo}`}
+            aria-label={`Chỗ trống câu ${label}`}
             className={cn(
               'mx-1 inline-flex min-w-[3.5em] items-center justify-center rounded-md border-b-[3px] px-2 align-baseline font-sans text-base font-black',
               current
@@ -42,7 +45,7 @@ export function PassageText({
               onSelect && 'hover:brightness-95',
             )}
           >
-            {labelOf ? labelOf(blankNo) : blankNo}
+            {label}
           </button>
         )
       })}

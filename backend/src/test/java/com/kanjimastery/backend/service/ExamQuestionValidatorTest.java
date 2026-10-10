@@ -40,6 +40,15 @@ class ExamQuestionValidatorTest {
     }
 
     @Test
+    void passageProblems_shouldAcceptAPairOfBlanks_forAQuestionFillingTwoPlaces() {
+        assertThat(ExamQuestionValidator.passageProblems("【1】、【2a】と【2b】。", List.of(1, 2))).isEmpty();
+        assertThat(ExamQuestionValidator.passageProblems("【1】、【2a】と【2a】。", List.of(1, 2)))
+                .containsExactly("【2a】 và 【2b】 phải có mỗi chỗ đúng một lần trong đoạn văn");
+        assertThat(ExamQuestionValidator.passageProblems("【1】、【2】と【2b】。", List.of(1, 2)))
+                .containsExactly("【2a】 và 【2b】 phải có mỗi chỗ đúng một lần trong đoạn văn");
+    }
+
+    @Test
     void passageProblems_shouldMatchTheBlanksOfTheTextWithTheQuestions() {
         String text = "今日は雨でした。【1】、学校へ行きました。友達と【2】話しました。";
 
