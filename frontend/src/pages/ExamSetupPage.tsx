@@ -334,7 +334,8 @@ function SectionTime({
         type="button"
         aria-pressed={custom}
         className={chip(custom)}
-        onClick={() => onChange(value ?? String(standardMinutes))}
+        // Bắt đầu từ giờ chuẩn, kéo vào khoảng cho phép (đề ngắn vì ngân hàng chưa đủ câu có thể dưới 5 phút).
+        onClick={() => onChange(value ?? String(Math.min(Math.max(standardMinutes, MIN_MINUTES), MAX_MINUTES)))}
       >
         Tự đặt
       </button>
