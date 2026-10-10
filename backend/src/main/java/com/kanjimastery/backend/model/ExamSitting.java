@@ -54,6 +54,11 @@ public class ExamSitting {
     @Column(name = "finished_at")
     private LocalDateTime finishedAt;
 
+    /** Chỉ lấy câu của nguồn này (vd. IMPORTED - các đề tự soạn); null = mọi câu đã duyệt. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "question_source", length = 10)
+    private ExamQuestionSource questionSource;
+
     public List<ExamSection> sectionList() {
         return Arrays.stream(sections.split(",")).map(ExamSection::valueOf).toList();
     }

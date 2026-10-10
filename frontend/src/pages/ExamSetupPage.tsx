@@ -1,11 +1,17 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { ArrowRightLeft, BarChart3, FileText, ListChecks, Play, Shuffle, Timer, Trophy } from 'lucide-react'
 import { examApi } from '@/api/exam'
 import { extractErrorMessage } from '@/api/client'
 import { cacheStartedExam } from '@/lib/examCache'
-import { JLPT_LEVELS, type ExamSectionName, type JlptLevel, type JlptLevelResponse } from '@/api/types'
+import {
+  JLPT_LEVELS,
+  type ExamQuestionSource,
+  type ExamSectionName,
+  type JlptLevel,
+  type JlptLevelResponse,
+} from '@/api/types'
 import { LEVEL_META } from '@/lib/levels'
 import { QUESTION_TYPE_META, SECTION_META } from '@/lib/jlpt'
 import { cn } from '@/lib/utils'
@@ -73,13 +79,24 @@ export function ExamSetupPage() {
   )
 }
 
+const QUESTION_SOURCES: { value: ExamQuestionSource | undefined; label: string; description: string }[] = [
+  { value: undefined, label: 'Tất cả câu đã duyệt', description: 'Đề tự soạn, câu soạn tay, câu sinh từ kho từ' },
+  { value: 'IMPORTED', label: 'Chỉ đề tự soạn', description: 'Ghép từ kho các đề đã nhập, mỗi 問題 đủ số câu' },
+]
+
 /** Đề JLPT: chọn cấp độ và các phần; bảng cấu trúc đề cho biết số câu hiện có của từng 問題. */
 function JlptSetup() {
   const navigate = useNavigate()
   const [level, setLevel] = useState<string | null>(null)
   const [unchecked, setUnchecked] = useState<ExamSectionName[]>([])
+  /** undefined = mọi câu đã duyệt; IMPORTED = chỉ câu của các đề tự soạn. */
+  const [source, setSource] = useState<ExamQuestionSource | undefined>(undefined)
 
-  const levelsQuery = useQuery({ queryKey: ['jlpt-levels'], queryFn: examApi.jlptLevels })
+  const levelsQuery = useQuery({
+    queryKey: ['jlpt-levels', source ?? 'ALL'],
+    queryFn: () => examApi.jlptLevels(source),
+    placeholderData: keepPreviousData,
+  })
   const startMutation = useMutation({
     mutationFn: examApi.startSitting,
     onSuccess: (data) => {
@@ -135,7 +152,32 @@ function JlptSetup() {
         </section>
 
         <section>
-          <h2 className="mb-3 font-black">2. Chọn phần thi</h2>
+          <h2 className="mb-3 font-black">2. Nguồn câu hỏi</h2>
+          <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Nguồn câu hỏi">
+            {QUESTION_SOURCES.map((option) => {
+              const selected = source === option.value
+              return (
+                <button
+                  key={option.label}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setSource(option.value)}
+                  className={cn(
+                    'rounded-2xl border-2 px-4 py-3 text-left',
+                    selected ? 'border-secondary bg-secondary-soft' : 'border-border bg-card hover:bg-muted',
+                  )}
+                >
+                  <span className="block font-black">{option.label}</span>
+                  <span className="block text-sm font-semibold text-muted-foreground">{option.description}</span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+
+        <section>
+          <h2 className="mb-3 font-black">3. Chọn phần thi</h2>
           <div className="flex flex-col gap-2">
             {current.sections.map((s) => {
               const ready = s.questionCount > 0
@@ -195,7 +237,9 @@ function JlptSetup() {
           size="lg"
           className="w-full"
           disabled={startMutation.isPending || chosen.length === 0}
-          onClick={() => startMutation.mutate({ jlptLevel: current.jlptLevel, sections: chosen.map((s) => s.name) })}
+          onClick={() =>
+            startMutation.mutate({ jlptLevel: current.jlptLevel, sections: chosen.map((s) => s.name), source })
+          }
         >
           <Play className="h-5 w-5 fill-current" />
           {startMutation.isPending ? 'Đang ghép đề...' : `Bắt đầu đề ${current.jlptLevel}`}

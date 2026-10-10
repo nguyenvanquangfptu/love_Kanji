@@ -12,6 +12,7 @@ import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.ResourceNotFoundException;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamQuestion;
+import com.kanjimastery.backend.model.ExamQuestionSource;
 import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.ExamSitting;
 import com.kanjimastery.backend.model.ExamSittingStatus;
@@ -67,16 +68,20 @@ public class JlptExamService {
     private final ExamService examService;
     private final Clock clock;
 
-    /** Các cấp độ có cấu trúc đề, kèm số câu đã duyệt hiện có của từng dạng. */
+    /**
+     * Các cấp độ có cấu trúc đề, kèm số câu đã duyệt hiện có của từng dạng - của mọi nguồn, hoặc chỉ của {@code source}
+     * (vd. IMPORTED: các đề tự soạn).
+     */
     @Transactional(readOnly = true)
-    public List<JlptLevelResponse> levels() {
+    public List<JlptLevelResponse> levels(ExamQuestionSource source) {
         return blueprints.getLevels().entrySet().stream()
-                .map(entry -> levelResponse(entry.getKey(), entry.getValue()))
+                .map(entry -> levelResponse(entry.getKey(), entry.getValue(), source))
                 .toList();
     }
 
-    private JlptLevelResponse levelResponse(JlptLevel level, JlptBlueprintProperties.Level blueprint) {
-        Map<JlptQuestionType, Long> available = availableByType(level);
+    private JlptLevelResponse levelResponse(JlptLevel level, JlptBlueprintProperties.Level blueprint,
+                                            ExamQuestionSource source) {
+        Map<JlptQuestionType, Long> available = availableByType(level, source);
         List<JlptLevelResponse.Section> sections = blueprint.getSections().stream()
                 .map(section -> {
                     List<JlptLevelResponse.Mondai> mondai = new ArrayList<>();
@@ -124,7 +129,7 @@ public class JlptExamService {
             throw new BadRequestException("Phần thi không hợp lệ: " + request.getSections());
         }
         // Phần nào chưa có câu thì báo ngay, không để người học làm xong phần đầu mới biết phần sau không có đề.
-        Map<JlptQuestionType, Long> available = availableByType(level);
+        Map<JlptQuestionType, Long> available = availableByType(level, request.getSource());
         for (JlptBlueprintProperties.Section section : blueprint.getSections()) {
             if (sections.contains(section.getName())
                     && section.types().stream().noneMatch(type -> available.getOrDefault(type, 0L) > 0)) {
@@ -137,6 +142,7 @@ public class JlptExamService {
                 .userId(userId)
                 .jlptLevel(level)
                 .sections(sections.stream().map(ExamSection::name).collect(Collectors.joining(",")))
+                .questionSource(request.getSource())
                 .startedAt(LocalDateTime.now(clock))
                 .build());
         return startSection(sitting, sections.get(0), new HashSet<>());
@@ -165,7 +171,8 @@ public class JlptExamService {
     private StartExamResponse startSection(ExamSitting sitting, ExamSection sectionName, Set<Long> wordsAsked) {
         JlptBlueprintProperties.Section section = blueprints.section(sitting.getJlptLevel(), sectionName)
                 .orElseThrow(() -> new BadRequestException("Không còn cấu trúc đề cho phần thi: " + sectionName));
-        List<JlptExamAssembler.Mondai> mondai = assembler.assemble(sitting.getUserId(), sitting.getJlptLevel(), section, wordsAsked).stream()
+        List<JlptExamAssembler.Mondai> mondai = assembler.assemble(sitting.getUserId(), sitting.getJlptLevel(), section,
+                        wordsAsked, sitting.getQuestionSource()).stream()
                 .filter(part -> !part.questions().isEmpty())
                 .toList();
         List<ExamQuestion> questions = mondai.stream().flatMap(part -> part.questions().stream()).toList();
@@ -245,6 +252,7 @@ public class JlptExamService {
                 .status(sitting.getStatus())
                 .startedAt(sitting.getStartedAt())
                 .finishedAt(sitting.getFinishedAt())
+                .questionSource(sitting.getQuestionSource())
                 .sections(sections)
                 .nextSection(canContinue ? nextSection(sitting, attempts) : null)
                 .estimatedScore(total > 0 ? estimatedScore(correct, total) : null)
@@ -335,8 +343,8 @@ public class JlptExamService {
         return (int) minutes * 60;
     }
 
-    private Map<JlptQuestionType, Long> availableByType(JlptLevel level) {
-        return questionRepository.countApprovedByType(level.name()).stream()
+    private Map<JlptQuestionType, Long> availableByType(JlptLevel level, ExamQuestionSource source) {
+        return questionRepository.countApprovedByType(level.name(), source == null ? null : source.name()).stream()
                 .collect(Collectors.toMap(ExamQuestionRepository.TypeCount::getType,
                         ExamQuestionRepository.TypeCount::getCount));
     }

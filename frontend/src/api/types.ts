@@ -310,6 +310,8 @@ export interface StartExamResponse {
 export interface StartJlptExamRequest {
   jlptLevel: string
   sections: ExamSectionName[]
+  /** Chỉ lấy câu của nguồn này (vd. IMPORTED - các đề tự soạn); bỏ trống = mọi câu đã duyệt. */
+  source?: ExamQuestionSource
 }
 
 /** Cấu trúc đề JLPT của một cấp độ và số câu hỏi hiện có. */
@@ -336,6 +338,8 @@ export interface ExamSittingResponse {
   status: ExamSittingStatus
   startedAt: string
   finishedAt: string | null
+  /** Nguồn câu đã chọn (IMPORTED = các đề tự soạn); null = mọi câu đã duyệt. */
+  questionSource: ExamQuestionSource | null
   sections: {
     name: ExamSectionName
     /** null = chưa làm. */

@@ -1,5 +1,6 @@
 import { apiClient } from './client'
 import type {
+  ExamQuestionSource,
   ExamResultResponse,
   ExamReviewResponse,
   ExamSessionResponse,
@@ -32,7 +33,9 @@ export const examApi = {
     apiClient.get<ExamReviewResponse>(`/exams/attempts/${attemptId}/review`).then((r) => r.data),
 
   /** Cấu trúc đề JLPT theo cấp độ, kèm số câu hỏi hiện có của từng dạng. */
-  jlptLevels: () => apiClient.get<JlptLevelResponse[]>('/exams/jlpt/levels').then((r) => r.data),
+  /** Cấu trúc đề theo cấp độ; `source` (vd. IMPORTED) thì chỉ đếm câu của nguồn đó. */
+  jlptLevels: (source?: ExamQuestionSource) =>
+    apiClient.get<JlptLevelResponse[]>('/exams/jlpt/levels', { params: { source } }).then((r) => r.data),
 
   /** Bắt đầu buổi làm đề JLPT: tạo buổi thi và bắt đầu ngay phần đầu tiên. */
   startSitting: (payload: StartJlptExamRequest) =>

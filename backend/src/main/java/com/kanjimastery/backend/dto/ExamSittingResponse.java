@@ -2,6 +2,7 @@ package com.kanjimastery.backend.dto;
 
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
+import com.kanjimastery.backend.model.ExamQuestionSource;
 import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.ExamSittingStatus;
 import lombok.AllArgsConstructor;
@@ -22,6 +23,8 @@ public class ExamSittingResponse {
     private ExamSittingStatus status;
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;
+    /** Nguồn câu đã chọn (vd. IMPORTED - các đề tự soạn); null = mọi câu đã duyệt. */
+    private ExamQuestionSource questionSource;
     /** Các phần đã chọn, theo thứ tự làm bài. */
     private List<Section> sections;
     /** Phần làm tiếp theo; null khi đang làm dở một phần, đã làm hết, hoặc buổi thi đã kết thúc. */

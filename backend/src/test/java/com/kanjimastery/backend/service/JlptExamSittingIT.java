@@ -9,6 +9,7 @@ import com.kanjimastery.backend.dto.ExamQuestionPublicResponse;
 import com.kanjimastery.backend.dto.ExamReviewResponse;
 import com.kanjimastery.backend.dto.ExamSittingResponse;
 import com.kanjimastery.backend.dto.JlptLeaderboardEntryResponse;
+import com.kanjimastery.backend.dto.JlptLevelResponse;
 import com.kanjimastery.backend.dto.SaveAnswerRequest;
 import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.dto.StartJlptExamRequest;
@@ -17,6 +18,7 @@ import com.kanjimastery.backend.job.ExamReconciliationJob;
 import com.kanjimastery.backend.job.ExamSittingCleanupJob;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamQuestion;
+import com.kanjimastery.backend.model.ExamQuestionSource;
 import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.ExamSitting;
 import com.kanjimastery.backend.model.ExamSittingStatus;
@@ -224,6 +226,30 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void aSittingFromTheImportedTests_shouldOnlyAskTheirQuestions_inEverySection() {
+        ExamQuestion importedReading = imported(KANJI_READING, QuizDirection.KANJI_TO_READING, wordIds.get(2));
+        ExamQuestion importedContext = imported(CONTEXT, QuizDirection.MEANING, wordIds.get(1));
+        ExamQuestion importedGrammar = imported(GRAMMAR_FORM, null, wordIds.get(4));
+        StartJlptExamRequest request = request("VOCABULARY", "GRAMMAR");
+        request.setSource(ExamQuestionSource.IMPORTED);
+
+        StartExamResponse vocabulary = jlptExamService.startSitting(userId, request);
+        examService.submit(userId, vocabulary.getAttemptId());
+        // Phần sau lấy câu từ đúng nguồn đã chọn lúc bắt đầu.
+        StartExamResponse grammar = jlptExamService.startNextSection(userId, vocabulary.getSittingId());
+
+        assertThat(vocabulary.getQuestions()).extracting(ExamQuestionPublicResponse::getId)
+                .containsExactlyInAnyOrder(importedReading.getId(), importedContext.getId());
+        assertThat(grammar.getQuestions()).extracting(ExamQuestionPublicResponse::getId)
+                .containsExactly(importedGrammar.getId());
+        // Màn chọn đề đếm câu của riêng nguồn đó: 1/2 câu đọc, 1/2 câu điền từ, 1/2 câu ngữ pháp.
+        JlptLevelResponse level = jlptExamService.levels(ExamQuestionSource.IMPORTED).stream()
+                .filter(found -> LEVEL.equals(found.getJlptLevel()))
+                .findFirst().orElseThrow();
+        assertThat(level.getSections()).extracting(JlptLevelResponse.Section::getQuestionCount).containsExactly(2, 1);
+    }
+
+    @Test
     void aNewSitting_shouldFirstAskQuestionsTheLearnerHasNotMetYet() {
         StartExamResponse first = jlptExamService.startSitting(userId, request("GRAMMAR"));
         examService.submit(userId, first.getAttemptId());
@@ -290,6 +316,13 @@ class JlptExamSittingIT extends AbstractIntegrationTest {
         return questionRepository.save(ExamQuestion.builder().jlptLevel(LEVEL).questionText(type.name())
                 .optionA("1").optionB("2").optionC("3").optionD("4").correctOption("A")
                 .skill(skill).questionType(type).kanjiIds(Set.of(wordId)).build());
+    }
+
+    /** Câu của một đề tự soạn đã nhập (nguồn IMPORTED). */
+    private ExamQuestion imported(JlptQuestionType type, QuizDirection skill, Long wordId) {
+        return questionRepository.save(ExamQuestion.builder().jlptLevel(LEVEL).questionText("imported " + type.name())
+                .optionA("1").optionB("2").optionC("3").optionD("4").correctOption("A")
+                .skill(skill).questionType(type).kanjiIds(Set.of(wordId)).source(ExamQuestionSource.IMPORTED).build());
     }
 
     private static JlptBlueprintProperties.Section section(ExamSection name, int minutes) {

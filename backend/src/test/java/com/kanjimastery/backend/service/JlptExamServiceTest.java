@@ -115,10 +115,10 @@ class JlptExamServiceTest {
 
     @Test
     void levels_shouldTellHowManyQuestionsAndMinutesAnExamWouldHaveNow() {
-        when(questionRepository.countApprovedByType("N4")).thenReturn(List.of(
+        when(questionRepository.countApprovedByType("N4", null)).thenReturn(List.of(
                 new Count(KANJI_READING, 300L), new Count(ORTHOGRAPHY, 3L), new Count(CONTEXT, 200L)));
 
-        List<JlptLevelResponse> levels = jlptExamService.levels();
+        List<JlptLevelResponse> levels = jlptExamService.levels(null);
 
         assertThat(levels).singleElement().extracting(JlptLevelResponse::getJlptLevel).isEqualTo(JlptLevel.N4);
         JlptLevelResponse.Section words = levels.get(0).getSections().get(0);
@@ -139,7 +139,7 @@ class JlptExamServiceTest {
 
     @Test
     void startSitting_shouldTakeTheChosenSectionsInTheRealOrder_andStartTheFirstWithTimeForItsQuestions() {
-        when(questionRepository.countApprovedByType("N4")).thenReturn(List.of(
+        when(questionRepository.countApprovedByType("N4", null)).thenReturn(List.of(
                 new Count(KANJI_READING, 300L), new Count(CONTEXT, 200L), new Count(GRAMMAR_FORM, 50L)));
         when(sittingRepository.save(any(ExamSitting.class))).thenAnswer(invocation -> {
             ExamSitting sitting = invocation.getArgument(0);
@@ -148,7 +148,7 @@ class JlptExamServiceTest {
         });
         List<ExamQuestion> reading = questions(1, 7);
         List<ExamQuestion> context = questions(101, 8);
-        when(assembler.assemble(eq(USER_ID), eq(JlptLevel.N4), eq(vocabulary), any())).thenReturn(List.of(
+        when(assembler.assemble(eq(USER_ID), eq(JlptLevel.N4), eq(vocabulary), any(), any())).thenReturn(List.of(
                 new JlptExamAssembler.Mondai(1, KANJI_READING, 7, reading),
                 new JlptExamAssembler.Mondai(2, ORTHOGRAPHY, 5, List.of()),
                 new JlptExamAssembler.Mondai(3, CONTEXT, 8, context),
@@ -188,7 +188,7 @@ class JlptExamServiceTest {
         assertThatThrownBy(() -> jlptExamService.startSitting(USER_ID, request("N4", "LISTENING")))
                 .isInstanceOf(BadRequestException.class);
 
-        when(questionRepository.countApprovedByType("N4")).thenReturn(List.of(new Count(KANJI_READING, 300L)));
+        when(questionRepository.countApprovedByType("N4", null)).thenReturn(List.of(new Count(KANJI_READING, 300L)));
         assertThatThrownBy(() -> jlptExamService.startSitting(USER_ID, request("N4", "VOCABULARY", "GRAMMAR")))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Ngữ pháp");
@@ -209,7 +209,7 @@ class JlptExamServiceTest {
         when(questionRepository.findAllWithWordsByIdIn(List.of(1L, 2L))).thenReturn(List.of(
                 ExamQuestion.builder().id(1L).kanjiIds(Set.of(10L)).build(),
                 ExamQuestion.builder().id(2L).kanjiIds(Set.of(11L)).build()));
-        when(assembler.assemble(USER_ID, JlptLevel.N4, grammar, Set.of(10L, 11L))).thenReturn(List.of(
+        when(assembler.assemble(USER_ID, JlptLevel.N4, grammar, Set.of(10L, 11L), null)).thenReturn(List.of(
                 new JlptExamAssembler.Mondai(1, GRAMMAR_FORM, 13, questions(201, 1))));
         ArgumentCaptor<UserExamAttempt> attempt = ArgumentCaptor.forClass(UserExamAttempt.class);
         when(examService.begin(attempt.capture(), any(), any())).thenReturn(StartExamResponse.builder().build());
