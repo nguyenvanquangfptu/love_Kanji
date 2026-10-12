@@ -198,7 +198,8 @@ export function ExamResultPage() {
                     {q.explanation && (
                       <p className="mt-3 flex items-start gap-2 rounded-xl bg-secondary-soft px-3 py-2 text-sm font-semibold text-secondary-dark">
                         <Lightbulb className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2.5} />
-                        {q.explanation}
+                        {/* Giải thích nhiều dòng (trọng tâm, dịch câu, vì sao các lựa chọn khác sai): giữ xuống dòng. */}
+                        <span className="min-w-0 whitespace-pre-line break-words">{q.explanation}</span>
                       </p>
                     )}
                     <div className="mt-2 flex justify-end">
