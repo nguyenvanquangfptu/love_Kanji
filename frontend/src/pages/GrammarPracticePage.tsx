@@ -11,7 +11,7 @@ import { SessionHeader } from '@/components/SessionHeader'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
 import { StatTile } from '@/components/StatTile'
 import { EmptyState } from '@/components/EmptyState'
-import { Badge } from '@/components/ui/badge'
+import { GrammarPointList } from '@/components/GrammarPointNote'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
@@ -93,7 +93,8 @@ export function GrammarPracticePage() {
     <>
       <SessionHeader exitTo={exitTo} progress={isDone ? 100 : progress} />
 
-      <main className="mx-auto max-w-2xl px-4 pb-72 sm:pb-52">
+      {/* Khung kết quả ở đáy cao thêm khi mở giải thích ngữ pháp: chừa đủ chỗ để vẫn cuộn xem hết các lựa chọn. */}
+      <main className={cn('mx-auto max-w-2xl px-4', answered ? 'pb-[70vh]' : 'pb-72 sm:pb-52')}>
         {isLoading && <PageSpinner label="Đang lấy câu luyện..." />}
         {isError && <Alert>{extractErrorMessage(error)}</Alert>}
         {questions && total === 0 && (
@@ -194,7 +195,7 @@ export function GrammarPracticePage() {
                   <X className="h-7 w-7" strokeWidth={4} />
                 )}
               </span>
-              <div className="min-w-0 flex-1">
+              <div className="max-h-[45vh] min-w-0 flex-1 overflow-y-auto">
                 <p
                   className={cn(
                     'text-xl font-black',
@@ -209,15 +210,13 @@ export function GrammarPracticePage() {
                     {current.explanation}
                   </p>
                 )}
-                {current.grammarPoints.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {current.grammarPoints.map((point) => (
-                      <Badge key={point.id} variant="purple" className="font-jp" title={point.meaningVi}>
-                        {point.pattern}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
+                {/* Trả lời sai thì mở sẵn giải thích ngữ pháp - lúc cần đọc nhất. */}
+                <GrammarPointList
+                  key={current.id}
+                  points={current.grammarPoints}
+                  defaultOpen={selected !== correctIndex}
+                  className="mt-2"
+                />
               </div>
             </div>
             <Button
