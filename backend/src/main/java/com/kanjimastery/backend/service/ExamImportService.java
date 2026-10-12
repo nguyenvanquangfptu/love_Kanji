@@ -449,7 +449,8 @@ public class ExamImportService {
                     if (order != null) {
                         answer = order.answer();
                         sentence = order.sentence();
-                        explanation = ((explanation == null ? "" : explanation) + " " + order.explanation()).strip();
+                        // Câu đúng dựng từ thứ tự đứng đầu, giải thích soạn tay (dịch, mẫu ngữ pháp) xuống dòng bên dưới
+                        explanation = order.explanation() + (explanation == null ? "" : "\n" + explanation);
                     }
                 }
                 case TEXT_GRAMMAR -> {

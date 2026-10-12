@@ -280,6 +280,17 @@ class ExamImportServiceTest {
         assertThat(byRef(savedQuestions(), "N3-05/TV/1").getExplanation()).isEqualTo("Giải thích câu 1");
     }
 
+    @Test
+    void sentenceOrder_shouldPutTheBuiltAnswerFirst_andTheOwnExplanationOnTheNextLine() {
+        ExamImportRequest test = n3Test("N3-05");
+        test.grammar().sentenceOrder().replaceAll(ExamImportServiceTest::withExplanation);
+
+        service.importTest(test, false);
+
+        assertThat(byRef(savedQuestions(), "N3-05/NP/14").getExplanation()).isEqualTo("Câu đúng: 今日は二14四14三14一14。"
+                + " (二14 → 四14 → 三14 → 一14). Vế ở vị trí ★ là 「三14」.\nGiải thích câu 14");
+    }
+
     private static Item withExplanation(Item item) {
         return new Item(item.number(), item.sentence(), item.highlight(), item.keyword(), item.before(), item.after(),
                 item.options(), item.answer(), item.order(), item.star(), item.word(), item.grammarPattern(),
