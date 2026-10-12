@@ -50,6 +50,10 @@ public interface GrammarPointRepository extends JpaRepository<GrammarPoint, Long
 
         String getMeaningVi();
 
+        String getConnection();
+
+        String getExplanationVi();
+
         Long getWrong();
 
         Long getAnswered();
@@ -61,6 +65,7 @@ public interface GrammarPointRepository extends JpaRepository<GrammarPoint, Long
      */
     @Query(value = """
             SELECT point.id AS "id", point.pattern AS "pattern", point.meaning_vi AS "meaningVi",
+                   point.connection AS "connection", point.explanation_vi AS "explanationVi",
                    COUNT(*) FILTER (WHERE NOT answer.is_correct) AS "wrong", COUNT(*) AS "answered"
             FROM user_exam_answers answer
             JOIN user_exam_attempts attempt ON attempt.id = answer.attempt_id
@@ -68,7 +73,7 @@ public interface GrammarPointRepository extends JpaRepository<GrammarPoint, Long
             JOIN grammar_points point ON point.id = link.grammar_point_id
             WHERE attempt.user_id = :userId AND attempt.jlpt_level = :level AND attempt.status <> 'IN_PROGRESS'
               AND attempt.started_at >= :since AND answer.selected_option IS NOT NULL
-            GROUP BY point.id, point.pattern, point.meaning_vi
+            GROUP BY point.id
             HAVING COUNT(*) FILTER (WHERE NOT answer.is_correct) > 0
             ORDER BY COUNT(*) FILTER (WHERE NOT answer.is_correct) DESC,
                      COUNT(*) FILTER (WHERE NOT answer.is_correct)::float / COUNT(*) DESC,

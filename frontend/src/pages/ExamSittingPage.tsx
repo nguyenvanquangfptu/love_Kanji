@@ -1,11 +1,13 @@
+import { useId, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Award, BookOpen, Check, Clock, Coffee, Eye, Play, RotateCcw, Target } from 'lucide-react'
+import { Award, BookOpen, Check, ChevronDown, Clock, Coffee, Eye, Play, RotateCcw, Target } from 'lucide-react'
 import { examApi } from '@/api/exam'
 import { extractErrorMessage } from '@/api/client'
-import type { ExamSittingResponse } from '@/api/types'
+import type { ExamSittingResponse, WeakGrammarPoint } from '@/api/types'
 import { cacheStartedExam } from '@/lib/examCache'
 import { formatMinutes, SECTION_META } from '@/lib/jlpt'
+import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,6 +15,7 @@ import { Alert } from '@/components/ui/alert'
 import { PageSpinner } from '@/components/ui/spinner'
 import { PageHeader } from '@/components/PageHeader'
 import { StatTile } from '@/components/StatTile'
+import { GrammarPointDetails } from '@/components/GrammarPointNote'
 
 const SITTING_STATUS: Record<ExamSittingResponse['status'], { label: string; variant: 'secondary' | 'success' | 'orange' }> = {
   IN_PROGRESS: { label: 'Đang làm', variant: 'secondary' },
@@ -206,13 +209,7 @@ function WeakGrammarCard({ level, sittingId }: { level: string; sittingId: numbe
       </p>
       <ul className="mt-3 flex flex-col gap-2">
         {points.map((point) => (
-          <li key={point.id} className="flex items-center gap-3 rounded-xl border-2 border-border px-3 py-2">
-            <span className="shrink-0 font-jp font-black">{point.pattern}</span>
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-muted-foreground">{point.meaningVi}</span>
-            <span className="shrink-0 text-sm font-black tabular-nums text-destructive-dark">
-              sai {point.wrong}/{point.answered}
-            </span>
-          </li>
+          <WeakGrammarRow key={point.id} point={point} />
         ))}
       </ul>
       <Button
@@ -223,6 +220,33 @@ function WeakGrammarCard({ level, sittingId }: { level: string; sittingId: numbe
         <Target className="h-5 w-5" /> Luyện lại các điểm này
       </Button>
     </Card>
+  )
+}
+
+/** Một điểm ngữ pháp hay sai: bấm để mở cách nối và giải thích, đọc lại trước khi luyện. */
+function WeakGrammarRow({ point }: { point: WeakGrammarPoint }) {
+  const [open, setOpen] = useState(false)
+  const detailsId = useId()
+  return (
+    <li className="flex flex-col gap-2">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={open ? detailsId : undefined}
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center gap-3 rounded-xl border-2 border-border px-3 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-dark"
+      >
+        <span className="shrink-0 font-jp font-black">{point.pattern}</span>
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-muted-foreground">{point.meaningVi}</span>
+        <span className="shrink-0 text-sm font-black tabular-nums text-destructive-dark">
+          sai {point.wrong}/{point.answered}
+        </span>
+        <ChevronDown
+          className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')}
+        />
+      </button>
+      {open && <GrammarPointDetails point={point} id={detailsId} />}
+    </li>
   )
 }
 

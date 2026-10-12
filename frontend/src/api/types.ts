@@ -405,16 +405,23 @@ export interface QuestionReviewItem {
   passageId: number | null
   blankNo: number | null
   /** Các điểm ngữ pháp câu này kiểm tra; rỗng với câu từ vựng. */
-  grammarPoints: { id: number; pattern: string; meaningVi: string }[]
+  grammarPoints: GrammarPointBrief[]
   /** Người học đang xem đã báo lỗi câu này. */
   reported: boolean
 }
 
-/** Một điểm ngữ pháp người học hay làm sai trong các đề JLPT gần đây. */
-export interface WeakGrammarPoint {
+/** Điểm ngữ pháp người học xem kèm câu hỏi: mẫu, nghĩa, cách nối và giải thích. */
+export interface GrammarPointBrief {
   id: number
   pattern: string
   meaningVi: string
+  connection: string | null
+  /** Giải thích và các dòng "Ví dụ: ..." cách nhau bằng xuống dòng; null nếu chưa có. */
+  explanationVi: string | null
+}
+
+/** Một điểm ngữ pháp người học hay làm sai trong các đề JLPT gần đây. */
+export interface WeakGrammarPoint extends GrammarPointBrief {
   /** Số câu làm sai / số câu đã trả lời (không tính câu bỏ trống). */
   wrong: number
   answered: number
@@ -433,7 +440,7 @@ export interface PracticeQuestion {
   optionD: string
   correctOption: 'A' | 'B' | 'C' | 'D'
   explanation: string | null
-  grammarPoints: { id: number; pattern: string; meaningVi: string }[]
+  grammarPoints: GrammarPointBrief[]
 }
 
 export interface ExamReviewResponse {

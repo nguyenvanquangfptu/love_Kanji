@@ -217,8 +217,7 @@ public class ExamService {
                             .blankNo(question.getBlankNo())
                             .grammarPoints(question.getGrammarPointIds().stream().sorted().map(grammarById::get)
                                     .filter(Objects::nonNull)
-                                    .map(point -> new QuestionReviewItem.Grammar(point.getId(), point.getPattern(),
-                                            point.getMeaningVi()))
+                                    .map(QuestionReviewItem.Grammar::from)
                                     .toList())
                             .reported(reported.contains(answer.getQuestionId()))
                             .build();
