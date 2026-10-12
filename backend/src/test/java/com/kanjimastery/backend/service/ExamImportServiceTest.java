@@ -256,6 +256,47 @@ class ExamImportServiceTest {
                 + " nào - thêm vào nếu muốn dùng cho phần luyện ngữ pháp yếu");
     }
 
+    @Test
+    void questionsWithoutExplanation_shouldBeReported_namingTheFirstFew() {
+        ExamImportResponse report = service.importTest(n3Test("N3-05"), true);
+
+        // Câu sắp xếp có sẵn giải thích dựng từ thứ tự đúng; 53 câu còn lại chưa có "giai_thich".
+        assertThat(report.errors()).isEmpty();
+        assertThat(report.warnings()).contains("53 câu chưa có \"giai_thich\" (TV câu 1, TV câu 2, TV câu 3, TV câu 4,"
+                + " TV câu 5...) - người học xem lại bài sẽ không thấy giải thích");
+    }
+
+    @Test
+    void questionsWithExplanation_shouldNotBeReported() {
+        ExamImportRequest test = n3Test("N3-05");
+        List.of(test.vocabulary().kanjiReading(), test.vocabulary().orthography(), test.vocabulary().context(),
+                        test.vocabulary().paraphrase(), test.vocabulary().usage(), test.grammar().grammarForm(),
+                        test.grammar().passage().questions())
+                .forEach(items -> items.replaceAll(ExamImportServiceTest::withExplanation));
+
+        ExamImportResponse report = service.importTest(test, false);
+
+        assertThat(report.warnings()).noneMatch(warning -> warning.contains("giai_thich"));
+        assertThat(byRef(savedQuestions(), "N3-05/TV/1").getExplanation()).isEqualTo("Giải thích câu 1");
+    }
+
+    @Test
+    void sentenceOrder_shouldPutTheBuiltAnswerFirst_andTheOwnExplanationOnTheNextLine() {
+        ExamImportRequest test = n3Test("N3-05");
+        test.grammar().sentenceOrder().replaceAll(ExamImportServiceTest::withExplanation);
+
+        service.importTest(test, false);
+
+        assertThat(byRef(savedQuestions(), "N3-05/NP/14").getExplanation()).isEqualTo("Câu đúng: 今日は二14四14三14一14。"
+                + " (二14 → 四14 → 三14 → 一14). Vế ở vị trí ★ là 「三14」.\nGiải thích câu 14");
+    }
+
+    private static Item withExplanation(Item item) {
+        return new Item(item.number(), item.sentence(), item.highlight(), item.keyword(), item.before(), item.after(),
+                item.options(), item.answer(), item.order(), item.star(), item.word(), item.grammarPattern(),
+                "Giải thích câu " + item.number());
+    }
+
     @SuppressWarnings("unchecked")
     private List<ExamQuestion> savedQuestions() {
         ArgumentCaptor<List<ExamQuestion>> captor = ArgumentCaptor.forClass(List.class);

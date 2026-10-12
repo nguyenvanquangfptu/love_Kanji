@@ -207,7 +207,7 @@ export function GrammarPracticePage() {
                 {current.explanation && (
                   <p className="mt-1 flex items-start gap-1.5 text-sm font-semibold text-foreground/80">
                     <Lightbulb className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={2.5} />
-                    {current.explanation}
+                    <span className="min-w-0 whitespace-pre-line break-words">{current.explanation}</span>
                   </p>
                 )}
                 {/* Trả lời sai thì mở sẵn giải thích ngữ pháp - lúc cần đọc nhất. */}
