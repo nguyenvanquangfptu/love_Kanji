@@ -68,6 +68,8 @@ public class ExamImportService {
     private static final Set<JlptQuestionType> GRAMMAR_TYPES = Set.of(JlptQuestionType.GRAMMAR_FORM,
             JlptQuestionType.SENTENCE_ORDER, JlptQuestionType.TEXT_GRAMMAR);
     private static final int MAX_TITLE_LENGTH = 200;
+    /** Số câu nêu tên trong cảnh báo câu chưa có giải thích. */
+    private static final int MISSING_EXPLANATION_EXAMPLES = 5;
 
     private final ExamQuestionRepository questionRepository;
     private final ExamPassageRepository passageRepository;
@@ -112,6 +114,7 @@ public class ExamImportService {
         List<String> warnings = new ArrayList<>();
         linkWords(test.questions, warnings);
         linkGrammar(level, test.questions, warnings);
+        warnMissingExplanations(test.questions, warnings);
 
         // Câu đã nhập ở lần trước được bỏ qua; đoạn văn đi cùng các câu hỏi của nó.
         Set<String> existing = test.questions.isEmpty() ? Set.of()
@@ -219,6 +222,24 @@ public class ExamImportService {
             warnings.add(withoutPattern + " câu ngữ pháp chưa ghi \"ngu_phap\" nên chưa gắn với điểm ngữ pháp nào"
                     + " - thêm vào nếu muốn dùng cho phần luyện ngữ pháp yếu");
         }
+    }
+
+    /**
+     * Câu chưa có giải thích ("giai_thich"; câu sắp xếp có sẵn phần dựng từ thứ tự đúng): người học xem lại bài sẽ không
+     * biết vì sao mình sai. Chỉ cảnh báo, kèm vài câu đầu tiên để dễ tìm.
+     */
+    private static void warnMissingExplanations(List<Built> questions, List<String> warnings) {
+        List<String> labels = questions.stream()
+                .filter(built -> !StringUtils.hasText(built.question().getExplanation()))
+                .map(Built::label)
+                .toList();
+        if (labels.isEmpty()) {
+            return;
+        }
+        String examples = String.join(", ", labels.subList(0, Math.min(labels.size(), MISSING_EXPLANATION_EXAMPLES)))
+                + (labels.size() > MISSING_EXPLANATION_EXAMPLES ? "..." : "");
+        warnings.add(labels.size() + " câu chưa có \"giai_thich\" (" + examples + ") - người học xem lại bài sẽ không"
+                + " thấy giải thích");
     }
 
     /** Câu trùng nội dung trong cùng đề, hoặc với câu đã có trong kho (không tính câu của chính đề này đã nhập trước). */
