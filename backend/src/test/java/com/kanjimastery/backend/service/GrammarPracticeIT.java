@@ -71,7 +71,8 @@ class GrammarPracticeIT extends AbstractIntegrationTest {
         userId = userRepository.save(User.builder().username("practice_" + suffix)
                 .email("practice_" + suffix + "@test.local").passwordHash("x").build()).getId();
         because = grammarPointRepository.save(GrammarPoint.builder().jlptLevel(LEVEL).pattern("〜から（lý do）")
-                .meaningVi("Vì ~ nên").build());
+                .meaningVi("Vì ~ nên").connection("Câu1 から、Câu2")
+                .explanationVi("Nêu lý do chủ quan.\nVí dụ: 時間がありませんから、タクシーで行きましょう。").build());
         after = grammarPointRepository.save(GrammarPoint.builder().jlptLevel(LEVEL).pattern("Vてから")
                 .meaningVi("Sau khi V1 rồi V2").build());
         passage = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).content("【1】")
@@ -113,6 +114,10 @@ class GrammarPracticeIT extends AbstractIntegrationTest {
 
         assertThat(weak).extracting(WeakGrammarResponse::id, WeakGrammarResponse::wrong, WeakGrammarResponse::answered)
                 .containsExactly(tuple(because.getId(), 2, 2), tuple(after.getId(), 1, 2));
+        // Cách nối, giải thích đọc đúng cột qua câu SQL native; mẫu chưa có thì là null.
+        assertThat(weak).extracting(WeakGrammarResponse::connection, WeakGrammarResponse::explanationVi)
+                .containsExactly(tuple("Câu1 から、Câu2", "Nêu lý do chủ quan.\nVí dụ: 時間がありませんから、タクシーで行きましょう。"),
+                        tuple(null, null));
         assertThat(practiceService.weakPoints(userId, "N2")).isEmpty();
     }
 
@@ -131,8 +136,9 @@ class GrammarPracticeIT extends AbstractIntegrationTest {
         assertThat(practice).singleElement().satisfies(question -> {
             assertThat(question.id()).isEqualTo(approved.getId());
             assertThat(question.correctOption()).isEqualTo("A");
-            assertThat(question.grammarPoints()).extracting(QuestionReviewItem.Grammar::pattern)
-                    .containsExactlyInAnyOrder("〜から（lý do）", "Vてから");
+            assertThat(question.grammarPoints()).extracting(QuestionReviewItem.Grammar::pattern,
+                            QuestionReviewItem.Grammar::connection)
+                    .containsExactlyInAnyOrder(tuple("〜から（lý do）", "Câu1 から、Câu2"), tuple("Vてから", null));
         });
     }
 

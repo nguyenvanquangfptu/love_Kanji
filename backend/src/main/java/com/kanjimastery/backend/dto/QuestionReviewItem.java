@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.dto;
 
+import com.kanjimastery.backend.model.GrammarPoint;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.QuizDirection;
 import lombok.AllArgsConstructor;
@@ -37,6 +38,17 @@ public class QuestionReviewItem {
     /** Người học đang xem đã báo lỗi câu này. */
     private boolean reported;
 
-    public record Grammar(Long id, String pattern, String meaningVi) {
+    /**
+     * Điểm ngữ pháp kèm cách nối và giải thích, để người học đọc lại ngay khi xem câu.
+     *
+     * @param connection    cách nối; null nếu chưa có
+     * @param explanationVi giải thích và ví dụ, các dòng cách nhau bằng xuống dòng; null nếu chưa có
+     */
+    public record Grammar(Long id, String pattern, String meaningVi, String connection, String explanationVi) {
+
+        public static Grammar from(GrammarPoint point) {
+            return new Grammar(point.getId(), point.getPattern(), point.getMeaningVi(), point.getConnection(),
+                    point.getExplanationVi());
+        }
     }
 }

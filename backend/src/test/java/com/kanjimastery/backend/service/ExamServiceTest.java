@@ -209,7 +209,7 @@ class ExamServiceTest {
     }
 
     @Test
-    void getReview_shouldNameTheGrammarPointsEachQuestionTests() {
+    void getReview_shouldNameTheGrammarPointsEachQuestionTests_withConnectionAndExplanation() {
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
                 .userId(USER_ID).jlptLevel(JlptLevel.N4).status(ExamAttemptStatus.COMPLETED).totalScore(0)
                 .sittingId(5L).section(ExamSection.GRAMMAR).startedAt(LocalDateTime.now().minusMinutes(10)).build()));
@@ -220,14 +220,18 @@ class ExamServiceTest {
         when(questionRepository.findAllWithLinksByIdIn(anyList())).thenReturn(List.of(grammarQuestion,
                 typed(question(2L, QuizDirection.KANJI_TO_READING), JlptQuestionType.KANJI_READING)));
         when(grammarPointRepository.findAllById(Set.of(72L, 3L))).thenReturn(List.of(
-                GrammarPoint.builder().id(72L).pattern("Vてから").meaningVi("Sau khi V1 rồi V2").build(),
+                GrammarPoint.builder().id(72L).pattern("Vてから").meaningVi("Sau khi V1 rồi V2")
+                        .connection("V1て + から、V2").explanationVi("Làm V1 xong rồi mới làm V2.").build(),
                 GrammarPoint.builder().id(3L).pattern("〜ですか").meaningVi("Câu hỏi có/không").build()));
 
         ExamReviewResponse review = examService.getReview(USER_ID, ATTEMPT_ID);
 
+        // Mẫu chưa có cách nối, giải thích thì hai trường đó là null.
         assertThat(review.getQuestions().get(0).getGrammarPoints())
-                .extracting(QuestionReviewItem.Grammar::id, QuestionReviewItem.Grammar::pattern)
-                .containsExactly(tuple(3L, "〜ですか"), tuple(72L, "Vてから"));
+                .extracting(QuestionReviewItem.Grammar::id, QuestionReviewItem.Grammar::pattern,
+                        QuestionReviewItem.Grammar::connection, QuestionReviewItem.Grammar::explanationVi)
+                .containsExactly(tuple(3L, "〜ですか", null, null),
+                        tuple(72L, "Vてから", "V1て + から、V2", "Làm V1 xong rồi mới làm V2."));
         assertThat(review.getQuestions().get(1).getGrammarPoints()).isEmpty();
     }
 

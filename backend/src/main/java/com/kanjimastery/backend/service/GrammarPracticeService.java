@@ -46,7 +46,8 @@ public class GrammarPracticeService {
         return grammarPointRepository.findMistakesOfLearner(userId, normalize(level),
                         LocalDateTime.now(clock).minusDays(MISTAKE_DAYS), MAX_WEAK_POINTS).stream()
                 .map(row -> new WeakGrammarResponse(row.getId(), row.getPattern(), row.getMeaningVi(),
-                        row.getWrong().intValue(), row.getAnswered().intValue()))
+                        row.getConnection(), row.getExplanationVi(), row.getWrong().intValue(),
+                        row.getAnswered().intValue()))
                 .toList();
     }
 
@@ -79,7 +80,7 @@ public class GrammarPracticeService {
     private static PracticeQuestionResponse toResponse(ExamQuestion question, Map<Long, GrammarPoint> points) {
         List<QuestionReviewItem.Grammar> grammar = question.getGrammarPointIds().stream().sorted().map(points::get)
                 .filter(Objects::nonNull)
-                .map(point -> new QuestionReviewItem.Grammar(point.getId(), point.getPattern(), point.getMeaningVi()))
+                .map(QuestionReviewItem.Grammar::from)
                 .toList();
         return new PracticeQuestionResponse(question.getId(), question.getQuestionType(), question.getQuestionText(),
                 question.getSentence(), question.getHighlight(), question.getOptionA(), question.getOptionB(),
