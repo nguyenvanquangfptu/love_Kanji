@@ -26,9 +26,13 @@ class HanVietSplitterTest {
     }
 
     @Test
-    void split_shouldCountTheIterationMark_butNotGiveItAPartOfItsOwn() {
+    void split_shouldNotGiveTheIterationMarkAPartOfItsOwn_whetherOrNotItHasASyllable() {
         assertThat(HanVietSplitter.split("人々", "NHÂN NHÂN").parts()).containsExactly(new WordCharacter("人", "NHÂN"));
-        assertThat(HanVietSplitter.split("人々", "NHÂN").problem()).isEqualTo(Problem.COUNT_MISMATCH);
+        assertThat(HanVietSplitter.split("人々", "NHÂN").parts()).containsExactly(new WordCharacter("人", "NHÂN"));
+        assertThat(HanVietSplitter.split("別々に", "BIỆT").parts()).containsExactly(new WordCharacter("別", "BIỆT"));
+        assertThat(HanVietSplitter.split("人々", "NHÂN NHÂN NHÂN").problem()).isEqualTo(Problem.COUNT_MISMATCH);
+        assertThat(HanVietSplitter.split("時々刻々", "THỜI KHẮC").parts())
+                .containsExactly(new WordCharacter("時", "THỜI"), new WordCharacter("刻", "KHẮC"));
     }
 
     @Test

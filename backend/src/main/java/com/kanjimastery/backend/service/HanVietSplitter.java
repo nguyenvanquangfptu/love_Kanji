@@ -5,14 +5,16 @@ import org.springframework.util.StringUtils;
 
 import java.text.Normalizer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
 
 /**
  * Tách âm Hán Việt của một từ ra từng chữ Hán: 銀行 + "NGÂN HÀNG" → 銀 NGÂN, 行 HÀNG. Quy ước nhập từ vựng là mỗi chữ
- * Hán một âm tiết, kể cả 々 (人々 = NHÂN NHÂN), nên chỉ tách khi số chữ Hán bằng số âm tiết; âm của 々 được bỏ qua vì
- * nó không phải một chữ riêng. Đếm theo code point: chữ ngoài BMP như 𠮟 là hai char Java nhưng chỉ là một chữ.
+ * Hán một âm tiết, nên chỉ tách khi số chữ Hán bằng số âm tiết. 々 không phải một chữ riêng nên không có phần của nó; kho
+ * từ ghi nó theo cả hai cách (人々 = NHÂN, hoặc NHÂN NHÂN) nên âm của 々 có hay không đều được. Đếm theo code point:
+ * chữ ngoài BMP như 𠮟 là hai char Java nhưng chỉ là một chữ.
  */
 final class HanVietSplitter {
 
@@ -53,17 +55,25 @@ final class HanVietSplitter {
             return Split.failed(Problem.NO_HAN_VIET);
         }
         String[] syllables = normalize(hanViet).split(" ");
-        if (syllables.length != kanji.length) {
+        long iterationMarks = Arrays.stream(kanji).filter(codePoint -> codePoint == ITERATION_MARK).count();
+        // 々 có âm riêng (NHÂN NHÂN) hay không (NHÂN).
+        boolean marksHaveSyllables = syllables.length == kanji.length;
+        if (!marksHaveSyllables && syllables.length != kanji.length - iterationMarks) {
             return Split.failed(Problem.COUNT_MISMATCH);
         }
         List<WordCharacter> parts = new ArrayList<>(kanji.length);
-        for (int i = 0; i < kanji.length; i++) {
-            if (!SYLLABLE.matcher(syllables[i]).matches()) {
+        int syllable = 0;
+        for (int codePoint : kanji) {
+            if (codePoint == ITERATION_MARK && !marksHaveSyllables) {
+                continue;
+            }
+            if (!SYLLABLE.matcher(syllables[syllable]).matches()) {
                 return Split.failed(Problem.NOT_A_SYLLABLE);
             }
-            if (kanji[i] != ITERATION_MARK) {
-                parts.add(new WordCharacter(Character.toString(kanji[i]), syllables[i]));
+            if (codePoint != ITERATION_MARK) {
+                parts.add(new WordCharacter(Character.toString(codePoint), syllables[syllable]));
             }
+            syllable++;
         }
         return new Split(List.copyOf(parts), null);
     }
