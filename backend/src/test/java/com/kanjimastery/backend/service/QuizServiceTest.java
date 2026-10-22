@@ -5,6 +5,7 @@ import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.config.RateLimitProperties;
 import com.kanjimastery.backend.dto.QuizQuestionResponse;
+import com.kanjimastery.backend.dto.RubySegment;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.TooManyRequestsException;
 import com.kanjimastery.backend.model.Kanji;
@@ -12,6 +13,7 @@ import com.kanjimastery.backend.model.User;
 import com.kanjimastery.backend.model.UserKanjiSrs;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.service.LearnerHistoryService.PastMistake;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +33,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -68,6 +71,8 @@ class QuizServiceTest {
     private SrsService srsService;
 
     private final QuizDistractorGenerator distractors = new QuizDistractorGenerator();
+    // Nạp từ điển Kuromoji một lần cho cả lớp test.
+    private static final FuriganaService furigana = new FuriganaService();
     private QuizService quizService;
 
     // 乾く đã thất bại 2 lần gần đây; 渇く chưa có câu; 固い đã có câu ví dụ.
@@ -81,7 +86,8 @@ class QuizServiceTest {
         properties.getQuiz().setLimit(30);
         properties.getQuiz().setWindowSeconds(60);
         quizService = new QuizService(kanjiRepository, sentenceGenerationService, rateLimiter, properties,
-                new QuestionBuilder(kanjiRepository, distractors), userService, learnerHistoryService, srsService);
+                new QuestionBuilder(kanjiRepository, distractors), userService, learnerHistoryService, srsService,
+                furigana);
         lenient().when(userService.getByUsername("taro")).thenReturn(User.builder().id(USER_ID).build());
         lenient().when(learnerHistoryService.load(eq(USER_ID), anyCollection()))
                 .thenAnswer(invocation -> LearnerHistory.empty(LocalDateTime.now()));
@@ -154,6 +160,34 @@ class QuizServiceTest {
                 .extracting(QuizQuestionResponse::getPrompt).isEqualTo("見る");
         assertThat(questions).filteredOn(question -> question.getKanjiId() == 3L).singleElement()
                 .extracting(QuizQuestionResponse::getSentence).isEqualTo("この肉は固い。");
+        // Furigana của từ được gõ chính là đáp án: không gửi, các từ khác trong câu vẫn có.
+        assertThat(questions).filteredOn(question -> question.getKanjiId() == 3L).singleElement()
+                .extracting(QuizQuestionResponse::getSentenceRuby).asInstanceOf(InstanceOfAssertFactories.list(RubySegment.class))
+                .contains(new RubySegment("固い", null, true), new RubySegment("肉", "にく", false))
+                .extracting(RubySegment::ruby).doesNotContain("かた", "かたい");
+    }
+
+    @Test
+    void generate_shouldGiveTheSentenceFurigana_butNotToTheWordWhoseReadingIsAsked() {
+        givenQuizAllowed();
+        List<Kanji> lesson = IntStream.rangeClosed(1, 30)
+                .mapToObj(i -> word((long) i, "語" + i, "ご" + i, "毎日語" + i + "を使う。"))
+                .toList();
+        when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(lesson);
+
+        List<QuizQuestionResponse> questions = quizService.generate("taro", TAG_ID, null, 30, QuizService.MODE_RANDOM,
+                false, null);
+
+        assertThat(questions).extracting(QuizQuestionResponse::getDirection).contains(QuizDirection.KANJI_TO_READING);
+        assertThat(questions).allSatisfy(question -> {
+            List<RubySegment> segments = question.getSentenceRuby();
+            assertThat(segments.stream().map(RubySegment::text).collect(Collectors.joining()))
+                    .isEqualTo(question.getSentence());
+            assertThat(segments).first().isEqualTo(new RubySegment("毎日", "まいにち", false));
+            // Hỏi cách đọc: từ được hỏi không có furigana. Hỏi cách viết: câu đã thay từ đó bằng hiragana.
+            assertThat(segments).filteredOn(RubySegment::target).singleElement()
+                    .isEqualTo(new RubySegment(question.getPrompt(), null, true));
+        });
     }
 
     @Test

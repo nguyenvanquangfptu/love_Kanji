@@ -21,6 +21,11 @@ public class QuizQuestionResponse {
     private String prompt;
     /** Câu ví dụ kiểu đề JLPT có chứa nguyên văn {@link #prompt} (để gạch chân); null nếu chưa có câu. */
     private String sentence;
+    /**
+     * {@link #sentence} chia đoạn kèm furigana; null nếu không có câu. Câu hỏi cách đọc (KANJI_TO_READING,
+     * TYPE_READING) không có furigana của từ được hỏi.
+     */
+    private List<RubySegment> sentenceRuby;
     private List<String> choices;
     private int correctIndex;
     /** Hiển thị sau khi trả lời để người học ôn thêm. */
