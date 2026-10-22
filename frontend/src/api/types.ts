@@ -386,6 +386,43 @@ export interface ExamResultResponse {
   sittingId: number | null
 }
 
+/** Một chữ Hán của một từ, kèm âm Hán Việt của chữ đó trong từ ấy (勉強: 勉 MIỄN, 強 CƯỜNG). */
+export interface WordCharacter {
+  character: string
+  hanViet: string
+}
+
+/** Một từ trong kho có chứa chữ đang xem. */
+export interface CharacterWord {
+  id: number
+  character: string
+  reading: string | null
+  /** Âm Hán Việt của cả từ. */
+  hanViet: string
+  meaning: string
+  jlptLevel: string
+  /** Đã có trong lịch ôn của bạn. */
+  inReview: boolean
+}
+
+/** Một chữ Hán và các từ chứa nó, gom theo âm Hán Việt của chữ trong từng từ (âm có nhiều từ đứng trước). */
+export interface CharacterDetail {
+  character: string
+  readings: { hanViet: string; words: CharacterWord[] }[]
+}
+
+export interface CharacterRebuildReport {
+  /** Chỉ thử: chưa ghi gì. */
+  dryRun: boolean
+  words: number
+  split: number
+  kanaOnly: number
+  /** Số từ có chữ thành phần khác với đang lưu (đã ghi, hoặc sẽ ghi nếu chạy thật). */
+  changed: number
+  /** Từ có chữ Hán mà không tách được: cần sửa cột Hán Việt. */
+  skipped: { id: number; character: string; hanViet: string; reason: 'NO_HAN_VIET' | 'COUNT_MISMATCH' | 'NOT_A_SYLLABLE' }[]
+}
+
 /** Một đoạn của câu tiếng Nhật đã chia để hiện furigana; ghép `text` các đoạn theo thứ tự ra lại đúng câu. */
 export interface RubySegment {
   text: string

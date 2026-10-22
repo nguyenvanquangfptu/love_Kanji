@@ -27,6 +27,9 @@ import { StatTile } from '@/components/StatTile'
 import { EmptyState } from '@/components/EmptyState'
 import { SpeakButton } from '@/components/SpeakButton'
 import { MemoryAidPanel } from '@/components/MemoryAidPanel'
+import { CharacterChips } from '@/components/CharacterChips'
+import { useCharacterParts } from '@/lib/characters'
+import { useCharacterSheetStore } from '@/store/characterSheetStore'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
@@ -65,6 +68,7 @@ export function FlashcardPage() {
 
   const queue = data?.content ?? []
   const current = queue[0]
+  const { data: characterParts } = useCharacterParts(current ? [current.kanji.id] : [])
 
   useEffect(() => {
     if (data && sessionTotal === null) setSessionTotal(data.content.length)
@@ -125,6 +129,8 @@ export function FlashcardPage() {
       if (!current) return
       // Đang gõ ghi chú cách nhớ: phím số và Space là chữ, không phải phím tắt.
       if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return
+      // Đang xem bảng từ cùng chữ: không lật hay chấm thẻ nằm bên dưới.
+      if (useCharacterSheetStore.getState().character !== null) return
       if (e.code === 'Space') {
         e.preventDefault()
         toggleFlip()
@@ -241,11 +247,12 @@ export function FlashcardPage() {
                   <p className="font-jp text-xl font-bold text-secondary-dark">{current.kanji.reading}</p>
                 )}
                 <p className="font-jp text-5xl font-bold">{current.kanji.character}</p>
-                {current.kanji.hanViet && (
-                  <p className="text-sm font-extrabold uppercase tracking-wide text-muted-foreground">
-                    {current.kanji.hanViet}
-                  </p>
-                )}
+                <CharacterChips
+                  hanViet={current.kanji.hanViet}
+                  parts={characterParts?.[current.kanji.id]}
+                  size="sm"
+                  className="justify-center text-muted-foreground"
+                />
                 <p className="mt-2 text-lg font-bold leading-snug">{current.kanji.meaning}</p>
                 <SpeakButton text={current.kanji.reading ?? current.kanji.character} className="mt-1" />
               </div>

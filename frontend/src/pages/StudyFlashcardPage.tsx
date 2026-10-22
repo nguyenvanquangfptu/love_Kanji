@@ -10,6 +10,9 @@ import { cn, wordSizeClass } from '@/lib/utils'
 import { FlipCard } from '@/components/FlipCard'
 import { SessionHeader } from '@/components/SessionHeader'
 import { SpeakButton } from '@/components/SpeakButton'
+import { CharacterChips } from '@/components/CharacterChips'
+import { useCharacterParts } from '@/lib/characters'
+import { useCharacterSheetStore } from '@/store/characterSheetStore'
 import { EmptyState } from '@/components/EmptyState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -42,6 +45,8 @@ export function StudyFlashcardPage() {
   })
 
   const words = data?.content ?? []
+  // Hỏi chữ Hán của cả bài một lần, khỏi gọi lại mỗi lần lật sang thẻ khác.
+  const { data: characterParts } = useCharacterParts(words.map((word) => word.id))
   const order = shuffledOrder ?? words.map((_, i) => i)
   const current = words[order[index]]
   const total = words.length
@@ -70,6 +75,8 @@ export function StudyFlashcardPage() {
   useEffect(() => {
     if (!current || finished) return
     function onKeyDown(e: KeyboardEvent) {
+      // Đang xem bảng từ cùng chữ: không lật hay chuyển thẻ nằm bên dưới.
+      if (useCharacterSheetStore.getState().character !== null) return
       if (e.code === 'Space') {
         e.preventDefault()
         setFlipped((f) => !f)
@@ -151,11 +158,12 @@ export function StudyFlashcardPage() {
                     <p className="font-jp text-xl font-bold text-secondary-dark">{current.reading}</p>
                   )}
                   <p className="font-jp text-5xl font-bold">{current.character}</p>
-                  {current.hanViet && (
-                    <p className="text-sm font-extrabold uppercase tracking-wide text-muted-foreground">
-                      {current.hanViet}
-                    </p>
-                  )}
+                  <CharacterChips
+                    hanViet={current.hanViet}
+                    parts={characterParts?.[current.id]}
+                    size="sm"
+                    className="justify-center text-muted-foreground"
+                  />
                   <p className="mt-2 text-lg font-bold leading-snug">{current.meaning}</p>
                   <SpeakButton text={current.reading ?? current.character} className="mt-1" />
                 </div>

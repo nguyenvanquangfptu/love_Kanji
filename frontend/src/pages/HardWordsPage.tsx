@@ -7,6 +7,8 @@ import { PageHeader } from '@/components/PageHeader'
 import { EmptyState } from '@/components/EmptyState'
 import { SpeakButton } from '@/components/SpeakButton'
 import { MemoryAidPanel } from '@/components/MemoryAidPanel'
+import { CharacterChips } from '@/components/CharacterChips'
+import { useCharacterParts } from '@/lib/characters'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -20,6 +22,7 @@ export function HardWordsPage() {
   const quiz = useQuizStart()
   const { data, isLoading, isError, error } = useQuery({ queryKey: ['srs', 'hard-words'], queryFn: srsApi.getHardWords })
   const words = data?.words ?? []
+  const { data: characterParts } = useCharacterParts(words.map(({ kanji }) => kanji.id))
 
   return (
     <div>
@@ -64,9 +67,11 @@ export function HardWordsPage() {
                 <span className="font-jp text-2xl font-bold">{kanji.character}</span>
               </div>
               <div className="min-w-0 flex-1">
-                {kanji.hanViet && (
-                  <p className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground">{kanji.hanViet}</p>
-                )}
+                <CharacterChips
+                  hanViet={kanji.hanViet}
+                  parts={characterParts?.[kanji.id]}
+                  className="text-muted-foreground"
+                />
                 <p className="text-sm font-semibold">{kanji.meaning}</p>
               </div>
               <Badge variant="destructive" className="shrink-0">

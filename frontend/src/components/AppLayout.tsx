@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { authApi } from '@/api/auth'
 import { Logo } from '@/components/Logo'
+import { CharacterSheet } from '@/components/CharacterSheet'
 
 interface NavItem {
   to: string
@@ -144,6 +145,7 @@ export function AppLayout() {
           ))}
         </div>
       </nav>
+      <CharacterSheet />
     </div>
   )
 }
@@ -153,6 +155,7 @@ export function FocusLayout() {
   return (
     <div className="min-h-screen bg-background">
       <Outlet />
+      <CharacterSheet />
     </div>
   )
 }
