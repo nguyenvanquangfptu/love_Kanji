@@ -6,6 +6,7 @@ import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.ExamQuestionPublicResponse;
 import com.kanjimastery.backend.dto.ExamReviewResponse;
 import com.kanjimastery.backend.dto.QuestionReviewItem;
+import com.kanjimastery.backend.dto.RubySegment;
 import com.kanjimastery.backend.dto.StartExamRequest;
 import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
@@ -77,6 +78,10 @@ class ExamServiceTest {
 
     @Spy
     private Clock clock = Clock.systemDefaultZone();
+    // Nạp từ điển Kuromoji một lần cho cả lớp test; @Spy chỉ sao chép tham chiếu tới nó.
+    private static final FuriganaService FURIGANA = new FuriganaService();
+    @Spy
+    private FuriganaService furiganaService = FURIGANA;
 
     @InjectMocks
     private ExamService examService;
@@ -233,6 +238,31 @@ class ExamServiceTest {
                 .containsExactly(tuple(3L, "〜ですか", null, null),
                         tuple(72L, "Vてから", "V1て + から、V2", "Làm V1 xong rồi mới làm V2."));
         assertThat(review.getQuestions().get(1).getGrammarPoints()).isEmpty();
+    }
+
+    @Test
+    void getReview_shouldGiveTheSentenceFurigana_readingTheUnderlinedWordAsTheCorrectAnswer() {
+        when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
+                .userId(USER_ID).jlptLevel(JlptLevel.N4).status(ExamAttemptStatus.COMPLETED).totalScore(1)
+                .startedAt(LocalDateTime.now().minusMinutes(10)).build()));
+        when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(
+                answer(1L, "B", true), answer(2L, "A", true)));
+        // Kuromoji tự đọc 今日 là きょう; đáp án đúng của câu này là こんにち.
+        ExamQuestion reading = typed(question(1L, QuizDirection.KANJI_TO_READING), JlptQuestionType.KANJI_READING);
+        reading.setSentence("今日の社会は便利だ。");
+        reading.setHighlight("今日");
+        reading.setOptionA("きょう");
+        reading.setOptionB("こんにち");
+        reading.setCorrectOption("B");
+        when(questionRepository.findAllWithLinksByIdIn(anyList())).thenReturn(List.of(reading,
+                question(2L, QuizDirection.MEANING)));
+
+        ExamReviewResponse review = examService.getReview(USER_ID, ATTEMPT_ID);
+
+        assertThat(review.getQuestions().get(0).getSentenceRuby())
+                .startsWith(new RubySegment("今日", "こんにち", true))
+                .contains(new RubySegment("社会", "しゃかい", false));
+        assertThat(review.getQuestions().get(1).getSentenceRuby()).isNull();
     }
 
     private static ExamQuestion typed(ExamQuestion question, JlptQuestionType questionType) {

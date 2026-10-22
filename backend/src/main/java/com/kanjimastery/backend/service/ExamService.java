@@ -69,6 +69,7 @@ public class ExamService {
     private final ExamPassageRepository passageRepository;
     private final GrammarPointRepository grammarPointRepository;
     private final ExamQuestionReportRepository reportRepository;
+    private final FuriganaService furiganaService;
     private final Clock clock;
 
     @Transactional
@@ -202,6 +203,8 @@ public class ExamService {
                             .questionId(answer.getQuestionId())
                             .questionText(question.getQuestionText())
                             .sentence(question.getSentence())
+                            .sentenceRuby(furiganaService.annotate(question.getSentence(), question.getHighlight(),
+                                    highlightReading(question), false))
                             .highlight(question.getHighlight())
                             .optionA(question.getOptionA())
                             .optionB(question.getOptionB())
@@ -241,6 +244,13 @@ public class ExamService {
                 .passages(passagesOf(answers.stream().map(answer -> questionsById.get(answer.getQuestionId()))
                         .filter(Objects::nonNull).toList()))
                 .build();
+    }
+
+    /** Câu hỏi cách đọc (漢字読み): đáp án đúng chính là cách đọc của phần gạch chân, khỏi để Kuromoji đoán. */
+    private static String highlightReading(ExamQuestion question) {
+        boolean asksReading = question.getQuestionType() == JlptQuestionType.KANJI_READING
+                || question.getSkill() == QuizDirection.KANJI_TO_READING;
+        return asksReading ? question.optionText(question.getCorrectOption()) : null;
     }
 
     /** Các điểm ngữ pháp mà các câu hỏi kiểm tra, theo id. */

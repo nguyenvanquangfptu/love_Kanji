@@ -118,4 +118,15 @@ public class ExamQuestion {
     public LocalDateTime getReviewedAt() {
         return review.getReviewedAt();
     }
+
+    /** Nội dung của đáp án A/B/C/D; null nếu {@code option} không phải một trong bốn chữ đó. */
+    public String optionText(String option) {
+        return switch (option.toUpperCase()) {
+            case "A" -> optionA;
+            case "B" -> optionB;
+            case "C" -> optionC;
+            case "D" -> optionD;
+            default -> null;
+        };
+    }
 }

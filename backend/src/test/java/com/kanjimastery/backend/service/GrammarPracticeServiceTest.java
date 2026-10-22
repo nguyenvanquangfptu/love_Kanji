@@ -2,6 +2,7 @@ package com.kanjimastery.backend.service;
 
 import com.kanjimastery.backend.dto.PracticeQuestionResponse;
 import com.kanjimastery.backend.dto.QuestionReviewItem;
+import com.kanjimastery.backend.dto.RubySegment;
 import com.kanjimastery.backend.dto.WeakGrammarResponse;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.model.ExamQuestion;
@@ -47,6 +48,10 @@ class GrammarPracticeServiceTest {
 
     @Spy
     private Clock clock = Clock.systemDefaultZone();
+    // Nạp từ điển Kuromoji một lần cho cả lớp test; @Spy chỉ sao chép tham chiếu tới nó.
+    private static final FuriganaService FURIGANA = new FuriganaService();
+    @Spy
+    private FuriganaService furiganaService = FURIGANA;
 
     @InjectMocks
     private GrammarPracticeService practiceService;
@@ -75,7 +80,7 @@ class GrammarPracticeServiceTest {
     @Test
     void practice_shouldSendConnectionAndExplanationOfEachGrammarPoint() {
         ExamQuestion question = ExamQuestion.builder().id(10L).questionType(JlptQuestionType.GRAMMAR_FORM)
-                .correctOption("A").grammarPointIds(Set.of(3L)).build();
+                .sentence("毎晩（　　）、勉強しています。").correctOption("A").grammarPointIds(Set.of(3L)).build();
         when(questionRepository.findRandomForGrammarPoints("N4", Set.of(3L), 15)).thenReturn(List.of(question));
         when(questionRepository.findAllWithLinksByIdIn(List.of(10L))).thenReturn(List.of(question));
         when(grammarPointRepository.findAllById(Set.of(3L))).thenReturn(List.of(GrammarPoint.builder().id(3L)
@@ -88,6 +93,8 @@ class GrammarPracticeServiceTest {
                 .extracting(QuestionReviewItem.Grammar::connection, QuestionReviewItem.Grammar::explanationVi)
                 .containsExactly(tuple("Vる／N の + ために",
                         "Mục đích, đi với động từ ý chí.\nVí dụ: 家を買うために、貯金しています。")));
+        assertThat(practice.get(0).sentenceRuby()).contains(new RubySegment("毎晩", "まいばん", false),
+                new RubySegment("勉強", "べんきょう", false));
     }
 
     @Test
