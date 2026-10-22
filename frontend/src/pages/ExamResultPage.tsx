@@ -29,6 +29,7 @@ import { Leaderboard } from '@/components/Leaderboard'
 import { StatTile } from '@/components/StatTile'
 import { Meter } from '@/components/Meter'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
+import { FuriganaToggle } from '@/components/FuriganaToggle'
 import { PassageText } from '@/components/PassageText'
 import { GrammarPointList } from '@/components/GrammarPointNote'
 import { ReportQuestionDialog } from '@/components/ReportQuestionDialog'
@@ -123,6 +124,10 @@ export function ExamResultPage() {
 
         <TabsContent value="review">
           <div className="flex flex-col gap-4">
+            <FuriganaToggle
+              segments={data.questions.flatMap((q) => q.sentenceRuby ?? [])}
+              className="self-end"
+            />
             {data.questions.map((q, idx) => {
               // Đề JLPT: câu xếp theo 問題, đầu mỗi 問題 ghi tên dạng câu.
               const mondai =
@@ -167,7 +172,7 @@ export function ExamResultPage() {
                         </p>
                         {q.sentence && (
                           <p className="mt-2 font-jp text-lg leading-loose">
-                            <SentenceWithTarget sentence={q.sentence} target={q.highlight} />
+                            <SentenceWithTarget sentence={q.sentence} target={q.highlight} segments={q.sentenceRuby} />
                           </p>
                         )}
                       </div>

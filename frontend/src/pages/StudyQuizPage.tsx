@@ -10,6 +10,7 @@ import { describeAddResult, useAddToReview } from '@/lib/review'
 import { cn } from '@/lib/utils'
 import { SessionHeader } from '@/components/SessionHeader'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
+import { FuriganaToggle } from '@/components/FuriganaToggle'
 import { TypedReadingFeedback, TypedReadingInput } from '@/components/TypedReadingAnswer'
 import { SpeakButton } from '@/components/SpeakButton'
 import { StatTile } from '@/components/StatTile'
@@ -318,8 +319,15 @@ export function StudyQuizPage() {
               {current.sentence ? (
                 <Card className="p-5 sm:p-6">
                   <p className="font-jp text-xl leading-[2.4] sm:text-2xl sm:leading-[2.4]">
-                    <SentenceWithTarget sentence={current.sentence} target={current.prompt} />
+                    <SentenceWithTarget
+                      sentence={current.sentence}
+                      target={current.prompt}
+                      segments={current.sentenceRuby}
+                    />
                   </p>
+                  <div className="mt-2 flex justify-end">
+                    <FuriganaToggle segments={current.sentenceRuby} />
+                  </div>
                 </Card>
               ) : (
                 <div className="flex justify-center rounded-3xl border-2 border-dashed border-border py-8">

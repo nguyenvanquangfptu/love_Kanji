@@ -386,10 +386,21 @@ export interface ExamResultResponse {
   sittingId: number | null
 }
 
+/** Một đoạn của câu tiếng Nhật đã chia để hiện furigana; ghép `text` các đoạn theo thứ tự ra lại đúng câu. */
+export interface RubySegment {
+  text: string
+  /** Furigana (hiragana) đặt trên `text`; null nếu đoạn không có chữ Hán hoặc không được hiện cách đọc. */
+  ruby: string | null
+  /** Thuộc lần xuất hiện đầu tiên của từ được hỏi: gạch chân. */
+  target: boolean
+}
+
 export interface QuestionReviewItem {
   questionId: number
   questionText: string
   sentence: string | null
+  /** `sentence` chia đoạn kèm furigana; null nếu không có câu. */
+  sentenceRuby: RubySegment[] | null
   highlight: string | null
   optionA: string
   optionB: string
@@ -433,6 +444,8 @@ export interface PracticeQuestion {
   questionType: JlptQuestionType
   questionText: string
   sentence: string | null
+  /** `sentence` chia đoạn kèm furigana; null nếu không có câu. */
+  sentenceRuby: RubySegment[] | null
   highlight: string | null
   optionA: string
   optionB: string
@@ -511,6 +524,8 @@ export interface QuizQuestionResponse {
   prompt: string
   /** Câu ví dụ kiểu đề JLPT có chứa nguyên văn `prompt` (cần gạch chân); null nếu chưa có. */
   sentence: string | null
+  /** `sentence` chia đoạn kèm furigana; câu hỏi cách đọc không có furigana của từ được hỏi. Null nếu chưa có câu. */
+  sentenceRuby: RubySegment[] | null
   /** Rỗng với câu gõ cách đọc. */
   choices: string[]
   /** -1 với câu gõ cách đọc. */

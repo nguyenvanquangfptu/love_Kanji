@@ -99,6 +99,14 @@ body {
   font-family: var(--font-jp);
 }
 
+/* Furigana: nhỏ, nhạt hơn chữ chính, và không bị chọn lẫn vào khi bôi đen câu để chép. */
+rt {
+  font-size: 0.5em;
+  font-weight: 700;
+  color: var(--color-muted-foreground);
+  user-select: none;
+}
+
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
