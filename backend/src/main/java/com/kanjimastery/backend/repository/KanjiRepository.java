@@ -86,4 +86,36 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
     /** Mọi từ trong kho - để kiểm tra một câu có dùng từ vượt cấp độ không. */
     @Query("SELECT k.character AS character, k.reading AS reading, k.jlptLevel AS jlptLevel FROM Kanji k")
     List<WordLevel> findAllWordLevels();
+
+    /** Mọi từ kèm các chữ Hán thành phần, trong một truy vấn - để tách lại cả kho. */
+    @Query("SELECT k FROM Kanji k LEFT JOIN FETCH k.characterParts")
+    List<Kanji> findAllWithCharacterParts();
+
+    /** Một từ có chứa một chữ Hán, kèm âm Hán Việt của chữ đó trong từ ấy. */
+    interface CharacterUse {
+        Long getWordId();
+
+        String getHanViet();
+    }
+
+    @Query("SELECT k.id AS wordId, c.hanViet AS hanViet FROM Kanji k JOIN k.characterParts c WHERE c.character = :character")
+    List<CharacterUse> findUsesOfCharacter(@Param("character") String character);
+
+    /** Một chữ Hán thành phần của một từ. */
+    interface CharacterPart {
+        Long getWordId();
+
+        String getCharacter();
+
+        String getHanViet();
+    }
+
+    /** Các chữ Hán thành phần của các từ, theo thứ tự trong từng từ. */
+    @Query("""
+            SELECT k.id AS wordId, c.character AS character, c.hanViet AS hanViet
+            FROM Kanji k JOIN k.characterParts c
+            WHERE k.id IN :wordIds
+            ORDER BY k.id, INDEX(c)
+            """)
+    List<CharacterPart> findCharacterPartsOf(@Param("wordIds") Collection<Long> wordIds);
 }

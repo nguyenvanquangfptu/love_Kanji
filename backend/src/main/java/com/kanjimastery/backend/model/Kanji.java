@@ -8,7 +8,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 @Entity
@@ -63,6 +65,19 @@ public class Kanji {
             inverseJoinColumns = @JoinColumn(name = "tag_id"))
     @Builder.Default
     private Set<Tag> tags = new HashSet<>();
+
+    /** Các chữ Hán của từ theo thứ tự, kèm âm Hán Việt trong từ này - tách từ {@link #hanViet}; rỗng nếu không tách được. */
+    @ElementCollection
+    @CollectionTable(name = "word_characters", joinColumns = @JoinColumn(name = "word_id"))
+    @OrderColumn(name = "position")
+    @Builder.Default
+    private List<WordCharacter> characterParts = new ArrayList<>();
+
+    /** Thay các chữ Hán thành phần, giữ nguyên collection Hibernate đang theo dõi. */
+    public void replaceCharacterParts(List<WordCharacter> parts) {
+        characterParts.clear();
+        characterParts.addAll(parts);
+    }
 
     @PrePersist
     protected void onCreate() {
