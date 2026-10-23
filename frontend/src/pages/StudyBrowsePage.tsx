@@ -13,6 +13,7 @@ import { Card, CardButton } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
 import { PageSpinner } from '@/components/ui/spinner'
 import { PageHeader } from '@/components/PageHeader'
+import { SetGoalBanner } from '@/components/SetGoalBanner'
 import { EmptyState } from '@/components/EmptyState'
 import { LevelTabs, type LevelKey } from '@/components/LevelTabs'
 import { useQuizStart } from '@/lib/quizStart'
@@ -68,6 +69,7 @@ export function StudyBrowsePage() {
     <div>
       {quiz.dialog}
       <PageHeader title="Học bài" subtitle="Chọn cấp độ, rồi chọn một bài để bắt đầu học." />
+      <SetGoalBanner />
 
       <LevelTabs
         levels={levelKeys}

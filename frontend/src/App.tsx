@@ -30,6 +30,7 @@ const AdminQuestionsPage = lazy(() =>
 )
 const CharacterPage = lazy(() => import('@/pages/CharacterPage').then((m) => ({ default: m.CharacterPage })))
 const SearchPage = lazy(() => import('@/pages/SearchPage').then((m) => ({ default: m.SearchPage })))
+const WelcomePage = lazy(() => import('@/pages/WelcomePage').then((m) => ({ default: m.WelcomePage })))
 
 export default function App() {
   return (
@@ -64,6 +65,7 @@ export default function App() {
           <Route path="study/quiz" element={<StudyQuizPage />} />
           <Route path="exam/:attemptId" element={<ExamWorkspacePage />} />
           <Route path="exam/grammar-practice" element={<GrammarPracticePage />} />
+          <Route path="welcome" element={<WelcomePage />} />
         </Route>
       </Route>
 
