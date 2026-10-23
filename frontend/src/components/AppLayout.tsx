@@ -1,9 +1,11 @@
+import { Suspense } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { BookOpen, ClipboardCheck, LogOut, RotateCcw, ShieldCheck, TrendingUp, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { authApi } from '@/api/auth'
 import { Logo } from '@/components/Logo'
+import { PageSpinner } from '@/components/ui/spinner'
 import { CharacterSheet } from '@/components/CharacterSheet'
 import { SearchLauncher } from '@/components/SearchLauncher'
 import { useSearchShortcut } from '@/lib/searchShortcut'
@@ -122,7 +124,9 @@ export function AppLayout() {
       </header>
 
       <main className="mx-auto w-full max-w-4xl px-4 pb-32 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-10">
-        <Outlet />
+        <Suspense fallback={<PageSpinner />}>
+          <Outlet />
+        </Suspense>
       </main>
 
       {/* Điện thoại: thanh tab dưới đáy */}
@@ -160,7 +164,9 @@ export function AppLayout() {
 export function FocusLayout() {
   return (
     <div className="min-h-screen bg-background">
-      <Outlet />
+      <Suspense fallback={<PageSpinner />}>
+        <Outlet />
+      </Suspense>
       <CharacterSheet />
     </div>
   )
