@@ -150,6 +150,32 @@ public interface ExamQuestionRepository
                                                   @Param("grammarPointIds") Collection<Long> grammarPointIds,
                                                   @Param("count") int count);
 
+    /** Một câu hỏi được chọn để ôn một điểm ngữ pháp. */
+    interface GrammarReviewQuestion {
+        Long getGrammarPointId();
+
+        Long getQuestionId();
+    }
+
+    /**
+     * Mỗi điểm ngữ pháp một câu đã duyệt, đứng riêng, chọn ngẫu nhiên - tránh câu đã hỏi lần ôn trước nếu điểm đó còn
+     * câu khác. Điểm chưa có câu nào thì không có dòng (ôn bằng thẻ lật).
+     */
+    @Query(value = """
+            SELECT DISTINCT ON (link.grammar_point_id) link.grammar_point_id AS grammarPointId, q.id AS questionId
+            FROM exam_question_grammar link
+            JOIN exam_questions q ON q.id = link.question_id
+            LEFT JOIN LATERAL (
+                SELECT l.question_id FROM grammar_review_logs l
+                WHERE l.user_id = :userId AND l.grammar_point_id = link.grammar_point_id
+                ORDER BY l.reviewed_at DESC, l.id DESC LIMIT 1
+            ) last_asked ON TRUE
+            WHERE link.grammar_point_id IN (:grammarPointIds) AND q.status = 'APPROVED' AND q.passage_id IS NULL
+            ORDER BY link.grammar_point_id, q.id IS NOT DISTINCT FROM last_asked.question_id, RANDOM()
+            """, nativeQuery = true)
+    List<GrammarReviewQuestion> pickForGrammarReview(@Param("userId") Long userId,
+                                                     @Param("grammarPointIds") Collection<Long> grammarPointIds);
+
     /** Câu trong đề của các câu hỏi gắn với một điểm ngữ pháp - để AI viết câu mới không trùng ý. */
     @Query("""
             SELECT q.sentence FROM ExamQuestion q JOIN q.grammarPointIds point

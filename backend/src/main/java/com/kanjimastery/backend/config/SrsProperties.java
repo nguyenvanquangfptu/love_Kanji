@@ -29,4 +29,6 @@ public class SrsProperties {
     private int fsrsMinFirstReviews = 50;
     /** Hoàn tác được một lần chấm thẻ (bấm nhầm) trong chừng này phút sau khi chấm. */
     private int undoMinutes = 30;
+    /** Số điểm ngữ pháp mới tối đa mỗi ngày (ôn ngữ pháp theo lịch). */
+    private int grammarNewPerDay = 3;
 }
