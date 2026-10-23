@@ -5,6 +5,8 @@ import { useAuthStore } from '@/store/authStore'
 import { authApi } from '@/api/auth'
 import { Logo } from '@/components/Logo'
 import { CharacterSheet } from '@/components/CharacterSheet'
+import { SearchLauncher } from '@/components/SearchLauncher'
+import { useSearchShortcut } from '@/lib/searchShortcut'
 
 interface NavItem {
   to: string
@@ -55,6 +57,8 @@ export function AppLayout() {
   const isAdmin = useAuthStore((s) => s.isAdmin())
   const logout = useLogout()
   const items = isAdmin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS
+  // Phiên học/thi (FocusLayout) không có phím "/": đang làm bài thì không nhảy sang trang khác.
+  useSearchShortcut()
 
   return (
     <div className="min-h-screen bg-background lg:pl-64">
@@ -63,7 +67,8 @@ export function AppLayout() {
         <Link to="/study" className="px-3">
           <Logo />
         </Link>
-        <nav className="mt-8 flex flex-col gap-1.5">
+        <SearchLauncher className="mt-6" />
+        <nav className="mt-4 flex flex-col gap-1.5">
           {items.map(({ to, label, icon: Icon, iconColor }) => (
             <NavLink
               key={to}
@@ -103,6 +108,7 @@ export function AppLayout() {
           <Logo />
         </Link>
         <div className="flex items-center gap-2">
+          <SearchLauncher compact />
           <Avatar name={username} />
           <button
             type="button"

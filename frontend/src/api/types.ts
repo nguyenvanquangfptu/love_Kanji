@@ -386,6 +386,20 @@ export interface ExamResultResponse {
   sittingId: number | null
 }
 
+/** Một từ tìm được. */
+export interface SearchResult {
+  id: number
+  character: string
+  reading: string | null
+  hanViet: string
+  meaning: string
+  jlptLevel: string
+  /** Tên các bài có từ này (vd. N5-01). */
+  lessons: string[]
+  /** Đã có trong lịch ôn của bạn. */
+  inReview: boolean
+}
+
 /** Một chữ Hán của một từ, kèm âm Hán Việt của chữ đó trong từ ấy (勉強: 勉 MIỄN, 強 CƯỜNG). */
 export interface WordCharacter {
   character: string
