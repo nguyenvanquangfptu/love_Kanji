@@ -32,6 +32,10 @@ const AdminQuestionsPage = lazy(() =>
 const CharacterPage = lazy(() => import('@/pages/CharacterPage').then((m) => ({ default: m.CharacterPage })))
 const SearchPage = lazy(() => import('@/pages/SearchPage').then((m) => ({ default: m.SearchPage })))
 const WelcomePage = lazy(() => import('@/pages/WelcomePage').then((m) => ({ default: m.WelcomePage })))
+const GrammarListPage = lazy(() => import('@/pages/GrammarListPage').then((m) => ({ default: m.GrammarListPage })))
+const GrammarReviewPage = lazy(() =>
+  import('@/pages/GrammarReviewPage').then((m) => ({ default: m.GrammarReviewPage })),
+)
 
 export default function App() {
   useThemeSync()
@@ -50,6 +54,7 @@ export default function App() {
           <Route path="goals" element={<GoalPage />} />
           <Route path="characters/:character" element={<CharacterPage />} />
           <Route path="search" element={<SearchPage />} />
+          <Route path="grammar" element={<GrammarListPage />} />
           <Route path="progress" element={<ProgressPage />} />
           <Route path="exam" element={<ExamSetupPage />} />
           <Route path="exam/:attemptId/result" element={<ExamResultPage />} />
@@ -68,6 +73,7 @@ export default function App() {
           <Route path="exam/:attemptId" element={<ExamWorkspacePage />} />
           <Route path="exam/grammar-practice" element={<GrammarPracticePage />} />
           <Route path="welcome" element={<WelcomePage />} />
+          <Route path="grammar/review" element={<GrammarReviewPage />} />
         </Route>
       </Route>
 

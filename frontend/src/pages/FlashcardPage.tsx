@@ -20,10 +20,12 @@ import type { DailyCardResponse, DailyPlanResponse, Page, ReviewRating, ReviewRe
 import { extractErrorMessage, isConflict } from '@/api/client'
 import { cn, wordSizeClass } from '@/lib/utils'
 import { addDays, formatDay, formatInterval } from '@/lib/dates'
+import { RATING_OPTIONS } from '@/lib/ratings'
 import { lessonQuery } from '@/lib/lesson'
 import { lessonTitle } from '@/lib/levels'
 import { FlipCard } from '@/components/FlipCard'
 import { PageHeader } from '@/components/PageHeader'
+import { GrammarDueLink } from '@/components/GrammarDueLink'
 import { StatTile } from '@/components/StatTile'
 import { EmptyState } from '@/components/EmptyState'
 import { SpeakButton } from '@/components/SpeakButton'
@@ -53,13 +55,6 @@ interface RatedCard {
   card: DailyCardResponse
   rating: ReviewRating
 }
-
-const RATING_OPTIONS: { rating: ReviewRating; label: string; hint: string; className: string }[] = [
-  { rating: 1, label: 'Quên', hint: 'Học lại', className: 'border-destructive-edge bg-destructive text-white' },
-  { rating: 2, label: 'Khó', hint: 'Nghĩ lâu mới ra', className: 'border-orange-edge bg-orange text-white' },
-  { rating: 3, label: 'Nhớ', hint: 'Nhớ ra được', className: 'border-secondary-edge bg-secondary text-white' },
-  { rating: 4, label: 'Dễ', hint: 'Nhớ ngay', className: 'border-primary-edge bg-primary text-white' },
-]
 
 export function FlashcardPage() {
   const navigate = useNavigate()
@@ -230,6 +225,8 @@ export function FlashcardPage() {
           <ChevronRight className="h-5 w-5 shrink-0" />
         </Link>
       )}
+
+      <GrammarDueLink className="mb-6" />
 
       {isLoading && <PageSpinner />}
       {isError && <Alert>{extractErrorMessage(error)}</Alert>}

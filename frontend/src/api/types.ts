@@ -788,3 +788,69 @@ export interface AdminExamPassage {
   reviewedAt: string | null
   questions: AdminExamQuestion[]
 }
+
+/** Một điểm ngữ pháp trong danh sách cho người học, kèm trạng thái ôn của chính người đó. */
+export interface GrammarPointStatus extends GrammarPointBrief {
+  /** Bài trong giáo trình (N5-01...); null = không theo bài (N3). */
+  lesson: string | null
+  inReview: boolean
+  /** null nếu chưa có trong lịch ôn. */
+  nextReviewAt: string | null
+}
+
+/** Câu hỏi để ôn một điểm ngữ pháp - không kèm đáp án: server chấm. */
+export interface GrammarQuestion {
+  id: number
+  questionType: JlptQuestionType
+  questionText: string
+  sentence: string | null
+  sentenceRuby: RubySegment[] | null
+  highlight: string | null
+  optionA: string
+  optionB: string
+  optionC: string
+  optionD: string
+}
+
+/** Một thẻ ngữ pháp trong phiên ôn hôm nay. */
+export interface GrammarCard {
+  grammarPointId: number
+  jlptLevel: JlptLevel
+  lesson: string | null
+  pattern: string
+  connection: string | null
+  meaningVi: string
+  explanationVi: string | null
+  newCard: boolean
+  /** Số ngày tới lần ôn sau nếu chấm Quên, Khó, Nhớ, Dễ. */
+  intervals: number[]
+  /** null nếu điểm chưa có câu đã duyệt - ôn bằng thẻ lật. */
+  question: GrammarQuestion | null
+}
+
+export interface GrammarSession {
+  cards: GrammarCard[]
+  /** Số điểm đã đến hạn (có thể nhiều hơn số thẻ trong phiên). */
+  dueCount: number
+  newLeftToday: number
+  /** Số điểm đã thêm mà chưa học lần nào. */
+  newWaiting: number
+}
+
+/** Trả lời câu hỏi (questionId + chosenOption) hoặc tự chấm thẻ lật (rating). */
+export interface GrammarReviewRequest {
+  grammarPointId: number
+  questionId?: number
+  chosenOption?: 'A' | 'B' | 'C' | 'D'
+  rating?: ReviewRating
+  responseMs?: number
+}
+
+export interface GrammarReviewResult {
+  correct: boolean
+  /** null với thẻ lật. */
+  correctOption: 'A' | 'B' | 'C' | 'D' | null
+  explanation: string | null
+  nextReviewAt: string
+  intervalDays: number
+}
