@@ -22,14 +22,16 @@ public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
     }
 
     /**
-     * Số lần trả lời theo từng giờ, mọi lúc - gom tiếp thành ngày học ở tầng Java (StudyCalendar), vì ngày học bắt đầu
-     * lúc 4 giờ sáng giờ Việt Nam còn reviewed_at lưu theo giờ máy chủ. Mỗi ngày nhiều nhất 24 dòng. Gom theo giờ là đủ
-     * chính xác khi múi giờ máy chủ lệch giờ Việt Nam một số giờ chẵn (như UTC hay chính giờ Việt Nam).
+     * Số lần trả lời theo từng giờ, mọi lúc, cả từ vựng lẫn ngữ pháp (grammar_review_logs) - gom tiếp thành ngày học ở
+     * tầng Java (StudyCalendar), vì ngày học bắt đầu lúc 4 giờ sáng giờ Việt Nam còn reviewed_at lưu theo giờ máy chủ.
+     * Mỗi ngày nhiều nhất 24 dòng. Gom theo giờ là đủ chính xác khi múi giờ máy chủ lệch giờ Việt Nam một số giờ chẵn
+     * (như UTC hay chính giờ Việt Nam).
      */
     @Query(value = """
-            SELECT date_trunc('hour', reviewed_at) AS hour, count(*) AS answers
-            FROM review_logs
-            WHERE user_id = :userId
+            SELECT date_trunc('hour', answered.reviewed_at) AS hour, count(*) AS answers
+            FROM (SELECT reviewed_at FROM review_logs WHERE user_id = :userId
+                  UNION ALL
+                  SELECT reviewed_at FROM grammar_review_logs WHERE user_id = :userId) answered
             GROUP BY 1
             """, nativeQuery = true)
     List<HourlyAnswers> answersPerHour(@Param("userId") Long userId);

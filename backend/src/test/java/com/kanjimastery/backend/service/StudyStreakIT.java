@@ -4,12 +4,16 @@ import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.dto.ProgressResponse;
 import com.kanjimastery.backend.dto.StreakResponse;
 import com.kanjimastery.backend.model.CardState;
+import com.kanjimastery.backend.model.GrammarPoint;
+import com.kanjimastery.backend.model.GrammarReviewLog;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.ReviewLog;
 import com.kanjimastery.backend.model.ReviewRating;
 import com.kanjimastery.backend.model.ReviewSource;
 import com.kanjimastery.backend.model.User;
+import com.kanjimastery.backend.repository.GrammarPointRepository;
+import com.kanjimastery.backend.repository.GrammarReviewLogRepository;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.repository.ReviewLogRepository;
 import com.kanjimastery.backend.repository.UserRepository;
@@ -26,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Chuỗi ngày học và lịch nhiệt trên PostgreSQL thật: lần trả lời lúc 3:59 sáng thuộc ngày học hôm trước, 4:01 thuộc
- * hôm nay (ngày học bắt đầu 4 giờ sáng giờ Việt Nam, dù máy chủ chạy múi giờ nào).
+ * hôm nay (ngày học bắt đầu 4 giờ sáng giờ Việt Nam, dù máy chủ chạy múi giờ nào); ôn ngữ pháp cũng tính là có học.
  */
 class StudyStreakIT extends AbstractIntegrationTest {
 
@@ -40,6 +44,10 @@ class StudyStreakIT extends AbstractIntegrationTest {
     private KanjiRepository kanjiRepository;
     @Autowired
     private ReviewLogRepository reviewLogRepository;
+    @Autowired
+    private GrammarPointRepository grammarPointRepository;
+    @Autowired
+    private GrammarReviewLogRepository grammarReviewLogRepository;
 
     private Long userId;
     private Long wordId;
@@ -77,6 +85,26 @@ class StudyStreakIT extends AbstractIntegrationTest {
         assertThat(days.get(days.size() - 1)).isEqualTo(new ProgressResponse.CalendarDay(today, 2));
         assertThat(days.subList(days.size() - 4, days.size() - 1)).extracting(ProgressResponse.CalendarDay::answers)
                 .containsExactly(1L, 0L, 1L);
+    }
+
+    @Test
+    void streak_shouldCountGrammarReviewsAsStudyToo() {
+        LocalDate today = calendar.today();
+        Long pointId = grammarPointRepository.save(GrammarPoint.builder().jlptLevel(JlptLevel.N5)
+                .pattern("〜てから" + System.nanoTime()).meaningVi("IT").build()).getId();
+        try {
+            // Hôm qua ôn từ vựng, hôm nay chỉ ôn ngữ pháp: vẫn là 2 ngày liên tiếp.
+            answerAt(calendar.startOf(today.minusDays(1)).plusHours(2));
+            grammarReviewLogRepository.save(GrammarReviewLog.builder().userId(userId).grammarPointId(pointId)
+                    .correct(true).rating(ReviewRating.GOOD).stateBefore(CardState.NEW)
+                    .reviewedAt(calendar.startOf(today).plusMinutes(1)).build());
+
+            assertThat(progressService.streak(userId)).isEqualTo(new StreakResponse(2, 2, true));
+            List<ProgressResponse.CalendarDay> days = progressService.get(userId).getCalendar();
+            assertThat(days.get(days.size() - 1)).isEqualTo(new ProgressResponse.CalendarDay(today, 1));
+        } finally {
+            grammarPointRepository.deleteById(pointId);
+        }
     }
 
     private void answerAt(LocalDateTime time) {
