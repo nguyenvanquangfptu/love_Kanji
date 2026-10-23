@@ -70,9 +70,6 @@ class SrsServiceTest {
     private ReviewLogRepository reviewLogRepository;
 
     @Spy
-    private SrsCalculatorService srsCalculatorService = new SrsCalculatorService();
-
-    @Spy
     private SrsProperties srsProperties = new SrsProperties();
 
     @Mock
@@ -80,6 +77,9 @@ class SrsServiceTest {
 
     @Spy
     private StudyCalendar calendar = new StudyCalendar(new SrsProperties(), Clock.systemDefaultZone());
+
+    @Spy
+    private CardScheduler cardScheduler = new CardScheduler(new SrsCalculatorService(), calendar);
 
     @Mock
     private LearningProfileService learningProfileService;

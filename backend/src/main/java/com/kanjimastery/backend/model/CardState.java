@@ -9,7 +9,7 @@ public enum CardState {
     /** Vừa quên (SM-2 đã đưa số lần nhớ liên tiếp về 0) và đang học lại. */
     RELEARNING;
 
-    public static CardState of(UserKanjiSrs card) {
+    public static CardState of(ScheduledCard card) {
         if (card == null || card.getLastReviewedAt() == null) {
             return NEW;
         }

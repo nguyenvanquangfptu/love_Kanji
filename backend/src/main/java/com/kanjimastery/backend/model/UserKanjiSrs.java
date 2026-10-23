@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class UserKanjiSrs {
+public class UserKanjiSrs implements ScheduledCard {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
