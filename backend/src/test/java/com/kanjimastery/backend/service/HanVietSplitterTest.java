@@ -60,6 +60,11 @@ class HanVietSplitterTest {
         assertThat(HanVietSplitter.split("銀行", "NGÂN HÀNG XÁ").problem()).isEqualTo(Problem.COUNT_MISMATCH);
         assertThat(HanVietSplitter.split("銀行", "NGÂN-HÀNG X").problem()).isEqualTo(Problem.NOT_A_SYLLABLE);
         assertThat(HanVietSplitter.split("銀行", "(NGÂN) HÀNG").problem()).isEqualTo(Problem.NOT_A_SYLLABLE);
+        // Chính từ tiếng Nhật gõ nhầm vào cột Hán Việt.
+        assertThat(HanVietSplitter.split("思いつく", "思いつく").problem()).isEqualTo(Problem.NOT_A_SYLLABLE);
+        assertThat(HanVietSplitter.split("思いつく", "おもいつく").problem()).isEqualTo(Problem.NOT_A_SYLLABLE);
+        assertThat(HanVietSplitter.split("駐車", "TRÚ XA").problem()).isNull();
+        assertThat(HanVietSplitter.split("道", "ĐẠO").problem()).isNull();
         assertThat(HanVietSplitter.split("銀行", "NGÂN HÀNG").parts()).hasSize(2);
     }
 }

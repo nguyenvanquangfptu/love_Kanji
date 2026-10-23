@@ -40,7 +40,8 @@ final class HanVietSplitter {
         }
     }
 
-    private static final Pattern SYLLABLE = Pattern.compile("\\p{L}{1,20}");
+    /** Một tiếng Việt: chỉ chữ Latin (kể cả có dấu) - không nhận kana hay chữ Hán gõ nhầm vào cột Hán Việt. */
+    private static final Pattern SYLLABLE = Pattern.compile("\\p{IsLatin}{1,20}");
     private static final int ITERATION_MARK = '々';
 
     private HanVietSplitter() {
