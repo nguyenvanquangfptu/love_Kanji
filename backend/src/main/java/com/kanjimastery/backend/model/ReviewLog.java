@@ -12,7 +12,7 @@ import java.time.LocalDateTime;
 
 /**
  * Một lần người học trả lời một từ - xem V10__add_review_logs.sql. Chỉ ghi thêm, không bao giờ sửa: Hibernate không phát
- * UPDATE cho entity này.
+ * UPDATE cho entity này. Dòng chỉ bị xoá khi người học hoàn tác lần chấm thẻ đó.
  */
 @Entity
 @Immutable
@@ -64,6 +64,31 @@ public class ReviewLog {
 
     @Column(name = "interval_before")
     private Integer intervalBefore;
+
+    /**
+     * Từ đã có trong lịch ôn trước lần trả lời này chưa; null ở các dòng ghi trước V36. Cùng các cột *Before dưới đây là
+     * trạng thái thẻ ngay trước lần trả lời, đủ để khôi phục khi hoàn tác.
+     */
+    @Column(name = "card_existed_before")
+    private Boolean cardExistedBefore;
+
+    @Column(name = "repetition_before")
+    private Integer repetitionBefore;
+
+    @Column(name = "lapses_before")
+    private Integer lapsesBefore;
+
+    @Column(name = "next_review_before")
+    private LocalDateTime nextReviewBefore;
+
+    @Column(name = "last_reviewed_before")
+    private LocalDateTime lastReviewedBefore;
+
+    @Column(name = "stability_before")
+    private Double stabilityBefore;
+
+    @Column(name = "difficulty_before")
+    private Double difficultyBefore;
 
     /** Lần trả lời này có được tính vào lịch ôn không (trắc nghiệm đúng khi thẻ chưa đến hạn thì không). */
     @Column(nullable = false)

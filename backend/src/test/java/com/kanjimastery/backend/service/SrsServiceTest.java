@@ -148,6 +148,8 @@ class SrsServiceTest {
         assertThat(log.getStateBefore()).isEqualTo(CardState.NEW);
         assertThat(log.getEfBefore()).isNull();
         assertThat(log.getIntervalBefore()).isNull();
+        assertThat(log.getCardExistedBefore()).isFalse();
+        assertThat(log.getNextReviewBefore()).isNull();
         assertThat(log.getScheduled()).isTrue();
         // 70 giây là đã rời máy, không phải thời gian nhớ lại.
         assertThat(log.getResponseMs()).isNull();
@@ -173,6 +175,31 @@ class SrsServiceTest {
         assertThat(log.getEfBefore()).isEqualByComparingTo("2.50");
         assertThat(log.getIntervalBefore()).isEqualTo(15);
         assertThat(log.getResponseMs()).isEqualTo(2_500);
+    }
+
+    @Test
+    void submitReview_shouldLogTheWholeCardStateBefore_soTheRatingCanBeUndone() {
+        LocalDateTime due = LocalDateTime.now().minusHours(1);
+        UserKanjiSrs card = card(3, "2.36", 15, due);
+        card.setLapseCount(2);
+        card.setFsrs(new FsrsState(14.5, 6.25));
+        LocalDateTime lastReviewed = card.getLastReviewedAt();
+        when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.of(card));
+        givenSaveReturnsCard();
+
+        srsService.submitReview(USER_ID, reviewRequest(ReviewRating.AGAIN, 2_500));
+
+        ReviewLog log = savedLog();
+        assertThat(log.getCardExistedBefore()).isTrue();
+        assertThat(log.getRepetitionBefore()).isEqualTo(3);
+        assertThat(log.getEfBefore()).isEqualByComparingTo("2.36");
+        assertThat(log.getIntervalBefore()).isEqualTo(15);
+        assertThat(log.getLapsesBefore()).isEqualTo(2);
+        assertThat(log.getNextReviewBefore()).isEqualTo(due);
+        assertThat(log.getLastReviewedBefore()).isEqualTo(lastReviewed);
+        assertThat(log.getStabilityBefore()).isEqualTo(14.5);
+        assertThat(log.getDifficultyBefore()).isEqualTo(6.25);
     }
 
     @Test
