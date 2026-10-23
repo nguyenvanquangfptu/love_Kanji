@@ -11,6 +11,7 @@ import {
   Dumbbell,
   PartyPopper,
   RotateCcw,
+  Zap,
   Sprout,
   Target,
 } from 'lucide-react'
@@ -41,6 +42,9 @@ const DAILY_CARDS_KEY = ['srs', 'daily-cards']
 const STATS_KEY = ['srs', 'stats']
 const DAILY_PLAN_KEY = ['srs', 'daily-plan']
 
+/** Ôn nhanh: lượng ôn vừa chừng này phút. */
+const QUICK_MINUTES = 5
+
 /** Hoàn tác được tối đa chừng này lần chấm gần nhất của phiên (server còn giới hạn 30 phút). */
 const MAX_UNDO = 20
 
@@ -70,6 +74,8 @@ export function FlashcardPage() {
   // Các thẻ đã chấm trong phiên (mới nhất ở cuối): bấm nhầm thì hoàn tác lần lượt từ thẻ cuối.
   const [ratedCards, setRatedCards] = useState<RatedCard[]>([])
   const lastRated = ratedCards.at(-1)
+  // Ôn nhanh: chỉ ôn N thẻ đầu hàng đợi (đã xếp dễ quên nhất trước), N vừa khoảng 5 phút theo nhịp của chính người học.
+  const [quick, setQuick] = useState<{ target: number; startLength: number } | null>(null)
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: cardsKey,
@@ -82,6 +88,9 @@ export function FlashcardPage() {
   const queue = data?.content ?? []
   const current = queue[0]
   const { data: characterParts } = useCharacterParts(current ? [current.kanji.id] : [])
+  const quickSize = quickReviewSize(plan)
+  const quickDone = quick ? quick.startLength - queue.length : 0
+  const quickFinished = quick !== null && quickDone >= quick.target
 
   useEffect(() => {
     if (data && sessionTotal === null) setSessionTotal(data.content.length)
@@ -150,6 +159,7 @@ export function FlashcardPage() {
 
   function studyExtra() {
     setRatedCards([])
+    setQuick(null)
     setSessionTotal(null)
     if (extra) queryClient.invalidateQueries({ queryKey: cardsKey })
     else setExtra(true)
@@ -175,7 +185,8 @@ export function FlashcardPage() {
         undoLast()
         return
       }
-      if (!current) return
+      // Xong phần ôn nhanh: thẻ kế tiếp đang ẩn, không lật hay chấm nó.
+      if (!current || quickFinished) return
       if (e.code === 'Space') {
         e.preventDefault()
         toggleFlip()
@@ -187,7 +198,7 @@ export function FlashcardPage() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [current, flipped, rate, toggleFlip, undoLast])
+  }, [current, quickFinished, flipped, rate, toggleFlip, undoLast])
 
   const doneCount = sessionTotal !== null ? sessionTotal - queue.length : 0
   // Thẻ đến hạn và từ mới đang chờ mà phiên hôm nay chưa lấy (để dành cho những ngày sau).
@@ -272,15 +283,60 @@ export function FlashcardPage() {
         />
       )}
 
-      {current && (
-        <div className="mx-auto flex max-w-xl flex-col gap-5">
-          {sessionTotal !== null && sessionTotal > 0 && (
-            <div className="flex items-center gap-3">
-              <Progress value={(doneCount / sessionTotal) * 100} className="flex-1" />
-              <span className="text-sm font-extrabold text-muted-foreground">
-                {doneCount}/{sessionTotal}
-              </span>
+      {current && quick && quickFinished && (
+        <EmptyState
+          icon={Zap}
+          iconClassName="bg-accent-soft text-accent-dark"
+          title={`Xong ${QUICK_MINUTES} phút ôn nhanh!`}
+          description={`Bạn vừa ôn ${quick.target} thẻ dễ quên nhất. Hôm nay còn ${queue.length} thẻ - ôn tiếp nếu còn thời gian.`}
+          action={
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button size="lg" onClick={() => setQuick(null)}>
+                <RotateCcw className="h-5 w-5" /> Ôn tiếp
+              </Button>
+              <Button size="lg" variant="outline" onClick={() => navigate('/study')}>
+                <BookOpen className="h-5 w-5" /> Để sau
+              </Button>
             </div>
+          }
+        />
+      )}
+
+      {current && !quickFinished && (
+        <div className="mx-auto flex max-w-xl flex-col gap-5">
+          {quick ? (
+            <div className="flex items-center gap-3">
+              <Badge variant="accent" className="shrink-0">
+                <Zap className="h-3.5 w-3.5" /> Ôn nhanh
+              </Badge>
+              <Progress value={(quickDone / quick.target) * 100} className="flex-1" />
+              <span className="text-sm font-extrabold text-muted-foreground">
+                {quickDone}/{quick.target}
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => setQuick(null)}>
+                Ôn hết
+              </Button>
+            </div>
+          ) : (
+            sessionTotal !== null &&
+            sessionTotal > 0 && (
+              <div className="flex items-center gap-3">
+                <Progress value={(doneCount / sessionTotal) * 100} className="flex-1" />
+                <span className="text-sm font-extrabold text-muted-foreground">
+                  {doneCount}/{sessionTotal}
+                </span>
+              </div>
+            )
+          )}
+          {!quick && queue.length > quickSize && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-center"
+              onClick={() => setQuick({ target: quickSize, startLength: queue.length })}
+            >
+              <Zap className="h-4 w-4" /> Ít thời gian? Ôn nhanh {QUICK_MINUTES} phút ({quickSize} thẻ dễ quên nhất)
+            </Button>
           )}
 
           <FlipCard
@@ -362,6 +418,16 @@ export function FlashcardPage() {
       )}
     </div>
   )
+}
+
+/**
+ * Số thẻ vừa khoảng {@link QUICK_MINUTES} phút theo nhịp ôn của chính người học: kế hoạch hôm nay ước tính bao nhiêu
+ * phút cho bao nhiêu thẻ, chia lại theo tỉ lệ. Chưa có kế hoạch (hoặc chưa đo được nhịp) thì lấy 10 thẻ; ít nhất 5 thẻ.
+ */
+function quickReviewSize(plan: DailyPlanResponse | undefined) {
+  const cards = plan ? plan.reviewsToday + plan.newToday : 0
+  if (!plan || cards <= 0 || plan.estimatedMinutes <= 0) return 10
+  return Math.max(5, Math.round((cards * QUICK_MINUTES) / plan.estimatedMinutes))
 }
 
 /** Phần còn lại của kế hoạch hôm nay, lý do nếu có thẻ hay từ mới được để dành, và tiến độ so với mục tiêu. */
