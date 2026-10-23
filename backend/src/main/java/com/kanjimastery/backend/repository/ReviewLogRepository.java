@@ -14,6 +14,9 @@ import java.util.Optional;
 
 public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
 
+    /** Lần trả lời mới nhất của một từ (ôn thẻ, trắc nghiệm hay bài thi); cùng thời điểm thì dòng ghi sau. */
+    Optional<ReviewLog> findFirstByUserIdAndKanjiIdOrderByReviewedAtDescIdDesc(Long userId, Long kanjiId);
+
     /** Kích thước bảng: số dòng ước lượng theo thống kê của PostgreSQL (không quét bảng) và dung lượng kể cả index. */
     interface TableSize {
         long getRows();

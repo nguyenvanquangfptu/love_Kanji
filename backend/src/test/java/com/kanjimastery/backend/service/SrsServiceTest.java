@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.model.FsrsState;
 import com.kanjimastery.backend.model.Sm2State;
 import com.kanjimastery.backend.model.QuizDirection;
@@ -200,6 +201,73 @@ class SrsServiceTest {
         assertThat(log.getLastReviewedBefore()).isEqualTo(lastReviewed);
         assertThat(log.getStabilityBefore()).isEqualTo(14.5);
         assertThat(log.getDifficultyBefore()).isEqualTo(6.25);
+    }
+
+    @Test
+    void undoReview_shouldPutTheCardBackExactlyAsItWasBeforeTheRating_keepingTheNote() {
+        LocalDateTime due = LocalDateTime.now().minusHours(1);
+        UserKanjiSrs card = card(3, "2.36", 15, due);
+        card.setLapseCount(2);
+        card.setFsrs(new FsrsState(14.5, 6.25));
+        LocalDateTime lastReviewed = card.getLastReviewedAt();
+        when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.of(card));
+        givenSaveReturnsCard();
+        srsService.submitReview(USER_ID, reviewRequest(ReviewRating.AGAIN, 2_500));
+        ReviewLog rating = savedLog();
+        card.setPersonalNote("viết sau khi chấm");
+        when(reviewLogRepository.findFirstByUserIdAndKanjiIdOrderByReviewedAtDescIdDesc(USER_ID, KANJI_ID))
+                .thenReturn(Optional.of(rating));
+
+        srsService.undoReview(USER_ID, KANJI_ID);
+
+        assertThat(card.getRepetitionCount()).isEqualTo(3);
+        assertThat(card.getEasinessFactor()).isEqualByComparingTo("2.36");
+        assertThat(card.getReviewIntervalDays()).isEqualTo(15);
+        assertThat(card.getNextReviewAt()).isEqualTo(due);
+        assertThat(card.getLastReviewedAt()).isEqualTo(lastReviewed);
+        assertThat(card.getLapseCount()).isEqualTo(2);
+        assertThat(card.getStability()).isEqualTo(14.5);
+        assertThat(card.getDifficulty()).isEqualTo(6.25);
+        assertThat(card.getPersonalNote()).isEqualTo("viết sau khi chấm");
+        verify(reviewLogRepository).delete(rating);
+    }
+
+    @Test
+    void undoReview_shouldRemoveTheCard_whenTheRatingIsWhatPutTheWordInReview() {
+        UserKanjiSrs card = card(1, "2.50", 1, LocalDateTime.now().plusDays(1));
+        ReviewLog rating = flashcardLog(LocalDateTime.now().minusMinutes(1)).cardExistedBefore(false).build();
+        when(reviewLogRepository.findFirstByUserIdAndKanjiIdOrderByReviewedAtDescIdDesc(USER_ID, KANJI_ID))
+                .thenReturn(Optional.of(rating));
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.of(card));
+
+        srsService.undoReview(USER_ID, KANJI_ID);
+
+        verify(srsRepository).delete(card);
+        verify(reviewLogRepository).delete(rating);
+    }
+
+    @Test
+    void undoReview_shouldRefuse_whenTheRatingIsNoLongerTheWordsLastAnswer_orTooOld_orFromBeforeUndoExisted() {
+        LocalDateTime now = LocalDateTime.now();
+        List<ReviewLog> refused = List.of(
+                // Đã làm trắc nghiệm từ này sau lần chấm.
+                flashcardLog(now.minusMinutes(1)).source(ReviewSource.QUIZ).cardExistedBefore(true).build(),
+                flashcardLog(now.minusMinutes(31)).cardExistedBefore(true).build(),
+                // Ghi trước V36.
+                flashcardLog(now.minusMinutes(1)).build());
+        for (ReviewLog last : refused) {
+            when(reviewLogRepository.findFirstByUserIdAndKanjiIdOrderByReviewedAtDescIdDesc(USER_ID, KANJI_ID))
+                    .thenReturn(Optional.of(last));
+
+            assertThatThrownBy(() -> srsService.undoReview(USER_ID, KANJI_ID)).isInstanceOf(BadRequestException.class);
+        }
+        when(reviewLogRepository.findFirstByUserIdAndKanjiIdOrderByReviewedAtDescIdDesc(USER_ID, KANJI_ID))
+                .thenReturn(Optional.empty());
+        assertThatThrownBy(() -> srsService.undoReview(USER_ID, KANJI_ID)).isInstanceOf(BadRequestException.class);
+        verify(srsRepository, never()).save(any());
+        verify(srsRepository, never()).delete(any());
+        verify(reviewLogRepository, never()).delete(any());
     }
 
     @Test
@@ -606,6 +674,12 @@ class SrsServiceTest {
         request.setRating(rating.value());
         request.setResponseMs(responseMs);
         return request;
+    }
+
+    /** Một lần chấm thẻ của từ KANJI_ID; card_existed_before để null như dòng ghi trước V36. */
+    private static ReviewLog.ReviewLogBuilder flashcardLog(LocalDateTime reviewedAt) {
+        return ReviewLog.builder().userId(USER_ID).kanjiId(KANJI_ID).source(ReviewSource.FLASHCARD).correct(true)
+                .rating(ReviewRating.GOOD).stateBefore(CardState.REVIEW).scheduled(true).reviewedAt(reviewedAt);
     }
 
     private static SrsService.Answer quizAnswer(boolean correct, ReviewRating rating) {

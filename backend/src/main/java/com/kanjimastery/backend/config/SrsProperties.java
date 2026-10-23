@@ -27,4 +27,6 @@ public class SrsProperties {
      * lại ở một ngày khác.
      */
     private int fsrsMinFirstReviews = 50;
+    /** Hoàn tác được một lần chấm thẻ (bấm nhầm) trong chừng này phút sau khi chấm. */
+    private int undoMinutes = 30;
 }

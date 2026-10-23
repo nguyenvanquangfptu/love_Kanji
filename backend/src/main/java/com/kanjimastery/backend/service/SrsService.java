@@ -1,6 +1,7 @@
 package com.kanjimastery.backend.service;
 
 import com.kanjimastery.backend.config.SrsProperties;
+import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.ResourceNotFoundException;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.repository.KanjiRepository;
@@ -236,6 +237,47 @@ public class SrsService {
         }
         log(userId, kanjiId, card, answer, false, now, settings.fsrs());
         return Optional.of(card.getNextReviewAt());
+    }
+
+    /**
+     * Hoàn tác lần chấm thẻ gần nhất của một từ (bấm nhầm): thẻ trở về đúng trạng thái trước lần chấm - SM-2, FSRS, ngày
+     * đến hạn, số lần quên - còn ghi chú riêng giữ nguyên; thẻ do chính lần chấm đó tạo ra thì bị xoá. Lần chấm bị xoá
+     * khỏi lịch sử ôn nên mọi thống kê không còn tính nó. Gọi lần lượt cho từng từ để hoàn tác nhiều thẻ.
+     * <p>
+     * Chỉ được khi lần chấm đó vẫn là lần trả lời mới nhất của từ (chưa ôn lại, chưa làm trắc nghiệm sau đó) và chưa quá
+     * {@code app.srs.undo-minutes} phút. Hai lần hoàn tác cùng lúc thì khoá lạc quan của thẻ từ chối lần sau (409).
+     */
+    @Transactional
+    public void undoReview(Long userId, Long kanjiId) {
+        ReviewLog last = reviewLogRepository.findFirstByUserIdAndKanjiIdOrderByReviewedAtDescIdDesc(userId, kanjiId)
+                .orElseThrow(() -> new BadRequestException("Từ này chưa có lần chấm nào để hoàn tác"));
+        if (last.getSource() != ReviewSource.FLASHCARD) {
+            throw new BadRequestException("Từ này đã được trả lời lại sau lần chấm thẻ, không hoàn tác được nữa");
+        }
+        // Dòng ghi trước V36 không có trạng thái thẻ trước đó (card_existed_before NULL) nên không khôi phục được.
+        if (last.getCardExistedBefore() == null) {
+            throw new BadRequestException("Lần chấm này có từ trước khi có tính năng hoàn tác, không hoàn tác được");
+        }
+        int undoMinutes = srsProperties.getUndoMinutes();
+        if (last.getReviewedAt().isBefore(calendar.now().minusMinutes(undoMinutes))) {
+            throw new BadRequestException("Chỉ hoàn tác được trong " + undoMinutes + " phút sau khi chấm thẻ");
+        }
+        UserKanjiSrs card = srsRepository.findByUserIdAndKanjiId(userId, kanjiId)
+                .orElseThrow(() -> new ResourceNotFoundException("Từ này không còn trong Ôn tập của bạn"));
+
+        if (last.getCardExistedBefore()) {
+            card.setSm2(new Sm2State(last.getRepetitionBefore(), last.getEfBefore()));
+            card.setReviewIntervalDays(last.getIntervalBefore());
+            card.setNextReviewAt(last.getNextReviewBefore());
+            card.setLastReviewedAt(last.getLastReviewedBefore());
+            card.setLapseCount(last.getLapsesBefore());
+            card.setFsrs(last.getStabilityBefore() == null ? null
+                    : new FsrsState(last.getStabilityBefore(), last.getDifficultyBefore()));
+            srsRepository.save(card);
+        } else {
+            srsRepository.delete(card);
+        }
+        reviewLogRepository.delete(last);
     }
 
     /**
