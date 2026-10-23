@@ -14,32 +14,39 @@
   --color-border-strong: #cecece;
   --color-ring: #1cb0f6;
 
-  /* Mỗi màu có 3 sắc: nền chính, "-dark" cho viền đáy kiểu nút nổi 3D, "-soft" cho nền nhạt. */
+  /* Mỗi màu có 4 sắc: nền chính, "-edge" cho viền đáy kiểu nút nổi 3D, "-dark" cho chữ trên nền "-soft" nhạt.
+     Sáng thì "-edge" và "-dark" trùng nhau; tối thì "-dark" sáng lên để đọc được, còn "-edge" vẫn đậm hơn nền chính. */
   --color-primary: #58cc02;
   --color-primary-dark: #58a700;
+  --color-primary-edge: #58a700;
   --color-primary-soft: #d7ffb8;
   --color-primary-foreground: #ffffff;
 
   --color-secondary: #1cb0f6;
   --color-secondary-dark: #1899d6;
+  --color-secondary-edge: #1899d6;
   --color-secondary-soft: #ddf4ff;
   --color-secondary-foreground: #ffffff;
 
   --color-accent: #ffc800;
   --color-accent-dark: #e5a500;
+  --color-accent-edge: #e5a500;
   --color-accent-soft: #fff5d1;
   --color-accent-foreground: #3c3c3c;
 
   --color-orange: #ff9600;
   --color-orange-dark: #e08600;
+  --color-orange-edge: #e08600;
   --color-orange-soft: #ffead1;
 
   --color-purple: #ce82ff;
   --color-purple-dark: #a568cc;
+  --color-purple-edge: #a568cc;
   --color-purple-soft: #f4e3ff;
 
   --color-destructive: #ff4b4b;
   --color-destructive-dark: #ea2b2b;
+  --color-destructive-edge: #ea2b2b;
   --color-destructive-soft: #ffdfe0;
   --color-destructive-foreground: #ffffff;
 

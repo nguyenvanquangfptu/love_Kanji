@@ -8,9 +8,9 @@ import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 
 const MEDALS: Record<number, string> = {
-  1: 'border-accent-dark bg-accent text-accent-foreground',
+  1: 'border-accent-edge bg-accent text-accent-foreground',
   2: 'border-border-strong bg-border text-foreground',
-  3: 'border-orange-dark bg-orange text-white',
+  3: 'border-orange-edge bg-orange text-white',
 }
 
 /**

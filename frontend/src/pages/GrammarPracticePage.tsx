@@ -193,7 +193,7 @@ export function GrammarPracticePage() {
             <div className="flex flex-1 items-start gap-3">
               <span
                 className={cn(
-                  'flex h-12 w-12 shrink-0 animate-bounce-in items-center justify-center rounded-full bg-white',
+                  'flex h-12 w-12 shrink-0 animate-bounce-in items-center justify-center rounded-full bg-card',
                   selected === correctIndex ? 'text-primary' : 'text-destructive',
                 )}
               >

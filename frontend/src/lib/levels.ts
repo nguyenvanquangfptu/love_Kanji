@@ -12,35 +12,35 @@ export interface LevelStyle {
 // Class Tailwind phải là chuỗi literal đầy đủ để trình biên dịch Tailwind quét được.
 const STYLES = {
   primary: {
-    solid: 'bg-primary border-primary-dark text-white',
+    solid: 'bg-primary border-primary-edge text-white',
     soft: 'bg-primary-soft',
     text: 'text-primary-dark',
     border: 'border-primary',
     bar: 'bg-primary',
   },
   secondary: {
-    solid: 'bg-secondary border-secondary-dark text-white',
+    solid: 'bg-secondary border-secondary-edge text-white',
     soft: 'bg-secondary-soft',
     text: 'text-secondary-dark',
     border: 'border-secondary',
     bar: 'bg-secondary',
   },
   purple: {
-    solid: 'bg-purple border-purple-dark text-white',
+    solid: 'bg-purple border-purple-edge text-white',
     soft: 'bg-purple-soft',
     text: 'text-purple-dark',
     border: 'border-purple',
     bar: 'bg-purple',
   },
   orange: {
-    solid: 'bg-orange border-orange-dark text-white',
+    solid: 'bg-orange border-orange-edge text-white',
     soft: 'bg-orange-soft',
     text: 'text-orange-dark',
     border: 'border-orange',
     bar: 'bg-orange',
   },
   destructive: {
-    solid: 'bg-destructive border-destructive-dark text-white',
+    solid: 'bg-destructive border-destructive-edge text-white',
     soft: 'bg-destructive-soft',
     text: 'text-destructive-dark',
     border: 'border-destructive',

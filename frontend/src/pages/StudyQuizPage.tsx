@@ -436,7 +436,7 @@ function FeedbackBar({
         <div className="flex flex-1 items-start gap-3">
           <span
             className={cn(
-              'flex h-12 w-12 shrink-0 animate-bounce-in items-center justify-center rounded-full bg-white',
+              'flex h-12 w-12 shrink-0 animate-bounce-in items-center justify-center rounded-full bg-card',
               correct ? 'text-primary' : 'text-destructive',
             )}
           >
@@ -485,7 +485,7 @@ function PersonalTrapNote({
       <span className="font-jp font-bold">「{personalTrap}」</span>
     )
   return (
-    <p className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-sm font-semibold text-foreground/90">
+    <p className="mt-2 rounded-xl bg-card/70 px-3 py-2 text-sm font-semibold text-foreground/90">
       {chosen === personalTrap ? (
         <>
           Bạn lại nhầm với {trap} - lần thứ {personalTrapCount + 1}.

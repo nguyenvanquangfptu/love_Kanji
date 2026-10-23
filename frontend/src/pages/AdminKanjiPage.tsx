@@ -188,7 +188,7 @@ export function AdminKanjiPage() {
         {generateQuestions.isError && <Alert className="mb-4">{extractErrorMessage(generateQuestions.error)}</Alert>}
 
         <CardButton onClick={() => openBook('all')} className="mb-6 flex w-full items-center gap-4 p-4">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-b-4 border-secondary-dark bg-secondary text-white">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-b-4 border-secondary-edge bg-secondary text-white">
             <Layers className="h-6 w-6" strokeWidth={2.5} />
           </span>
           <span className="flex-1">
