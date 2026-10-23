@@ -194,6 +194,17 @@ export interface ProgressResponse {
    * trên `reviews` lượt ôn; null nếu chưa đủ lượt ôn để so.
    */
   calibration: { reviews: number; predicted: number; actual: number } | null
+  streak: StreakResponse
+  /** 84 ngày học gần nhất (12 tuần), cũ trước, kể cả ngày không học: số lần trả lời mỗi ngày. */
+  calendar: { day: string; answers: number }[]
+}
+
+/** Chuỗi ngày học liên tiếp; một ngày có học là có ít nhất một lần trả lời (ngày học bắt đầu 4 giờ sáng). */
+export interface StreakResponse {
+  /** Tới hôm nay; hôm nay chưa học thì tính tới hôm qua. */
+  current: number
+  longest: number
+  studiedToday: boolean
 }
 
 /** 1 Quên, 2 Khó, 3 Nhớ, 4 Dễ. */

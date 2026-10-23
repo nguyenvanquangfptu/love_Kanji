@@ -8,6 +8,7 @@ import { Logo } from '@/components/Logo'
 import { PageSpinner } from '@/components/ui/spinner'
 import { CharacterSheet } from '@/components/CharacterSheet'
 import { SearchLauncher } from '@/components/SearchLauncher'
+import { StreakBadge } from '@/components/StreakBadge'
 import { useSearchShortcut } from '@/lib/searchShortcut'
 
 interface NavItem {
@@ -89,6 +90,7 @@ export function AppLayout() {
             </NavLink>
           ))}
         </nav>
+        <StreakBadge className="mt-4" />
         <div className="mt-auto flex items-center gap-3 rounded-2xl border-2 border-border p-3">
           <Avatar name={username} />
           <span className="flex-1 truncate font-extrabold">{username}</span>

@@ -133,6 +133,7 @@ export function FlashcardPage() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: STATS_KEY })
       queryClient.invalidateQueries({ queryKey: DAILY_PLAN_KEY })
+      queryClient.invalidateQueries({ queryKey: ['progress'] })
     },
   })
 
@@ -150,6 +151,7 @@ export function FlashcardPage() {
       setRatedCards((stack) => stack.filter((entry) => entry !== rated))
       queryClient.invalidateQueries({ queryKey: STATS_KEY })
       queryClient.invalidateQueries({ queryKey: DAILY_PLAN_KEY })
+      queryClient.invalidateQueries({ queryKey: ['progress'] })
     },
   })
 
