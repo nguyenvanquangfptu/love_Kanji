@@ -11,6 +11,7 @@ import { StudyBrowsePage } from '@/pages/StudyBrowsePage'
 import { StudyVocabListPage } from '@/pages/StudyVocabListPage'
 import { StudyFlashcardPage } from '@/pages/StudyFlashcardPage'
 import { StudyQuizPage } from '@/pages/StudyQuizPage'
+import { useThemeSync } from '@/lib/theme'
 
 // Trang học và ôn hằng ngày nằm trong bundle chính; các trang ít mở hơn (thi, tiến bộ, quản trị...) tải riêng khi cần,
 // nên người học không phải tải code quản trị và biểu đồ ngay lần đầu. Layout bọc <Outlet /> trong <Suspense>.
@@ -33,6 +34,7 @@ const SearchPage = lazy(() => import('@/pages/SearchPage').then((m) => ({ defaul
 const WelcomePage = lazy(() => import('@/pages/WelcomePage').then((m) => ({ default: m.WelcomePage })))
 
 export default function App() {
+  useThemeSync()
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />

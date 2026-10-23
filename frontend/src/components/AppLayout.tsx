@@ -9,6 +9,7 @@ import { PageSpinner } from '@/components/ui/spinner'
 import { CharacterSheet } from '@/components/CharacterSheet'
 import { SearchLauncher } from '@/components/SearchLauncher'
 import { StreakBadge } from '@/components/StreakBadge'
+import { ThemeToggle } from '@/components/ThemeToggle'
 import { useSearchShortcut } from '@/lib/searchShortcut'
 
 interface NavItem {
@@ -94,6 +95,7 @@ export function AppLayout() {
         <div className="mt-auto flex items-center gap-3 rounded-2xl border-2 border-border p-3">
           <Avatar name={username} />
           <span className="flex-1 truncate font-extrabold">{username}</span>
+          <ThemeToggle />
           <button
             type="button"
             onClick={logout}
@@ -113,6 +115,7 @@ export function AppLayout() {
         </Link>
         <div className="flex items-center gap-2">
           <SearchLauncher compact />
+          <ThemeToggle />
           <Avatar name={username} />
           <button
             type="button"
