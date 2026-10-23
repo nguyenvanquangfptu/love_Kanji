@@ -110,7 +110,7 @@ function ProgressBody({ progress }: { progress: ProgressResponse }) {
         subtitle={
           `Dài nhất ${progress.streak.longest} ngày. ` +
           (progress.streak.studiedToday || progress.streak.current === 0
-            ? 'Mỗi ngày trả lời ít nhất một câu (ôn thẻ, trắc nghiệm hay thi) là giữ được chuỗi.'
+            ? 'Mỗi ngày trả lời ít nhất một câu (ôn thẻ, ôn ngữ pháp, trắc nghiệm hay thi) là giữ được chuỗi.'
             : 'Hôm nay chưa học - ôn vài thẻ để giữ chuỗi.')
         }
       >
