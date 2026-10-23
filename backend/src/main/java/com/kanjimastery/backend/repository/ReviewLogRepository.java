@@ -14,6 +14,26 @@ import java.util.Optional;
 
 public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
 
+    /** Số lần trả lời trong một giờ (giờ của máy chủ, như cột reviewed_at). */
+    interface HourlyAnswers {
+        LocalDateTime getHour();
+
+        long getAnswers();
+    }
+
+    /**
+     * Số lần trả lời theo từng giờ, mọi lúc - gom tiếp thành ngày học ở tầng Java (StudyCalendar), vì ngày học bắt đầu
+     * lúc 4 giờ sáng giờ Việt Nam còn reviewed_at lưu theo giờ máy chủ. Mỗi ngày nhiều nhất 24 dòng. Gom theo giờ là đủ
+     * chính xác khi múi giờ máy chủ lệch giờ Việt Nam một số giờ chẵn (như UTC hay chính giờ Việt Nam).
+     */
+    @Query(value = """
+            SELECT date_trunc('hour', reviewed_at) AS hour, count(*) AS answers
+            FROM review_logs
+            WHERE user_id = :userId
+            GROUP BY 1
+            """, nativeQuery = true)
+    List<HourlyAnswers> answersPerHour(@Param("userId") Long userId);
+
     /** Lần trả lời mới nhất của một từ (ôn thẻ, trắc nghiệm hay bài thi); cùng thời điểm thì dòng ghi sau. */
     Optional<ReviewLog> findFirstByUserIdAndKanjiIdOrderByReviewedAtDescIdDesc(Long userId, Long kanjiId);
 

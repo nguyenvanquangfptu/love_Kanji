@@ -1,6 +1,7 @@
 package com.kanjimastery.backend.service;
 
 import com.kanjimastery.backend.dto.ProgressResponse;
+import com.kanjimastery.backend.dto.StreakResponse;
 import com.kanjimastery.backend.model.CardState;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.repository.KanjiRepository;
@@ -15,6 +16,7 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +37,8 @@ public class ProgressService {
     static final int CONFUSION_DAYS = 90;
     static final int MAX_CONFUSIONS = 8;
     static final int CALIBRATION_DAYS = 30;
+    /** Lịch nhiệt: 12 tuần gần nhất. */
+    static final int CALENDAR_DAYS = 84;
     /** Ít lượt ôn hơn thì tỉ lệ nhớ thật dao động quá nhiều để so với dự đoán. */
     static final int MIN_CALIBRATION_REVIEWS = 20;
 
@@ -58,6 +62,7 @@ public class ProgressService {
             days.put(firstDay.plusDays(i), new long[2]);
         }
 
+        Map<LocalDate, Long> answersPerDay = answersPerDay(userId);
         LocalDate since = firstWeek.isBefore(firstDay) ? firstWeek : firstDay;
         for (Activity answer : reviewLogRepository.activitySince(userId, calendar.startOf(since))) {
             LocalDate day = calendar.dayOf(answer.getReviewedAt());
@@ -93,7 +98,34 @@ public class ProgressService {
                         .toList())
                 .confusions(confusions(userId))
                 .calibration(calibration(userId))
+                .streak(StudyStreaks.of(answersPerDay.keySet(), today))
+                .calendar(calendar(answersPerDay, today))
                 .build();
+    }
+
+    /** Chỉ chuỗi ngày học - cho thanh bên, gọn hơn cả trang Tiến bộ. */
+    @Transactional(readOnly = true)
+    public StreakResponse streak(Long userId) {
+        return StudyStreaks.of(answersPerDay(userId).keySet(), calendar.today());
+    }
+
+    /** Số lần trả lời theo từng ngày học, mọi lúc. */
+    private Map<LocalDate, Long> answersPerDay(Long userId) {
+        Map<LocalDate, Long> perDay = new HashMap<>();
+        for (ReviewLogRepository.HourlyAnswers hour : reviewLogRepository.answersPerHour(userId)) {
+            perDay.merge(calendar.dayOf(hour.getHour()), hour.getAnswers(), Long::sum);
+        }
+        return perDay;
+    }
+
+    private static List<ProgressResponse.CalendarDay> calendar(Map<LocalDate, Long> answersPerDay, LocalDate today) {
+        LocalDate first = today.minusDays(CALENDAR_DAYS - 1);
+        List<ProgressResponse.CalendarDay> days = new ArrayList<>(CALENDAR_DAYS);
+        for (int i = 0; i < CALENDAR_DAYS; i++) {
+            LocalDate day = first.plusDays(i);
+            days.add(new ProgressResponse.CalendarDay(day, answersPerDay.getOrDefault(day, 0L)));
+        }
+        return days;
     }
 
     private ProgressResponse.Calibration calibration(Long userId) {
