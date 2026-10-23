@@ -28,6 +28,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { SpeakButton } from '@/components/SpeakButton'
 import { MemoryAidPanel } from '@/components/MemoryAidPanel'
 import { CharacterChips } from '@/components/CharacterChips'
+import { UndoReviewBar } from '@/components/UndoReviewBar'
 import { useCharacterParts } from '@/lib/characters'
 import { useCharacterSheetStore } from '@/store/characterSheetStore'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +40,15 @@ import { PageSpinner } from '@/components/ui/spinner'
 const DAILY_CARDS_KEY = ['srs', 'daily-cards']
 const STATS_KEY = ['srs', 'stats']
 const DAILY_PLAN_KEY = ['srs', 'daily-plan']
+
+/** Hoàn tác được tối đa chừng này lần chấm gần nhất của phiên (server còn giới hạn 30 phút). */
+const MAX_UNDO = 20
+
+/** Một thẻ đã chấm trong phiên, giữ nguyên như lúc hiện ra để đưa lại vào hàng đợi khi hoàn tác. */
+interface RatedCard {
+  card: DailyCardResponse
+  rating: ReviewRating
+}
 
 const RATING_OPTIONS: { rating: ReviewRating; label: string; hint: string; className: string }[] = [
   { rating: 1, label: 'Quên', hint: 'Học lại', className: 'border-destructive-dark bg-destructive text-white' },
@@ -57,6 +67,9 @@ export function FlashcardPage() {
   // Ôn thêm ngoài kế hoạch hôm nay: lấy mọi thẻ đến hạn, kể cả phần để dành cho những ngày sau.
   const [extra, setExtra] = useState(false)
   const cardsKey = useMemo(() => [...DAILY_CARDS_KEY, extra], [extra])
+  // Các thẻ đã chấm trong phiên (mới nhất ở cuối): bấm nhầm thì hoàn tác lần lượt từ thẻ cuối.
+  const [ratedCards, setRatedCards] = useState<RatedCard[]>([])
+  const lastRated = ratedCards.at(-1)
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: cardsKey,
@@ -97,7 +110,11 @@ export function FlashcardPage() {
         old ? { ...old, content: old.content.filter((c) => c.kanji.id !== vars.kanjiId) } : old,
       )
       setFlipped(false)
-      return { previous }
+      return { previous, card: previous?.content.find((c) => c.kanji.id === vars.kanjiId) }
+    },
+    onSuccess: (_data, vars, context) => {
+      const card = context?.card
+      if (card) setRatedCards((stack) => [...stack, { card, rating: vars.rating }].slice(-MAX_UNDO))
     },
     onError: (err, _vars, context) => {
       // Thẻ vừa được chấm ở tab khác: tải lại phiên ôn thay vì đưa thẻ cũ trở lại.
@@ -110,7 +127,29 @@ export function FlashcardPage() {
     },
   })
 
+  const undoMutation = useMutation({
+    mutationFn: (rated: RatedCard) => srsApi.undoReview(rated.card.kanji.id),
+    onSuccess: (_data, rated) => {
+      // Thẻ về lại đầu hàng đợi như lúc chưa chấm; không tải lại cả phiên để khỏi xáo các thẻ còn lại.
+      queryClient.setQueryData<Page<DailyCardResponse> | undefined>(cardsKey, (old) =>
+        old ? { ...old, content: [rated.card, ...old.content.filter((c) => c.kanji.id !== rated.card.kanji.id)] } : old,
+      )
+      setFlipped(false)
+    },
+    // Hoàn tác xong, hay bị từ chối (quá 30 phút, từ đã được trả lời lại) thì lần chấm đó cũng hết hoàn tác được.
+    onSettled: (_data, _error, rated) => {
+      setRatedCards((stack) => stack.filter((entry) => entry !== rated))
+      queryClient.invalidateQueries({ queryKey: STATS_KEY })
+      queryClient.invalidateQueries({ queryKey: DAILY_PLAN_KEY })
+    },
+  })
+
+  const undoLast = useCallback(() => {
+    if (lastRated && !undoMutation.isPending && !reviewMutation.isPending) undoMutation.mutate(lastRated)
+  }, [lastRated, undoMutation, reviewMutation.isPending])
+
   function studyExtra() {
+    setRatedCards([])
     setSessionTotal(null)
     if (extra) queryClient.invalidateQueries({ queryKey: cardsKey })
     else setExtra(true)
@@ -118,19 +157,25 @@ export function FlashcardPage() {
 
   const rate = useMemo(
     () => (rating: ReviewRating) => {
-      if (!current || reviewMutation.isPending) return
+      if (!current || reviewMutation.isPending || undoMutation.isPending) return
       reviewMutation.mutate({ kanjiId: current.kanji.id, rating, responseMs: recallMs.current ?? undefined })
     },
-    [current, reviewMutation],
+    [current, reviewMutation, undoMutation.isPending],
   )
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (!current) return
-      // Đang gõ ghi chú cách nhớ: phím số và Space là chữ, không phải phím tắt.
+      // Đang gõ ghi chú cách nhớ: phím số, Space và Ctrl+Z là của ô nhập, không phải phím tắt.
       if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return
       // Đang xem bảng từ cùng chữ: không lật hay chấm thẻ nằm bên dưới.
       if (useCharacterSheetStore.getState().character !== null) return
+      // Hoàn tác được cả khi vừa chấm xong thẻ cuối (không còn thẻ nào đang hiện).
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        undoLast()
+        return
+      }
+      if (!current) return
       if (e.code === 'Space') {
         e.preventDefault()
         toggleFlip()
@@ -142,7 +187,7 @@ export function FlashcardPage() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [current, flipped, rate, toggleFlip])
+  }, [current, flipped, rate, toggleFlip, undoLast])
 
   const doneCount = sessionTotal !== null ? sessionTotal - queue.length : 0
   // Thẻ đến hạn và từ mới đang chờ mà phiên hôm nay chưa lấy (để dành cho những ngày sau).
@@ -175,6 +220,19 @@ export function FlashcardPage() {
 
       {isLoading && <PageSpinner />}
       {isError && <Alert>{extractErrorMessage(error)}</Alert>}
+
+      {lastRated && (
+        <UndoReviewBar
+          word={lastRated.card.kanji.character}
+          ratingLabel={RATING_OPTIONS[lastRated.rating - 1].label}
+          pending={undoMutation.isPending}
+          onUndo={undoLast}
+          className="mx-auto mb-4 max-w-xl"
+        />
+      )}
+      {undoMutation.isError && (
+        <Alert className="mx-auto mb-4 max-w-xl">{extractErrorMessage(undoMutation.error)}</Alert>
+      )}
 
       {data && !current && stats?.totalCardsStarted === 0 && (
         <EmptyState
@@ -276,7 +334,7 @@ export function FlashcardPage() {
                   <button
                     key={rating}
                     type="button"
-                    disabled={reviewMutation.isPending}
+                    disabled={reviewMutation.isPending || undoMutation.isPending}
                     onClick={() => rate(rating)}
                     title={hint}
                     className={cn(
@@ -292,7 +350,7 @@ export function FlashcardPage() {
                 ))}
               </div>
               <p className="mt-3 hidden text-center text-xs font-semibold text-muted-foreground sm:block">
-                Phím tắt: số 1-4 để chấm · Space để lật thẻ
+                Phím tắt: số 1-4 để chấm · Space để lật thẻ · Ctrl+Z để hoàn tác
               </p>
             </div>
           ) : (

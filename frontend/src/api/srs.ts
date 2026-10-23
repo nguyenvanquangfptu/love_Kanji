@@ -19,6 +19,9 @@ export const srsApi = {
   submitReview: (payload: ReviewRequest) =>
     apiClient.post<ReviewResponse>('/srs/review', payload).then((r) => r.data),
 
+  /** Hoàn tác lần chấm thẻ gần nhất của một từ: thẻ về y như trước lần chấm (trong 30 phút, khi chưa trả lời lại từ đó). */
+  undoReview: (kanjiId: number) => apiClient.post<void>(`/srs/cards/${kanjiId}/undo-review`).then((r) => r.data),
+
   getStats: () => apiClient.get<SrsStatsResponse>('/srs/stats').then((r) => r.data),
 
   getDailyPlan: () => apiClient.get<DailyPlanResponse>('/srs/daily-plan').then((r) => r.data),
