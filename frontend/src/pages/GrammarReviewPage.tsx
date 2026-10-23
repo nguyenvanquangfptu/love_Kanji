@@ -160,7 +160,7 @@ export function GrammarReviewPage() {
             description={
               run.newWaiting > 0
                 ? 'Đã học đủ điểm mới hôm nay - mai học tiếp nhé.'
-                : 'Thêm vài điểm ngữ pháp vào ôn tập để bắt đầu.'
+                : 'Các điểm đã ôn sẽ quay lại khi đến hạn. Muốn học thêm thì thêm điểm mới ở trang Ngữ pháp.'
             }
           />
         )}

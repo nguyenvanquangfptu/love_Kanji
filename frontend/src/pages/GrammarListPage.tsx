@@ -79,7 +79,7 @@ export function GrammarListPage() {
                   ? `${session.dueCount} điểm đến hạn · ${Math.min(session.newLeftToday, session.newWaiting)} điểm mới`
                   : session.newWaiting > 0
                     ? 'Đã học đủ điểm mới hôm nay - mai học tiếp nhé.'
-                    : 'Chưa có điểm nào cần ôn. Thêm vài điểm bên dưới để bắt đầu.'
+                    : 'Hôm nay không còn điểm nào cần ôn. Thêm điểm bên dưới để học thêm.'
                 : 'Đang tải...'}
             </p>
           </div>
