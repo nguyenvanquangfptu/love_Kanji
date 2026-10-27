@@ -39,6 +39,7 @@ public class GrammarPracticeService {
 
     private final GrammarPointRepository grammarPointRepository;
     private final ExamQuestionRepository questionRepository;
+    private final FuriganaService furiganaService;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -77,13 +78,16 @@ public class GrammarPracticeService {
                 .toList();
     }
 
-    private static PracticeQuestionResponse toResponse(ExamQuestion question, Map<Long, GrammarPoint> points) {
+    private PracticeQuestionResponse toResponse(ExamQuestion question, Map<Long, GrammarPoint> points) {
         List<QuestionReviewItem.Grammar> grammar = question.getGrammarPointIds().stream().sorted().map(points::get)
                 .filter(Objects::nonNull)
                 .map(QuestionReviewItem.Grammar::from)
                 .toList();
+        // Chỉ có câu ngữ pháp: furigana không lộ đáp án nào.
         return new PracticeQuestionResponse(question.getId(), question.getQuestionType(), question.getQuestionText(),
-                question.getSentence(), question.getHighlight(), question.getOptionA(), question.getOptionB(),
+                question.getSentence(), furiganaService.annotate(question.getSentence(), question.getHighlight(), null,
+                false),
+                question.getHighlight(), question.getOptionA(), question.getOptionB(),
                 question.getOptionC(), question.getOptionD(), question.getCorrectOption(), question.getExplanation(),
                 grammar);
     }

@@ -194,6 +194,17 @@ export interface ProgressResponse {
    * trên `reviews` lượt ôn; null nếu chưa đủ lượt ôn để so.
    */
   calibration: { reviews: number; predicted: number; actual: number } | null
+  streak: StreakResponse
+  /** 84 ngày học gần nhất (12 tuần), cũ trước, kể cả ngày không học: số lần trả lời mỗi ngày. */
+  calendar: { day: string; answers: number }[]
+}
+
+/** Chuỗi ngày học liên tiếp; một ngày có học là có ít nhất một lần trả lời (ngày học bắt đầu 4 giờ sáng). */
+export interface StreakResponse {
+  /** Tới hôm nay; hôm nay chưa học thì tính tới hôm qua. */
+  current: number
+  longest: number
+  studiedToday: boolean
 }
 
 /** 1 Quên, 2 Khó, 3 Nhớ, 4 Dễ. */
@@ -386,10 +397,72 @@ export interface ExamResultResponse {
   sittingId: number | null
 }
 
+/** Một từ tìm được. */
+export interface SearchResult {
+  id: number
+  character: string
+  reading: string | null
+  hanViet: string
+  meaning: string
+  jlptLevel: string
+  /** Tên các bài có từ này (vd. N5-01). */
+  lessons: string[]
+  /** Đã có trong lịch ôn của bạn. */
+  inReview: boolean
+}
+
+/** Một chữ Hán của một từ, kèm âm Hán Việt của chữ đó trong từ ấy (勉強: 勉 MIỄN, 強 CƯỜNG). */
+export interface WordCharacter {
+  character: string
+  hanViet: string
+}
+
+/** Một từ trong kho có chứa chữ đang xem. */
+export interface CharacterWord {
+  id: number
+  character: string
+  reading: string | null
+  /** Âm Hán Việt của cả từ. */
+  hanViet: string
+  meaning: string
+  jlptLevel: string
+  /** Đã có trong lịch ôn của bạn. */
+  inReview: boolean
+}
+
+/** Một chữ Hán và các từ chứa nó, gom theo âm Hán Việt của chữ trong từng từ (âm có nhiều từ đứng trước). */
+export interface CharacterDetail {
+  character: string
+  readings: { hanViet: string; words: CharacterWord[] }[]
+}
+
+export interface CharacterRebuildReport {
+  /** Chỉ thử: chưa ghi gì. */
+  dryRun: boolean
+  words: number
+  split: number
+  kanaOnly: number
+  /** Số từ có chữ thành phần khác với đang lưu (đã ghi, hoặc sẽ ghi nếu chạy thật). */
+  changed: number
+  /** Từ có chữ Hán mà không tách được: cần sửa cột Hán Việt. */
+  skipped: { id: number; character: string; hanViet: string; reason: 'NO_HAN_VIET' | 'COUNT_MISMATCH' | 'NOT_A_SYLLABLE' }[]
+}
+
+/** Một đoạn của câu tiếng Nhật đã chia để hiện furigana; ghép `text` các đoạn theo thứ tự ra lại đúng câu. */
+export interface RubySegment {
+  text: string
+  /** Furigana (hiragana) đặt trên `text`; null nếu đoạn không có chữ Hán hoặc không được hiện cách đọc. */
+  ruby: string | null
+  /** Thuộc lần xuất hiện đầu tiên của từ được hỏi: gạch chân. */
+  target: boolean
+}
+
 export interface QuestionReviewItem {
   questionId: number
   questionText: string
   sentence: string | null
+  /** `sentence` chia đoạn kèm furigana; null nếu không có câu. */
+  sentenceRuby: RubySegment[] | null
   highlight: string | null
   optionA: string
   optionB: string
@@ -433,6 +506,8 @@ export interface PracticeQuestion {
   questionType: JlptQuestionType
   questionText: string
   sentence: string | null
+  /** `sentence` chia đoạn kèm furigana; null nếu không có câu. */
+  sentenceRuby: RubySegment[] | null
   highlight: string | null
   optionA: string
   optionB: string
@@ -511,6 +586,8 @@ export interface QuizQuestionResponse {
   prompt: string
   /** Câu ví dụ kiểu đề JLPT có chứa nguyên văn `prompt` (cần gạch chân); null nếu chưa có. */
   sentence: string | null
+  /** `sentence` chia đoạn kèm furigana; câu hỏi cách đọc không có furigana của từ được hỏi. Null nếu chưa có câu. */
+  sentenceRuby: RubySegment[] | null
   /** Rỗng với câu gõ cách đọc. */
   choices: string[]
   /** -1 với câu gõ cách đọc. */
@@ -710,4 +787,70 @@ export interface AdminExamPassage {
   reviewNote: string | null
   reviewedAt: string | null
   questions: AdminExamQuestion[]
+}
+
+/** Một điểm ngữ pháp trong danh sách cho người học, kèm trạng thái ôn của chính người đó. */
+export interface GrammarPointStatus extends GrammarPointBrief {
+  /** Bài trong giáo trình (N5-01...); null = không theo bài (N3). */
+  lesson: string | null
+  inReview: boolean
+  /** null nếu chưa có trong lịch ôn. */
+  nextReviewAt: string | null
+}
+
+/** Câu hỏi để ôn một điểm ngữ pháp - không kèm đáp án: server chấm. */
+export interface GrammarQuestion {
+  id: number
+  questionType: JlptQuestionType
+  questionText: string
+  sentence: string | null
+  sentenceRuby: RubySegment[] | null
+  highlight: string | null
+  optionA: string
+  optionB: string
+  optionC: string
+  optionD: string
+}
+
+/** Một thẻ ngữ pháp trong phiên ôn hôm nay. */
+export interface GrammarCard {
+  grammarPointId: number
+  jlptLevel: JlptLevel
+  lesson: string | null
+  pattern: string
+  connection: string | null
+  meaningVi: string
+  explanationVi: string | null
+  newCard: boolean
+  /** Số ngày tới lần ôn sau nếu chấm Quên, Khó, Nhớ, Dễ. */
+  intervals: number[]
+  /** null nếu điểm chưa có câu đã duyệt - ôn bằng thẻ lật. */
+  question: GrammarQuestion | null
+}
+
+export interface GrammarSession {
+  cards: GrammarCard[]
+  /** Số điểm đã đến hạn (có thể nhiều hơn số thẻ trong phiên). */
+  dueCount: number
+  newLeftToday: number
+  /** Số điểm đã thêm mà chưa học lần nào. */
+  newWaiting: number
+}
+
+/** Trả lời câu hỏi (questionId + chosenOption) hoặc tự chấm thẻ lật (rating). */
+export interface GrammarReviewRequest {
+  grammarPointId: number
+  questionId?: number
+  chosenOption?: 'A' | 'B' | 'C' | 'D'
+  rating?: ReviewRating
+  responseMs?: number
+}
+
+export interface GrammarReviewResult {
+  correct: boolean
+  /** null với thẻ lật. */
+  correctOption: 'A' | 'B' | 'C' | 'D' | null
+  explanation: string | null
+  nextReviewAt: string
+  intervalDays: number
 }

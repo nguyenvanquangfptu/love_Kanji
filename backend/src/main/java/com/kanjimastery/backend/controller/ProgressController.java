@@ -1,6 +1,7 @@
 package com.kanjimastery.backend.controller;
 
 import com.kanjimastery.backend.dto.ProgressResponse;
+import com.kanjimastery.backend.dto.StreakResponse;
 import com.kanjimastery.backend.service.ProgressService;
 import com.kanjimastery.backend.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,5 +28,13 @@ public class ProgressController {
     @GetMapping
     public ResponseEntity<ProgressResponse> getProgress(Authentication authentication) {
         return ResponseEntity.ok(progressService.get(userService.getByUsername(authentication.getName()).getId()));
+    }
+
+    @Operation(summary = "Chuỗi ngày học của tôi",
+            description = "Số ngày học liên tiếp tới hôm nay (hôm nay chưa học thì tính tới hôm qua), chuỗi dài nhất, và hôm "
+                    + "nay đã học chưa. Một ngày có học là có ít nhất một lần trả lời; ngày học bắt đầu 4 giờ sáng giờ Việt Nam.")
+    @GetMapping("/streak")
+    public ResponseEntity<StreakResponse> getStreak(Authentication authentication) {
+        return ResponseEntity.ok(progressService.streak(userService.getByUsername(authentication.getName()).getId()));
     }
 }

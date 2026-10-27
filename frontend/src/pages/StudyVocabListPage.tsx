@@ -12,6 +12,8 @@ import { Alert } from '@/components/ui/alert'
 import { PageSpinner } from '@/components/ui/spinner'
 import { EmptyState } from '@/components/EmptyState'
 import { SpeakButton } from '@/components/SpeakButton'
+import { CharacterChips } from '@/components/CharacterChips'
+import { useCharacterParts } from '@/lib/characters'
 import { LessonReviewCard } from '@/components/LessonReviewCard'
 import { useQuizStart } from '@/lib/quizStart'
 
@@ -27,10 +29,10 @@ export function StudyVocabListPage() {
     queryFn: () => kanjiApi.search({ tagId: tagId ?? undefined, size: 500 }),
     enabled: tagId !== null,
   })
+  const words = data?.content ?? []
+  const { data: characterParts } = useCharacterParts(words.map((word) => word.id))
 
   if (tagId === null) return <Navigate to="/study" replace />
-
-  const words = data?.content ?? []
 
   return (
     <div>
@@ -96,9 +98,7 @@ export function StudyVocabListPage() {
               <span className="font-jp text-3xl font-bold leading-tight">{word.character}</span>
             </div>
             <div className="min-w-0 flex-1">
-              {word.hanViet && (
-                <p className={cn('text-xs font-extrabold uppercase tracking-wide', style.text)}>{word.hanViet}</p>
-              )}
+              <CharacterChips hanViet={word.hanViet} parts={characterParts?.[word.id]} className={style.text} />
               <p className="text-sm font-semibold leading-snug">{word.meaning}</p>
             </div>
             <SpeakButton text={word.reading ?? word.character} />

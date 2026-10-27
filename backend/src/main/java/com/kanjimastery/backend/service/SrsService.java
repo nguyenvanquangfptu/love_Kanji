@@ -1,6 +1,7 @@
 package com.kanjimastery.backend.service;
 
 import com.kanjimastery.backend.config.SrsProperties;
+import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.ResourceNotFoundException;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.repository.KanjiRepository;
@@ -22,11 +23,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -57,7 +55,7 @@ public class SrsService {
 
     private final UserKanjiSrsRepository srsRepository;
     private final KanjiRepository kanjiRepository;
-    private final SrsCalculatorService srsCalculatorService;
+    private final CardScheduler cardScheduler;
     private final ReviewLogRepository reviewLogRepository;
     private final SrsProperties srsProperties;
     private final StudyPlanService studyPlanService;
@@ -89,7 +87,7 @@ public class SrsService {
                 userId, now, PageRequest.of(0, MAX_DUE_CARDS)).getContent();
         SchedulingSettings settings = learningProfileService.scheduling(userId);
         Comparator<UserKanjiSrs> riskiestFirst = settings.usesFsrs()
-                ? Comparator.comparingDouble((UserKanjiSrs card) -> recall(card, now, settings.fsrs()))
+                ? Comparator.comparingDouble((UserKanjiSrs card) -> cardScheduler.recall(card, now, settings.fsrs()))
                 : DailySessionOrder.mostOverdueFirst(now);
         List<UserKanjiSrs> session;
         if (extra) {
@@ -119,7 +117,7 @@ public class SrsService {
                         .hardWord(isHardWord(srs))
                         .personalNote(srs.getPersonalNote())
                         .newCard(srs.getLastReviewedAt() == null)
-                        .intervals(previewIntervals(srs, now, settings))
+                        .intervals(cardScheduler.previewIntervals(srs, now, settings))
                         .build())
                 .toList();
         return new PageImpl<>(hardWordsUpFrontOnly(cards), pageable, session.size());
@@ -239,6 +237,47 @@ public class SrsService {
     }
 
     /**
+     * Hoàn tác lần chấm thẻ gần nhất của một từ (bấm nhầm): thẻ trở về đúng trạng thái trước lần chấm - SM-2, FSRS, ngày
+     * đến hạn, số lần quên - còn ghi chú riêng giữ nguyên; thẻ do chính lần chấm đó tạo ra thì bị xoá. Lần chấm bị xoá
+     * khỏi lịch sử ôn nên mọi thống kê không còn tính nó. Gọi lần lượt cho từng từ để hoàn tác nhiều thẻ.
+     * <p>
+     * Chỉ được khi lần chấm đó vẫn là lần trả lời mới nhất của từ (chưa ôn lại, chưa làm trắc nghiệm sau đó) và chưa quá
+     * {@code app.srs.undo-minutes} phút. Hai lần hoàn tác cùng lúc thì khoá lạc quan của thẻ từ chối lần sau (409).
+     */
+    @Transactional
+    public void undoReview(Long userId, Long kanjiId) {
+        ReviewLog last = reviewLogRepository.findFirstByUserIdAndKanjiIdOrderByReviewedAtDescIdDesc(userId, kanjiId)
+                .orElseThrow(() -> new BadRequestException("Từ này chưa có lần chấm nào để hoàn tác"));
+        if (last.getSource() != ReviewSource.FLASHCARD) {
+            throw new BadRequestException("Từ này đã được trả lời lại sau lần chấm thẻ, không hoàn tác được nữa");
+        }
+        // Dòng ghi trước V36 không có trạng thái thẻ trước đó (card_existed_before NULL) nên không khôi phục được.
+        if (last.getCardExistedBefore() == null) {
+            throw new BadRequestException("Lần chấm này có từ trước khi có tính năng hoàn tác, không hoàn tác được");
+        }
+        int undoMinutes = srsProperties.getUndoMinutes();
+        if (last.getReviewedAt().isBefore(calendar.now().minusMinutes(undoMinutes))) {
+            throw new BadRequestException("Chỉ hoàn tác được trong " + undoMinutes + " phút sau khi chấm thẻ");
+        }
+        UserKanjiSrs card = srsRepository.findByUserIdAndKanjiId(userId, kanjiId)
+                .orElseThrow(() -> new ResourceNotFoundException("Từ này không còn trong Ôn tập của bạn"));
+
+        if (last.getCardExistedBefore()) {
+            card.setSm2(new Sm2State(last.getRepetitionBefore(), last.getEfBefore()));
+            card.setReviewIntervalDays(last.getIntervalBefore());
+            card.setNextReviewAt(last.getNextReviewBefore());
+            card.setLastReviewedAt(last.getLastReviewedBefore());
+            card.setLapseCount(last.getLapsesBefore());
+            card.setFsrs(last.getStabilityBefore() == null ? null
+                    : new FsrsState(last.getStabilityBefore(), last.getDifficultyBefore()));
+            srsRepository.save(card);
+        } else {
+            srsRepository.delete(card);
+        }
+        reviewLogRepository.delete(last);
+    }
+
+    /**
      * Tính lịch ôn mới (thẻ chưa có thì tạo) và ghi lại lần trả lời trong cùng transaction.
      * "Quên" một thẻ đang ôn bình thường (đã nhớ lại được kể từ lần quên trước) được đếm vào số lần quên - đủ số lần
      * thì thành từ khó. Quên tiếp khi đang học lại không tính thêm: trắc nghiệm thích ứng hay hỏi lại từ vừa sai, nên
@@ -248,105 +287,19 @@ public class SrsService {
     private UserKanjiSrs schedule(Long userId, Long kanjiId, UserKanjiSrs card, Answer answer, LocalDateTime now,
                                   SchedulingSettings settings) {
         log(userId, kanjiId, card, answer, true, now, settings.fsrs());
-        boolean lapse = answer.rating() == ReviewRating.AGAIN && CardState.REVIEW.equals(CardState.of(card));
-        Outcome outcome = outcome(card, answer.rating(), now, settings);
-
         UserKanjiSrs srs = card != null ? card : UserKanjiSrs.builder()
                 .userId(userId)
                 .kanjiId(kanjiId)
                 .nextReviewAt(now)
                 .build();
-        srs.setSm2(new Sm2State(outcome.sm2().repetitionCount(), outcome.sm2().easinessFactor()));
-        srs.setReviewIntervalDays(outcome.intervalDays());
-        // Đến hạn từ đầu ngày học thứ N (4 giờ sáng), không phải đúng giờ của lần ôn này: hôm đến hạn học sớm hơn hôm nay
-        // vài tiếng thì thẻ vẫn có trong phiên, không bị đẩy thêm một ngày.
-        srs.setNextReviewAt(calendar.startOf(calendar.dayOf(now).plusDays(outcome.intervalDays())));
-        srs.setLastReviewedAt(now);
-        srs.setFsrs(new FsrsState(outcome.memory().stability(), outcome.memory().difficulty()));
-        if (lapse) {
-            srs.setLapseCount(srs.getLapseCount() + 1);
-        }
+        cardScheduler.apply(srs, answer.rating(), now, settings);
         return srsRepository.save(srs);
-    }
-
-    /**
-     * Kết quả của một mức đánh giá: SM-2 và trí nhớ FSRS luôn được tính cùng nhau (đổi thuật toán lúc nào cũng có sẵn
-     * trạng thái), khoảng ôn lấy theo thuật toán người học đang dùng - FSRS thì theo tỉ lệ nhớ mong muốn.
-     */
-    private record Outcome(SrsCalculatorService.SrsResult sm2, Fsrs.Memory memory, int intervalDays) {
-    }
-
-    private Outcome outcome(UserKanjiSrs card, ReviewRating rating, LocalDateTime now, SchedulingSettings settings) {
-        SrsCalculatorService.SrsResult sm2 = srsCalculatorService.calculateNext(
-                card == null ? 0 : card.getRepetitionCount(),
-                card == null ? new BigDecimal("2.50") : card.getEasinessFactor(),
-                card == null ? 0 : card.getReviewIntervalDays(),
-                rating.sm2Quality());
-        if (rating == ReviewRating.AGAIN && forgottenEarlierToday(card, now)) {
-            // SM-2 đã trừ hệ số dễ (EF) ở lần quên đầu tiên trong ngày. Quên tiếp trong cùng ngày học thì không trừ thêm,
-            // giống cách đếm số lần quên: trắc nghiệm hay hỏi lại từ vừa sai, và mỗi lần sai trừ 0,54 thì vài câu sai liền
-            // nhau kéo EF xuống mức sàn 1,3 - khoảng ôn về sau chỉ còn nhân 1,3, phải ôn dày gấp mấy lần mãi về sau.
-            sm2 = new SrsCalculatorService.SrsResult(sm2.repetitionCount(), card.getEasinessFactor(),
-                    sm2.reviewIntervalDays());
-        }
-        Fsrs fsrs = settings.fsrs();
-        Fsrs.Memory before = memoryBefore(card, fsrs);
-        Fsrs.Memory memory = before == null ? fsrs.first(rating.value())
-                : fsrs.next(before, rating.value(), elapsedDays(card, now));
-        int intervalDays = settings.usesFsrs()
-                ? fsrs.interval(memory.stability(), settings.desiredRetention())
-                : sm2.reviewIntervalDays();
-        return new Outcome(sm2, memory, intervalDays);
-    }
-
-    /** Số ngày tới lần ôn sau nếu chấm Quên, Khó, Nhớ, Dễ - hiện ngay trên các nút chấm. */
-    private List<Integer> previewIntervals(UserKanjiSrs card, LocalDateTime now, SchedulingSettings settings) {
-        return Arrays.stream(ReviewRating.values())
-                .map(rating -> outcome(card, rating, now, settings).intervalDays())
-                .toList();
-    }
-
-    /**
-     * Trí nhớ FSRS của thẻ ngay trước lần trả lời; null nếu từ chưa từng được ôn. Thẻ đã ôn từ trước khi có FSRS thì
-     * ước lượng từ SM-2: vừa quên thì như một thẻ mới quên; còn lại độ ổn định bằng khoảng ôn hiện tại (SM-2 xếp lịch
-     * quanh mức nhớ 90%, đúng nghĩa độ ổn định của FSRS) và độ khó suy từ hệ số dễ EF (2,5 như thẻ "Nhớ", 1,3 là 10).
-     */
-    private Fsrs.Memory memoryBefore(UserKanjiSrs card, Fsrs fsrs) {
-        if (card == null || card.getLastReviewedAt() == null) {
-            return null;
-        }
-        if (card.getStability() != null && card.getDifficulty() != null) {
-            return new Fsrs.Memory(card.getStability(), card.getDifficulty());
-        }
-        if (card.getRepetitionCount() == 0) {
-            return fsrs.first(ReviewRating.AGAIN.value());
-        }
-        double easiest = fsrs.first(ReviewRating.GOOD.value()).difficulty();
-        double hardness = (2.5 - card.getEasinessFactor().doubleValue()) / (2.5 - 1.3);
-        double difficulty = Math.min(Math.max(easiest + hardness * (10 - easiest), 1), 10);
-        return new Fsrs.Memory(Math.max(card.getReviewIntervalDays(), 1), difficulty);
-    }
-
-    /** Thẻ đang học lại (đã quên, chưa nhớ lại được) và lần trả lời trước nằm trong cùng ngày học với {@code now}. */
-    private boolean forgottenEarlierToday(UserKanjiSrs card, LocalDateTime now) {
-        return CardState.RELEARNING.equals(CardState.of(card)) && elapsedDays(card, now) == 0;
-    }
-
-    /** Số ngày học kể từ lần ôn trước (cùng ngày học = 0). */
-    private long elapsedDays(UserKanjiSrs card, LocalDateTime now) {
-        return Math.max(0, ChronoUnit.DAYS.between(calendar.dayOf(card.getLastReviewedAt()), calendar.dayOf(now)));
     }
 
     /**
      * Ghi kèm trạng thái thẻ ngay trước lần trả lời ({@code card} null = chưa có trong lịch ôn) và xác suất nhớ FSRS
      * dự đoán lúc đó.
      */
-    /** Xác suất FSRS còn nhớ thẻ lúc {@code now}; null nếu chưa học lần nào. */
-    private Double recall(UserKanjiSrs card, LocalDateTime now, Fsrs fsrs) {
-        Fsrs.Memory memory = memoryBefore(card, fsrs);
-        return memory == null ? null : fsrs.retrievability(memory.stability(), elapsedDays(card, now));
-    }
-
     private void log(Long userId, Long kanjiId, UserKanjiSrs card, Answer answer, boolean scheduled, LocalDateTime now,
                      Fsrs fsrs) {
         reviewLogRepository.save(ReviewLog.builder()
@@ -361,7 +314,14 @@ public class SrsService {
                 .stateBefore(CardState.of(card))
                 .efBefore(card == null ? null : card.getEasinessFactor())
                 .intervalBefore(card == null ? null : card.getReviewIntervalDays())
-                .retrievability(recall(card, now, fsrs))
+                .cardExistedBefore(card != null)
+                .repetitionBefore(card == null ? null : card.getRepetitionCount())
+                .lapsesBefore(card == null ? null : card.getLapseCount())
+                .nextReviewBefore(card == null ? null : card.getNextReviewAt())
+                .lastReviewedBefore(card == null ? null : card.getLastReviewedAt())
+                .stabilityBefore(card == null ? null : card.getStability())
+                .difficultyBefore(card == null ? null : card.getDifficulty())
+                .retrievability(cardScheduler.recall(card, now, fsrs))
                 .scheduled(scheduled)
                 .reviewedAt(now)
                 .build());

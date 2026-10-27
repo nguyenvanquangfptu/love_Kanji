@@ -31,7 +31,7 @@ export function QuestionPalette({
             aria-current={current ? 'step' : undefined}
             className={cn(
               'flex h-10 items-center justify-center rounded-xl border-2 border-b-4 text-sm font-black transition-all active:translate-y-[2px] active:border-b-2',
-              answered ? 'border-secondary-dark bg-secondary text-white' : 'border-border bg-card text-muted-foreground hover:bg-muted',
+              answered ? 'border-secondary-edge bg-secondary text-white' : 'border-border bg-card text-muted-foreground hover:bg-muted',
               current && 'ring-4 ring-accent',
             )}
           >

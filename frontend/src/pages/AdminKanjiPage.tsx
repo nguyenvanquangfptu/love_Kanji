@@ -7,6 +7,7 @@ import {
   Layers,
   Pencil,
   Plus,
+  Scissors,
   Search,
   Tags as TagsIcon,
   Trash2,
@@ -28,6 +29,7 @@ import { Card, CardButton } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { KanjiFormDialog } from '@/components/KanjiFormDialog'
 import { TagManagerDialog } from '@/components/TagManagerDialog'
+import { CharacterRebuildDialog } from '@/components/CharacterRebuildDialog'
 import { PageHeader } from '@/components/PageHeader'
 import { AdminNav } from '@/components/AdminNav'
 import { LevelTabs, type LevelKey } from '@/components/LevelTabs'
@@ -50,6 +52,7 @@ export function AdminKanjiPage() {
   const [deleting, setDeleting] = useState<KanjiResponse | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const [tagManagerOpen, setTagManagerOpen] = useState(false)
+  const [characterRebuildOpen, setCharacterRebuildOpen] = useState(false)
 
   const { data: tags, isLoading: tagsLoading } = useQuery({ queryKey: ['tags'], queryFn: tagApi.list })
 
@@ -168,6 +171,9 @@ export function AdminKanjiPage() {
                   {generateQuestions.isPending ? 'Đang sinh câu thi...' : `Sinh câu thi ${activeGridLevel}`}
                 </Button>
               )}
+              <Button variant="outline" size="sm" onClick={() => setCharacterRebuildOpen(true)}>
+                <Scissors className="h-4 w-4" /> Hán Việt từng chữ
+              </Button>
               {tagManagerButton}
             </div>
           }
@@ -182,7 +188,7 @@ export function AdminKanjiPage() {
         {generateQuestions.isError && <Alert className="mb-4">{extractErrorMessage(generateQuestions.error)}</Alert>}
 
         <CardButton onClick={() => openBook('all')} className="mb-6 flex w-full items-center gap-4 p-4">
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-b-4 border-secondary-dark bg-secondary text-white">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-b-4 border-secondary-edge bg-secondary text-white">
             <Layers className="h-6 w-6" strokeWidth={2.5} />
           </span>
           <span className="flex-1">
@@ -236,6 +242,7 @@ export function AdminKanjiPage() {
         )}
 
         <TagManagerDialog open={tagManagerOpen} onClose={() => setTagManagerOpen(false)} />
+        <CharacterRebuildDialog open={characterRebuildOpen} onClose={() => setCharacterRebuildOpen(false)} />
       </div>
     )
   }

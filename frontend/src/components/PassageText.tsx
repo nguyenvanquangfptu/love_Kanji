@@ -40,7 +40,7 @@ export function PassageText({
             className={cn(
               'mx-1 inline-flex min-w-[3.5em] items-center justify-center rounded-md border-b-[3px] px-2 align-baseline font-sans text-base font-black',
               current
-                ? 'border-secondary-dark bg-secondary text-white'
+                ? 'border-secondary-edge bg-secondary text-white'
                 : 'border-accent-dark bg-accent-soft text-accent-dark',
               onSelect && 'hover:brightness-95',
             )}

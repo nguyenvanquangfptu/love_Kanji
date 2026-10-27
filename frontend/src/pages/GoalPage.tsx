@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Target } from 'lucide-react'
@@ -12,8 +12,8 @@ import {
   type Scheduler,
 } from '@/api/types'
 import { formatDay, toIsoDay, upcomingJlptDays } from '@/lib/dates'
-import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/PageHeader'
+import { Choice } from '@/components/Choice'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -310,20 +310,5 @@ function MemoryModel({ fsrs }: { fsrs: FsrsParametersResponse }) {
         )}
       </div>
     </div>
-  )
-}
-
-function Choice({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'h-10 rounded-xl border-2 px-4 text-sm font-extrabold transition-colors',
-        active ? 'border-secondary bg-secondary-soft text-secondary-dark' : 'border-border bg-card hover:bg-muted',
-      )}
-    >
-      {children}
-    </button>
   )
 }

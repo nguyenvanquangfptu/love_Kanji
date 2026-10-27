@@ -63,6 +63,16 @@ public class SrsController {
         return ResponseEntity.ok(srsService.submitReview(userId, request));
     }
 
+    @Operation(summary = "Hoàn tác lần chấm thẻ gần nhất của một từ",
+            description = "Thẻ trở về đúng trạng thái trước lần chấm (SM-2, FSRS, ngày đến hạn, số lần quên) và lần chấm bị xoá "
+                    + "khỏi lịch sử ôn. Chỉ được khi đó vẫn là lần trả lời mới nhất của từ và chưa quá app.srs.undo-minutes "
+                    + "phút; gọi lần lượt cho từng từ để hoàn tác nhiều thẻ.")
+    @PostMapping("/cards/{kanjiId}/undo-review")
+    public ResponseEntity<Void> undoReview(Authentication authentication, @PathVariable Long kanjiId) {
+        srsService.undoReview(currentUserId(authentication), kanjiId);
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "Thêm từ vào lịch ôn tập",
             description = "Đưa danh sách từ (cả một bài, hoặc các từ làm sai trong trắc nghiệm) vào lịch ôn SRS, đến hạn ôn ngay. Từ đã có trong lịch ôn giữ nguyên tiến độ, nên gọi lại nhiều lần vẫn an toàn.")
     @PostMapping("/cards")

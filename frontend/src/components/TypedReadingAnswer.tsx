@@ -103,7 +103,7 @@ export function TypedReadingFeedback({
         <div className="flex flex-1 items-start gap-3">
           <span
             className={cn(
-              'flex h-12 w-12 shrink-0 animate-bounce-in items-center justify-center rounded-full bg-white',
+              'flex h-12 w-12 shrink-0 animate-bounce-in items-center justify-center rounded-full bg-card',
               correct ? 'text-primary' : 'text-destructive',
             )}
           >
@@ -124,7 +124,7 @@ export function TypedReadingFeedback({
               </p>
             )}
             {result.mistake && (
-              <p className="mt-2 rounded-xl bg-white/70 px-3 py-2 text-sm font-semibold text-foreground/90">
+              <p className="mt-2 rounded-xl bg-card/70 px-3 py-2 text-sm font-semibold text-foreground/90">
                 {MISTAKE_HINTS[result.mistake]}
               </p>
             )}

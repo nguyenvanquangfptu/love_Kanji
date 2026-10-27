@@ -4,9 +4,9 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
 const TILES = [
-  { char: '漢', className: '-rotate-6 border-primary-dark bg-primary' },
-  { char: '字', className: '-translate-y-2 border-secondary-dark bg-secondary' },
-  { char: '学', className: 'rotate-6 border-orange-dark bg-orange' },
+  { char: '漢', className: '-rotate-6 border-primary-edge bg-primary' },
+  { char: '字', className: '-translate-y-2 border-secondary-edge bg-secondary' },
+  { char: '学', className: 'rotate-6 border-orange-edge bg-orange' },
 ]
 
 export function AuthShell({

@@ -66,22 +66,12 @@ public class ExamDiagnosisService {
             // Bài thi không đo thời gian từng câu: đúng là "Nhớ", sai là "Quên".
             SrsService.Answer result = new SrsService.Answer(ReviewSource.EXAM, question.getSkill(), correct,
                     correct ? ReviewRating.GOOD : ReviewRating.AGAIN, null,
-                    optionText(question, answer.getSelectedOption()));
+                    question.optionText(answer.getSelectedOption()));
             for (Long kanjiId : question.getKanjiIds()) {
                 srsService.recordQuizAnswer(attempt.getUserId(), kanjiId, result);
                 recorded++;
             }
         }
         return recorded;
-    }
-
-    private static String optionText(ExamQuestion question, String option) {
-        return switch (option.toUpperCase()) {
-            case "A" -> question.getOptionA();
-            case "B" -> question.getOptionB();
-            case "C" -> question.getOptionC();
-            case "D" -> question.getOptionD();
-            default -> null;
-        };
     }
 }

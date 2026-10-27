@@ -21,7 +21,8 @@ export function RegisterPage() {
     mutationFn: authApi.register,
     onSuccess: (data) => {
       setSession({ accessToken: data.accessToken, refreshToken: data.refreshToken, username })
-      navigate('/study', { replace: true })
+      // Người mới: đi qua hướng dẫn đặt mục tiêu và bài đầu tiên trước.
+      navigate('/welcome', { replace: true })
     },
   })
 

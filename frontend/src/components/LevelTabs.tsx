@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 
 export type LevelKey = JlptLevel | 'OTHER'
 
+/** Các nút chọn cấp độ; {@code lessonCounts} bỏ trống thì không hiện dòng số bài. */
 export function LevelTabs({
   levels,
   active,
@@ -13,7 +14,7 @@ export function LevelTabs({
   levels: LevelKey[]
   active: LevelKey
   onChange: (level: LevelKey) => void
-  lessonCounts: Record<LevelKey, number>
+  lessonCounts?: Record<LevelKey, number>
 }) {
   return (
     <div className="no-scrollbar -mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:overflow-visible sm:px-0">
@@ -38,9 +39,11 @@ export function LevelTabs({
               )}
             >
               <span className="text-lg font-black">{key === 'OTHER' ? 'Khác' : key}</span>
-              <span className={cn('text-[11px] font-bold', isActive ? 'text-white/90' : 'text-muted-foreground')}>
-                {lessonCounts[key]} bài
-              </span>
+              {lessonCounts && (
+                <span className={cn('text-[11px] font-bold', isActive ? 'text-white/90' : 'text-muted-foreground')}>
+                  {lessonCounts[key]} bài
+                </span>
+              )}
             </button>
           )
         })}

@@ -81,6 +81,7 @@ public class QuizService {
     private final UserService userService;
     private final LearnerHistoryService learnerHistoryService;
     private final SrsService srsService;
+    private final FuriganaService furiganaService;
     private final ExecutorService sentenceExecutor = Executors.newFixedThreadPool(4);
     /** Từ đang được sinh câu ở một request khác - tránh gửi trùng khi người học mở quiz liên tục. */
     private final Set<Long> sentencesInFlight = ConcurrentHashMap.newKeySet();
@@ -301,17 +302,21 @@ public class QuizService {
         return skipped;
     }
 
-    private static QuizQuestionResponse toResponse(BuiltQuestion question) {
+    private QuizQuestionResponse toResponse(BuiltQuestion question) {
         Kanji kanji = question.kanji();
         PastMistake trap = question.shownTrap();
         Kanji trapWord = question.trapWord();
         // Câu gõ: không gửi cách đọc (là đáp án) và nghĩa trước khi chấm - trả trong kết quả chấm.
         boolean typing = question.direction() == TYPE_READING;
+        // Câu hỏi cách đọc: furigana của từ được hỏi chính là đáp án.
+        boolean asksReading = typing || question.direction() == KANJI_TO_READING;
         return QuizQuestionResponse.builder()
                 .kanjiId(kanji.getId())
                 .direction(question.direction())
                 .prompt(question.prompt())
                 .sentence(question.sentence())
+                .sentenceRuby(furiganaService.annotate(question.sentence(), question.prompt(),
+                        asksReading ? null : kanji.getReading(), asksReading))
                 .choices(question.choices())
                 .correctIndex(question.correctIndex())
                 .character(kanji.getCharacter())

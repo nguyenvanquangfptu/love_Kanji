@@ -86,4 +86,64 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
     /** Mọi từ trong kho - để kiểm tra một câu có dùng từ vượt cấp độ không. */
     @Query("SELECT k.character AS character, k.reading AS reading, k.jlptLevel AS jlptLevel FROM Kanji k")
     List<WordLevel> findAllWordLevels();
+
+    /** Tìm từ: cách viết khớp mẫu LIKE (đã escape, ký tự escape là \). Tối đa 200 dòng. */
+    @Query(value = "SELECT * FROM kanji k WHERE k.character LIKE :pattern ESCAPE '\\' LIMIT 200", nativeQuery = true)
+    List<Kanji> searchByWritten(@Param("pattern") String pattern);
+
+    /** Tìm từ: cách đọc (bỏ ngoặc okurigana, み(る) → みる) khớp mẫu LIKE. Tối đa 200 dòng. */
+    @Query(value = "SELECT * FROM kanji k WHERE translate(k.reading, '()（）', '') LIKE :pattern ESCAPE '\\' LIMIT 200",
+            nativeQuery = true)
+    List<Kanji> searchByReading(@Param("pattern") String pattern);
+
+    /** Tìm từ: Hán Việt hoặc nghĩa, không phân biệt hoa thường và dấu (V37), khớp mẫu LIKE. Tối đa 200 dòng. */
+    @Query(value = """
+            SELECT * FROM kanji k
+            WHERE unaccent(lower(k.han_viet)) LIKE :pattern ESCAPE '\\'
+               OR unaccent(lower(k.meaning)) LIKE :pattern ESCAPE '\\'
+            LIMIT 200
+            """, nativeQuery = true)
+    List<Kanji> searchByHanVietOrMeaning(@Param("pattern") String pattern);
+
+    /** Tên bài (tag) của một từ. */
+    interface WordLesson {
+        Long getWordId();
+
+        String getName();
+    }
+
+    @Query("SELECT k.id AS wordId, t.name AS name FROM Kanji k JOIN k.tags t WHERE k.id IN :wordIds ORDER BY t.name")
+    List<WordLesson> findLessonsOf(@Param("wordIds") Collection<Long> wordIds);
+
+    /** Mọi từ kèm các chữ Hán thành phần, trong một truy vấn - để tách lại cả kho. */
+    @Query("SELECT k FROM Kanji k LEFT JOIN FETCH k.characterParts")
+    List<Kanji> findAllWithCharacterParts();
+
+    /** Một từ có chứa một chữ Hán, kèm âm Hán Việt của chữ đó trong từ ấy. */
+    interface CharacterUse {
+        Long getWordId();
+
+        String getHanViet();
+    }
+
+    @Query("SELECT k.id AS wordId, c.hanViet AS hanViet FROM Kanji k JOIN k.characterParts c WHERE c.character = :character")
+    List<CharacterUse> findUsesOfCharacter(@Param("character") String character);
+
+    /** Một chữ Hán thành phần của một từ. */
+    interface CharacterPart {
+        Long getWordId();
+
+        String getCharacter();
+
+        String getHanViet();
+    }
+
+    /** Các chữ Hán thành phần của các từ, theo thứ tự trong từng từ. */
+    @Query("""
+            SELECT k.id AS wordId, c.character AS character, c.hanViet AS hanViet
+            FROM Kanji k JOIN k.characterParts c
+            WHERE k.id IN :wordIds
+            ORDER BY k.id, INDEX(c)
+            """)
+    List<CharacterPart> findCharacterPartsOf(@Param("wordIds") Collection<Long> wordIds);
 }

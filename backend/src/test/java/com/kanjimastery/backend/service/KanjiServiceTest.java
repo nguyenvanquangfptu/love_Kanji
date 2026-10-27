@@ -6,16 +6,19 @@ import com.kanjimastery.backend.dto.KanjiResponse;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.Tag;
+import com.kanjimastery.backend.model.WordCharacter;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.repository.TagRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -90,6 +93,35 @@ class KanjiServiceTest {
         KanjiResponse updated = kanjiService.update(1L, request("開く", "ひらく", 27L));
 
         assertThat(updated.getReading()).isEqualTo("ひらく");
+    }
+
+    @Test
+    void create_shouldSplitTheHanVietIntoItsCharacters() {
+        KanjiRequest bank = request("銀行", "ぎんこう");
+        bank.setHanViet("ngân  hàng");
+        ArgumentCaptor<Kanji> saved = ArgumentCaptor.forClass(Kanji.class);
+        when(kanjiRepository.save(saved.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        kanjiService.create(bank);
+
+        assertThat(saved.getValue().getCharacterParts())
+                .containsExactly(new WordCharacter("銀", "NGÂN"), new WordCharacter("行", "HÀNG"));
+    }
+
+    @Test
+    void update_shouldDropTheOldCharacters_whenTheNewHanVietNoLongerFits() {
+        Kanji bank = Kanji.builder().id(2L).character("銀行").reading("ぎんこう").hanViet("NGÂN HÀNG").meaning("Ngân hàng")
+                .strokeCount(20).jlptLevel(JlptLevel.N5)
+                .characterParts(new ArrayList<>(List.of(new WordCharacter("銀", "NGÂN"), new WordCharacter("行", "HÀNG"))))
+                .build();
+        when(kanjiRepository.findById(2L)).thenReturn(Optional.of(bank));
+        when(kanjiRepository.save(any(Kanji.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        KanjiRequest oneSyllable = request("銀行", "ぎんこう");
+        oneSyllable.setHanViet("NGÂN");
+
+        kanjiService.update(2L, oneSyllable);
+
+        assertThat(bank.getCharacterParts()).isEmpty();
     }
 
     private static KanjiRequest request(String character, String reading, Long... tagIds) {

@@ -19,6 +19,8 @@ public interface GrammarPointRepository extends JpaRepository<GrammarPoint, Long
 
     List<GrammarPoint> findAllByOrderByJlptLevelDescLessonAscIdAsc();
 
+    long countByIdIn(Collection<Long> ids);
+
     Optional<GrammarPoint> findByJlptLevelAndPattern(JlptLevel jlptLevel, String pattern);
 
     /** Mẫu ngữ pháp ở mọi cấp độ - đề N3 vẫn hỏi cả mẫu của N4, N5. */

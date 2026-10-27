@@ -23,6 +23,13 @@ public class ProgressResponse {
     private List<Confusion> confusions;
     /** FSRS dự đoán so với thực tế, 30 ngày gần nhất; null nếu chưa đủ lượt ôn để so. */
     private Calibration calibration;
+    /** Chuỗi ngày học liên tiếp. */
+    private StreakResponse streak;
+    /** 84 ngày học gần nhất (12 tuần), cũ trước, kể cả ngày không học: số lần trả lời mỗi ngày - cho lịch nhiệt. */
+    private List<CalendarDay> calendar;
+
+    public record CalendarDay(LocalDate day, long answers) {
+    }
 
     /**
      * Tỉ lệ nhớ thật: trong các lần ôn đúng hạn một thẻ đang ôn bình thường (không tính từ mới, thẻ đang học lại),

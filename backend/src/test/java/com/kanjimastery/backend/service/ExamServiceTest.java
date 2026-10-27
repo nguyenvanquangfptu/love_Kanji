@@ -6,6 +6,9 @@ import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.ExamQuestionPublicResponse;
 import com.kanjimastery.backend.dto.ExamReviewResponse;
 import com.kanjimastery.backend.dto.QuestionReviewItem;
+import com.kanjimastery.backend.dto.RubySegment;
+import com.kanjimastery.backend.dto.SaveAnswerRequest;
+import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.dto.StartExamRequest;
 import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
@@ -41,10 +44,13 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -77,6 +83,10 @@ class ExamServiceTest {
 
     @Spy
     private Clock clock = Clock.systemDefaultZone();
+    // Nạp từ điển Kuromoji một lần cho cả lớp test; @Spy chỉ sao chép tham chiếu tới nó.
+    private static final FuriganaService FURIGANA = new FuriganaService();
+    @Spy
+    private FuriganaService furiganaService = FURIGANA;
 
     @InjectMocks
     private ExamService examService;
@@ -233,6 +243,73 @@ class ExamServiceTest {
                 .containsExactly(tuple(3L, "〜ですか", null, null),
                         tuple(72L, "Vてから", "V1て + から、V2", "Làm V1 xong rồi mới làm V2."));
         assertThat(review.getQuestions().get(1).getGrammarPoints()).isEmpty();
+    }
+
+    @Test
+    void getReview_shouldGiveTheSentenceFurigana_readingTheUnderlinedWordAsTheCorrectAnswer() {
+        when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(UserExamAttempt.builder().id(ATTEMPT_ID)
+                .userId(USER_ID).jlptLevel(JlptLevel.N4).status(ExamAttemptStatus.COMPLETED).totalScore(1)
+                .startedAt(LocalDateTime.now().minusMinutes(10)).build()));
+        when(answerRepository.findByAttemptIdOrderByIdAsc(ATTEMPT_ID)).thenReturn(List.of(
+                answer(1L, "B", true), answer(2L, "A", true)));
+        // Kuromoji tự đọc 今日 là きょう; đáp án đúng của câu này là こんにち.
+        ExamQuestion reading = typed(question(1L, QuizDirection.KANJI_TO_READING), JlptQuestionType.KANJI_READING);
+        reading.setSentence("今日の社会は便利だ。");
+        reading.setHighlight("今日");
+        reading.setOptionA("きょう");
+        reading.setOptionB("こんにち");
+        reading.setCorrectOption("B");
+        when(questionRepository.findAllWithLinksByIdIn(anyList())).thenReturn(List.of(reading,
+                question(2L, QuizDirection.MEANING)));
+
+        ExamReviewResponse review = examService.getReview(USER_ID, ATTEMPT_ID);
+
+        assertThat(review.getQuestions().get(0).getSentenceRuby())
+                .startsWith(new RubySegment("今日", "こんにち", true))
+                .contains(new RubySegment("社会", "しゃかい", false));
+        assertThat(review.getQuestions().get(1).getSentenceRuby()).isNull();
+    }
+
+    @Test
+    void saveAnswer_whileTimeRemains_shouldStoreTheOptionInUpperCase() {
+        when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attemptStartedSecondsAgo(600)));
+
+        examService.saveAnswer(USER_ID, ATTEMPT_ID, saveRequest(5L, "b"));
+
+        verify(examSessionStore).saveAnswer(ATTEMPT_ID, 5L, "B", 1500);
+    }
+
+    @Test
+    void saveAnswer_justAfterTheDeadline_shouldStillBeAccepted_toAllowForNetworkDelay() {
+        when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attemptStartedSecondsAgo(1500 + 2)));
+
+        examService.saveAnswer(USER_ID, ATTEMPT_ID, saveRequest(5L, "C"));
+
+        verify(examSessionStore).saveAnswer(ATTEMPT_ID, 5L, "C", 1500);
+    }
+
+    @Test
+    void saveAnswer_afterTimeIsUp_shouldBeRejected_evenIfTheAttemptIsNotFinalizedYet() {
+        // Lượt thi vẫn IN_PROGRESS: sự kiện hết hạn của Redis bị lỡ, job quét chưa tới lượt.
+        when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(
+                attemptStartedSecondsAgo(1500 + ExamService.LATE_ANSWER_GRACE_SECONDS + 30)));
+
+        assertThatThrownBy(() -> examService.saveAnswer(USER_ID, ATTEMPT_ID, saveRequest(5L, "A")))
+                .isInstanceOf(BadRequestException.class);
+        verify(examSessionStore, never()).saveAnswer(any(), any(), any(), anyInt());
+    }
+
+    private static UserExamAttempt attemptStartedSecondsAgo(int seconds) {
+        return UserExamAttempt.builder().id(ATTEMPT_ID).userId(USER_ID).jlptLevel(JlptLevel.N3)
+                .section(ExamSection.GRAMMAR).durationSeconds(1500)
+                .startedAt(LocalDateTime.now().minusSeconds(seconds)).build();
+    }
+
+    private static SaveAnswerRequest saveRequest(Long questionId, String option) {
+        SaveAnswerRequest request = new SaveAnswerRequest();
+        request.setQuestionId(questionId);
+        request.setSelectedOption(option);
+        return request;
     }
 
     private static ExamQuestion typed(ExamQuestion question, JlptQuestionType questionType) {

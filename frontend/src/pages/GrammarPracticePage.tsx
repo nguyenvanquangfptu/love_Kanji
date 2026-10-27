@@ -9,6 +9,7 @@ import { QUESTION_TYPE_META } from '@/lib/jlpt'
 import { cn } from '@/lib/utils'
 import { SessionHeader } from '@/components/SessionHeader'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
+import { FuriganaToggle } from '@/components/FuriganaToggle'
 import { StatTile } from '@/components/StatTile'
 import { EmptyState } from '@/components/EmptyState'
 import { GrammarPointList } from '@/components/GrammarPointNote'
@@ -138,8 +139,15 @@ export function GrammarPracticePage() {
             {current.sentence && (
               <Card className="mt-6 p-5 sm:p-6">
                 <p className="font-jp text-xl leading-[2.4] sm:text-2xl sm:leading-[2.4]">
-                  <SentenceWithTarget sentence={current.sentence} target={current.highlight} />
+                  <SentenceWithTarget
+                    sentence={current.sentence}
+                    target={current.highlight}
+                    segments={current.sentenceRuby}
+                  />
                 </p>
+                <div className="mt-2 flex justify-end">
+                  <FuriganaToggle segments={current.sentenceRuby} />
+                </div>
               </Card>
             )}
 
@@ -185,7 +193,7 @@ export function GrammarPracticePage() {
             <div className="flex flex-1 items-start gap-3">
               <span
                 className={cn(
-                  'flex h-12 w-12 shrink-0 animate-bounce-in items-center justify-center rounded-full bg-white',
+                  'flex h-12 w-12 shrink-0 animate-bounce-in items-center justify-center rounded-full bg-card',
                   selected === correctIndex ? 'text-primary' : 'text-destructive',
                 )}
               >

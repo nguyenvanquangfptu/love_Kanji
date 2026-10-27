@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { BookMarked, ListChecks, Lock } from 'lucide-react'
+import { BookMarked, ChevronRight, ListChecks, Lock, ScrollText } from 'lucide-react'
 import { tagApi } from '@/api/tags'
 import { extractErrorMessage } from '@/api/client'
 import { JLPT_LEVELS } from '@/api/types'
@@ -13,6 +13,7 @@ import { Card, CardButton } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
 import { PageSpinner } from '@/components/ui/spinner'
 import { PageHeader } from '@/components/PageHeader'
+import { SetGoalBanner } from '@/components/SetGoalBanner'
 import { EmptyState } from '@/components/EmptyState'
 import { LevelTabs, type LevelKey } from '@/components/LevelTabs'
 import { useQuizStart } from '@/lib/quizStart'
@@ -68,6 +69,7 @@ export function StudyBrowsePage() {
     <div>
       {quiz.dialog}
       <PageHeader title="Học bài" subtitle="Chọn cấp độ, rồi chọn một bài để bắt đầu học." />
+      <SetGoalBanner />
 
       <LevelTabs
         levels={levelKeys}
@@ -120,6 +122,22 @@ export function StudyBrowsePage() {
             ))}
           </div>
         </Card>
+      )}
+
+      {activeLevel !== 'OTHER' && (
+        <Link
+          to={`/grammar?level=${activeLevel}`}
+          className="mt-3 flex items-center gap-3 rounded-2xl border-2 border-border bg-card p-4 transition-colors hover:bg-muted"
+        >
+          <ScrollText className="h-7 w-7 shrink-0 text-purple-dark" strokeWidth={2.5} />
+          <span className="min-w-0 flex-1">
+            <span className="block font-extrabold">Ngữ pháp {activeLevel}</span>
+            <span className="block text-sm font-semibold text-muted-foreground">
+              Xem mẫu câu theo bài, thêm vào ôn tập để ôn theo lịch
+            </span>
+          </span>
+          <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+        </Link>
       )}
 
       {lessons.length === 0 ? (

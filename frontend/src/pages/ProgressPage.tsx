@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { ChartLegend, ColumnChart, type ChartColumn, type ColumnSeries } from '@/components/ColumnChart'
 import { PageHeader } from '@/components/PageHeader'
 import { StatTile } from '@/components/StatTile'
+import { StudyHeatmap } from '@/components/StudyHeatmap'
 import { EmptyState } from '@/components/EmptyState'
 import { Meter } from '@/components/Meter'
 import { Button } from '@/components/ui/button'
@@ -103,6 +104,18 @@ function ProgressBody({ progress }: { progress: ProgressResponse }) {
           Tỉ lệ nhớ tính trên 4 tuần gần nhất; lượt ôn và từ mới trên 14 ngày gần nhất.
         </p>
       </div>
+
+      <ChartCard
+        title={`Chuỗi ngày học: ${progress.streak.current} ngày`}
+        subtitle={
+          `Dài nhất ${progress.streak.longest} ngày. ` +
+          (progress.streak.studiedToday || progress.streak.current === 0
+            ? 'Mỗi ngày trả lời ít nhất một câu (ôn thẻ, ôn ngữ pháp, trắc nghiệm hay thi) là giữ được chuỗi.'
+            : 'Hôm nay chưa học - ôn vài thẻ để giữ chuỗi.')
+        }
+      >
+        <StudyHeatmap days={progress.calendar} />
+      </ChartCard>
 
       <RetentionCard weeks={progress.weeks} />
       {progress.calibration && <CalibrationCard calibration={progress.calibration} />}

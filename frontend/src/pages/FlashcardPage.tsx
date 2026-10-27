@@ -11,6 +11,7 @@ import {
   Dumbbell,
   PartyPopper,
   RotateCcw,
+  Zap,
   Sprout,
   Target,
 } from 'lucide-react'
@@ -19,14 +20,20 @@ import type { DailyCardResponse, DailyPlanResponse, Page, ReviewRating, ReviewRe
 import { extractErrorMessage, isConflict } from '@/api/client'
 import { cn, wordSizeClass } from '@/lib/utils'
 import { addDays, formatDay, formatInterval } from '@/lib/dates'
+import { RATING_OPTIONS } from '@/lib/ratings'
 import { lessonQuery } from '@/lib/lesson'
 import { lessonTitle } from '@/lib/levels'
 import { FlipCard } from '@/components/FlipCard'
 import { PageHeader } from '@/components/PageHeader'
+import { GrammarDueLink } from '@/components/GrammarDueLink'
 import { StatTile } from '@/components/StatTile'
 import { EmptyState } from '@/components/EmptyState'
 import { SpeakButton } from '@/components/SpeakButton'
 import { MemoryAidPanel } from '@/components/MemoryAidPanel'
+import { CharacterChips } from '@/components/CharacterChips'
+import { UndoReviewBar } from '@/components/UndoReviewBar'
+import { useCharacterParts } from '@/lib/characters'
+import { useCharacterSheetStore } from '@/store/characterSheetStore'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
@@ -37,12 +44,17 @@ const DAILY_CARDS_KEY = ['srs', 'daily-cards']
 const STATS_KEY = ['srs', 'stats']
 const DAILY_PLAN_KEY = ['srs', 'daily-plan']
 
-const RATING_OPTIONS: { rating: ReviewRating; label: string; hint: string; className: string }[] = [
-  { rating: 1, label: 'Quên', hint: 'Học lại', className: 'border-destructive-dark bg-destructive text-white' },
-  { rating: 2, label: 'Khó', hint: 'Nghĩ lâu mới ra', className: 'border-orange-dark bg-orange text-white' },
-  { rating: 3, label: 'Nhớ', hint: 'Nhớ ra được', className: 'border-secondary-dark bg-secondary text-white' },
-  { rating: 4, label: 'Dễ', hint: 'Nhớ ngay', className: 'border-primary-dark bg-primary text-white' },
-]
+/** Ôn nhanh: lượng ôn vừa chừng này phút. */
+const QUICK_MINUTES = 5
+
+/** Hoàn tác được tối đa chừng này lần chấm gần nhất của phiên (server còn giới hạn 30 phút). */
+const MAX_UNDO = 20
+
+/** Một thẻ đã chấm trong phiên, giữ nguyên như lúc hiện ra để đưa lại vào hàng đợi khi hoàn tác. */
+interface RatedCard {
+  card: DailyCardResponse
+  rating: ReviewRating
+}
 
 export function FlashcardPage() {
   const navigate = useNavigate()
@@ -54,6 +66,11 @@ export function FlashcardPage() {
   // Ôn thêm ngoài kế hoạch hôm nay: lấy mọi thẻ đến hạn, kể cả phần để dành cho những ngày sau.
   const [extra, setExtra] = useState(false)
   const cardsKey = useMemo(() => [...DAILY_CARDS_KEY, extra], [extra])
+  // Các thẻ đã chấm trong phiên (mới nhất ở cuối): bấm nhầm thì hoàn tác lần lượt từ thẻ cuối.
+  const [ratedCards, setRatedCards] = useState<RatedCard[]>([])
+  const lastRated = ratedCards.at(-1)
+  // Ôn nhanh: chỉ ôn N thẻ đầu hàng đợi (đã xếp dễ quên nhất trước), N vừa khoảng 5 phút theo nhịp của chính người học.
+  const [quick, setQuick] = useState<{ target: number; startLength: number } | null>(null)
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: cardsKey,
@@ -65,6 +82,10 @@ export function FlashcardPage() {
 
   const queue = data?.content ?? []
   const current = queue[0]
+  const { data: characterParts } = useCharacterParts(current ? [current.kanji.id] : [])
+  const quickSize = quickReviewSize(plan)
+  const quickDone = quick ? quick.startLength - queue.length : 0
+  const quickFinished = quick !== null && quickDone >= quick.target
 
   useEffect(() => {
     if (data && sessionTotal === null) setSessionTotal(data.content.length)
@@ -93,7 +114,11 @@ export function FlashcardPage() {
         old ? { ...old, content: old.content.filter((c) => c.kanji.id !== vars.kanjiId) } : old,
       )
       setFlipped(false)
-      return { previous }
+      return { previous, card: previous?.content.find((c) => c.kanji.id === vars.kanjiId) }
+    },
+    onSuccess: (_data, vars, context) => {
+      const card = context?.card
+      if (card) setRatedCards((stack) => [...stack, { card, rating: vars.rating }].slice(-MAX_UNDO))
     },
     onError: (err, _vars, context) => {
       // Thẻ vừa được chấm ở tab khác: tải lại phiên ôn thay vì đưa thẻ cũ trở lại.
@@ -103,10 +128,35 @@ export function FlashcardPage() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: STATS_KEY })
       queryClient.invalidateQueries({ queryKey: DAILY_PLAN_KEY })
+      queryClient.invalidateQueries({ queryKey: ['progress'] })
     },
   })
 
+  const undoMutation = useMutation({
+    mutationFn: (rated: RatedCard) => srsApi.undoReview(rated.card.kanji.id),
+    onSuccess: (_data, rated) => {
+      // Thẻ về lại đầu hàng đợi như lúc chưa chấm; không tải lại cả phiên để khỏi xáo các thẻ còn lại.
+      queryClient.setQueryData<Page<DailyCardResponse> | undefined>(cardsKey, (old) =>
+        old ? { ...old, content: [rated.card, ...old.content.filter((c) => c.kanji.id !== rated.card.kanji.id)] } : old,
+      )
+      setFlipped(false)
+    },
+    // Hoàn tác xong, hay bị từ chối (quá 30 phút, từ đã được trả lời lại) thì lần chấm đó cũng hết hoàn tác được.
+    onSettled: (_data, _error, rated) => {
+      setRatedCards((stack) => stack.filter((entry) => entry !== rated))
+      queryClient.invalidateQueries({ queryKey: STATS_KEY })
+      queryClient.invalidateQueries({ queryKey: DAILY_PLAN_KEY })
+      queryClient.invalidateQueries({ queryKey: ['progress'] })
+    },
+  })
+
+  const undoLast = useCallback(() => {
+    if (lastRated && !undoMutation.isPending && !reviewMutation.isPending) undoMutation.mutate(lastRated)
+  }, [lastRated, undoMutation, reviewMutation.isPending])
+
   function studyExtra() {
+    setRatedCards([])
+    setQuick(null)
     setSessionTotal(null)
     if (extra) queryClient.invalidateQueries({ queryKey: cardsKey })
     else setExtra(true)
@@ -114,17 +164,26 @@ export function FlashcardPage() {
 
   const rate = useMemo(
     () => (rating: ReviewRating) => {
-      if (!current || reviewMutation.isPending) return
+      if (!current || reviewMutation.isPending || undoMutation.isPending) return
       reviewMutation.mutate({ kanjiId: current.kanji.id, rating, responseMs: recallMs.current ?? undefined })
     },
-    [current, reviewMutation],
+    [current, reviewMutation, undoMutation.isPending],
   )
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (!current) return
-      // Đang gõ ghi chú cách nhớ: phím số và Space là chữ, không phải phím tắt.
+      // Đang gõ ghi chú cách nhớ: phím số, Space và Ctrl+Z là của ô nhập, không phải phím tắt.
       if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return
+      // Đang xem bảng từ cùng chữ: không lật hay chấm thẻ nằm bên dưới.
+      if (useCharacterSheetStore.getState().character !== null) return
+      // Hoàn tác được cả khi vừa chấm xong thẻ cuối (không còn thẻ nào đang hiện).
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        undoLast()
+        return
+      }
+      // Xong phần ôn nhanh: thẻ kế tiếp đang ẩn, không lật hay chấm nó.
+      if (!current || quickFinished) return
       if (e.code === 'Space') {
         e.preventDefault()
         toggleFlip()
@@ -136,7 +195,7 @@ export function FlashcardPage() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [current, flipped, rate, toggleFlip])
+  }, [current, quickFinished, flipped, rate, toggleFlip, undoLast])
 
   const doneCount = sessionTotal !== null ? sessionTotal - queue.length : 0
   // Thẻ đến hạn và từ mới đang chờ mà phiên hôm nay chưa lấy (để dành cho những ngày sau).
@@ -167,8 +226,23 @@ export function FlashcardPage() {
         </Link>
       )}
 
+      <GrammarDueLink className="mb-6" />
+
       {isLoading && <PageSpinner />}
       {isError && <Alert>{extractErrorMessage(error)}</Alert>}
+
+      {lastRated && (
+        <UndoReviewBar
+          word={lastRated.card.kanji.character}
+          ratingLabel={RATING_OPTIONS[lastRated.rating - 1].label}
+          pending={undoMutation.isPending}
+          onUndo={undoLast}
+          className="mx-auto mb-4 max-w-xl"
+        />
+      )}
+      {undoMutation.isError && (
+        <Alert className="mx-auto mb-4 max-w-xl">{extractErrorMessage(undoMutation.error)}</Alert>
+      )}
 
       {data && !current && stats?.totalCardsStarted === 0 && (
         <EmptyState
@@ -208,15 +282,60 @@ export function FlashcardPage() {
         />
       )}
 
-      {current && (
-        <div className="mx-auto flex max-w-xl flex-col gap-5">
-          {sessionTotal !== null && sessionTotal > 0 && (
-            <div className="flex items-center gap-3">
-              <Progress value={(doneCount / sessionTotal) * 100} className="flex-1" />
-              <span className="text-sm font-extrabold text-muted-foreground">
-                {doneCount}/{sessionTotal}
-              </span>
+      {current && quick && quickFinished && (
+        <EmptyState
+          icon={Zap}
+          iconClassName="bg-accent-soft text-accent-dark"
+          title={`Xong ${QUICK_MINUTES} phút ôn nhanh!`}
+          description={`Bạn vừa ôn ${quick.target} thẻ dễ quên nhất. Hôm nay còn ${queue.length} thẻ - ôn tiếp nếu còn thời gian.`}
+          action={
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button size="lg" onClick={() => setQuick(null)}>
+                <RotateCcw className="h-5 w-5" /> Ôn tiếp
+              </Button>
+              <Button size="lg" variant="outline" onClick={() => navigate('/study')}>
+                <BookOpen className="h-5 w-5" /> Để sau
+              </Button>
             </div>
+          }
+        />
+      )}
+
+      {current && !quickFinished && (
+        <div className="mx-auto flex max-w-xl flex-col gap-5">
+          {quick ? (
+            <div className="flex items-center gap-3">
+              <Badge variant="accent" className="shrink-0">
+                <Zap className="h-3.5 w-3.5" /> Ôn nhanh
+              </Badge>
+              <Progress value={(quickDone / quick.target) * 100} className="flex-1" />
+              <span className="text-sm font-extrabold text-muted-foreground">
+                {quickDone}/{quick.target}
+              </span>
+              <Button variant="ghost" size="sm" onClick={() => setQuick(null)}>
+                Ôn hết
+              </Button>
+            </div>
+          ) : (
+            sessionTotal !== null &&
+            sessionTotal > 0 && (
+              <div className="flex items-center gap-3">
+                <Progress value={(doneCount / sessionTotal) * 100} className="flex-1" />
+                <span className="text-sm font-extrabold text-muted-foreground">
+                  {doneCount}/{sessionTotal}
+                </span>
+              </div>
+            )
+          )}
+          {!quick && queue.length > quickSize && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="self-center"
+              onClick={() => setQuick({ target: quickSize, startLength: queue.length })}
+            >
+              <Zap className="h-4 w-4" /> Ít thời gian? Ôn nhanh {QUICK_MINUTES} phút ({quickSize} thẻ dễ quên nhất)
+            </Button>
           )}
 
           <FlipCard
@@ -241,11 +360,12 @@ export function FlashcardPage() {
                   <p className="font-jp text-xl font-bold text-secondary-dark">{current.kanji.reading}</p>
                 )}
                 <p className="font-jp text-5xl font-bold">{current.kanji.character}</p>
-                {current.kanji.hanViet && (
-                  <p className="text-sm font-extrabold uppercase tracking-wide text-muted-foreground">
-                    {current.kanji.hanViet}
-                  </p>
-                )}
+                <CharacterChips
+                  hanViet={current.kanji.hanViet}
+                  parts={characterParts?.[current.kanji.id]}
+                  size="sm"
+                  className="justify-center text-muted-foreground"
+                />
                 <p className="mt-2 text-lg font-bold leading-snug">{current.kanji.meaning}</p>
                 <SpeakButton text={current.kanji.reading ?? current.kanji.character} className="mt-1" />
               </div>
@@ -269,7 +389,7 @@ export function FlashcardPage() {
                   <button
                     key={rating}
                     type="button"
-                    disabled={reviewMutation.isPending}
+                    disabled={reviewMutation.isPending || undoMutation.isPending}
                     onClick={() => rate(rating)}
                     title={hint}
                     className={cn(
@@ -285,7 +405,7 @@ export function FlashcardPage() {
                 ))}
               </div>
               <p className="mt-3 hidden text-center text-xs font-semibold text-muted-foreground sm:block">
-                Phím tắt: số 1-4 để chấm · Space để lật thẻ
+                Phím tắt: số 1-4 để chấm · Space để lật thẻ · Ctrl+Z để hoàn tác
               </p>
             </div>
           ) : (
@@ -297,6 +417,16 @@ export function FlashcardPage() {
       )}
     </div>
   )
+}
+
+/**
+ * Số thẻ vừa khoảng {@link QUICK_MINUTES} phút theo nhịp ôn của chính người học: kế hoạch hôm nay ước tính bao nhiêu
+ * phút cho bao nhiêu thẻ, chia lại theo tỉ lệ. Chưa có kế hoạch (hoặc chưa đo được nhịp) thì lấy 10 thẻ; ít nhất 5 thẻ.
+ */
+function quickReviewSize(plan: DailyPlanResponse | undefined) {
+  const cards = plan ? plan.reviewsToday + plan.newToday : 0
+  if (!plan || cards <= 0 || plan.estimatedMinutes <= 0) return 10
+  return Math.max(5, Math.round((cards * QUICK_MINUTES) / plan.estimatedMinutes))
 }
 
 /** Phần còn lại của kế hoạch hôm nay, lý do nếu có thẻ hay từ mới được để dành, và tiến độ so với mục tiêu. */

@@ -14,32 +14,39 @@
   --color-border-strong: #cecece;
   --color-ring: #1cb0f6;
 
-  /* Mỗi màu có 3 sắc: nền chính, "-dark" cho viền đáy kiểu nút nổi 3D, "-soft" cho nền nhạt. */
+  /* Mỗi màu có 4 sắc: nền chính, "-edge" cho viền đáy kiểu nút nổi 3D, "-dark" cho chữ trên nền "-soft" nhạt.
+     Sáng thì "-edge" và "-dark" trùng nhau; tối thì "-dark" sáng lên để đọc được, còn "-edge" vẫn đậm hơn nền chính. */
   --color-primary: #58cc02;
   --color-primary-dark: #58a700;
+  --color-primary-edge: #58a700;
   --color-primary-soft: #d7ffb8;
   --color-primary-foreground: #ffffff;
 
   --color-secondary: #1cb0f6;
   --color-secondary-dark: #1899d6;
+  --color-secondary-edge: #1899d6;
   --color-secondary-soft: #ddf4ff;
   --color-secondary-foreground: #ffffff;
 
   --color-accent: #ffc800;
   --color-accent-dark: #e5a500;
+  --color-accent-edge: #e5a500;
   --color-accent-soft: #fff5d1;
   --color-accent-foreground: #3c3c3c;
 
   --color-orange: #ff9600;
   --color-orange-dark: #e08600;
+  --color-orange-edge: #e08600;
   --color-orange-soft: #ffead1;
 
   --color-purple: #ce82ff;
   --color-purple-dark: #a568cc;
+  --color-purple-edge: #a568cc;
   --color-purple-soft: #f4e3ff;
 
   --color-destructive: #ff4b4b;
   --color-destructive-dark: #ea2b2b;
+  --color-destructive-edge: #ea2b2b;
   --color-destructive-soft: #ffdfe0;
   --color-destructive-foreground: #ffffff;
 
@@ -51,6 +58,38 @@
   --animate-pop-in: pop-in 0.25s ease-out;
   --animate-slide-up: slide-up 0.25s ease-out;
   --animate-bounce-in: bounce-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/*
+ * Chế độ tối: class "dark" trên <html> (public/theme-init.js gắn trước khi trang vẽ, lib/theme.ts đổi khi người học chọn).
+ * Chỉ đổi giá trị các biến màu; màu nền chính của nút giữ nguyên. Mọi cặp chữ/nền đạt tương phản WCAG AA (≥ 4,5:1).
+ */
+:root.dark {
+  color-scheme: dark;
+
+  --color-background: #131f24;
+  --color-foreground: #eef4f7;
+  --color-card: #18272e;
+  --color-card-foreground: #eef4f7;
+  --color-muted: #22333b;
+  --color-muted-foreground: #9db0ba;
+  --color-border: #33454e;
+  --color-border-strong: #4b5f69;
+
+  --color-primary-dark: #8ee346;
+  --color-primary-soft: #1f3a12;
+  --color-secondary-dark: #6ccdff;
+  --color-secondary-soft: #0e3448;
+  --color-accent-dark: #ffd64a;
+  --color-accent-soft: #3b3110;
+  --color-orange-dark: #ffb24d;
+  --color-orange-soft: #40290c;
+  --color-purple-dark: #dfb3ff;
+  --color-purple-soft: #33224a;
+  --color-destructive-dark: #ff8a8a;
+  --color-destructive-soft: #47191c;
+  --color-success-dark: #8ee346;
+  --color-success-soft: #1f3a12;
 }
 
 @keyframes pop-in {
@@ -97,6 +136,14 @@ body {
 
 .font-jp {
   font-family: var(--font-jp);
+}
+
+/* Furigana: nhỏ, nhạt hơn chữ chính, và không bị chọn lẫn vào khi bôi đen câu để chép. */
+rt {
+  font-size: 0.5em;
+  font-weight: 700;
+  color: var(--color-muted-foreground);
+  user-select: none;
 }
 
 .pb-safe {

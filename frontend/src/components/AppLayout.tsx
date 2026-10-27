@@ -1,9 +1,16 @@
+import { Suspense } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { BookOpen, ClipboardCheck, LogOut, RotateCcw, ShieldCheck, TrendingUp, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { authApi } from '@/api/auth'
 import { Logo } from '@/components/Logo'
+import { PageSpinner } from '@/components/ui/spinner'
+import { CharacterSheet } from '@/components/CharacterSheet'
+import { SearchLauncher } from '@/components/SearchLauncher'
+import { StreakBadge } from '@/components/StreakBadge'
+import { ThemeToggle } from '@/components/ThemeToggle'
+import { useSearchShortcut } from '@/lib/searchShortcut'
 
 interface NavItem {
   to: string
@@ -54,6 +61,8 @@ export function AppLayout() {
   const isAdmin = useAuthStore((s) => s.isAdmin())
   const logout = useLogout()
   const items = isAdmin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS
+  // Phiên học/thi (FocusLayout) không có phím "/": đang làm bài thì không nhảy sang trang khác.
+  useSearchShortcut()
 
   return (
     <div className="min-h-screen bg-background lg:pl-64">
@@ -62,7 +71,8 @@ export function AppLayout() {
         <Link to="/study" className="px-3">
           <Logo />
         </Link>
-        <nav className="mt-8 flex flex-col gap-1.5">
+        <SearchLauncher className="mt-6" />
+        <nav className="mt-4 flex flex-col gap-1.5">
           {items.map(({ to, label, icon: Icon, iconColor }) => (
             <NavLink
               key={to}
@@ -81,9 +91,11 @@ export function AppLayout() {
             </NavLink>
           ))}
         </nav>
+        <StreakBadge className="mt-4" />
         <div className="mt-auto flex items-center gap-3 rounded-2xl border-2 border-border p-3">
           <Avatar name={username} />
           <span className="flex-1 truncate font-extrabold">{username}</span>
+          <ThemeToggle />
           <button
             type="button"
             onClick={logout}
@@ -102,6 +114,8 @@ export function AppLayout() {
           <Logo />
         </Link>
         <div className="flex items-center gap-2">
+          <SearchLauncher compact />
+          <ThemeToggle />
           <Avatar name={username} />
           <button
             type="button"
@@ -115,7 +129,9 @@ export function AppLayout() {
       </header>
 
       <main className="mx-auto w-full max-w-4xl px-4 pb-32 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-10">
-        <Outlet />
+        <Suspense fallback={<PageSpinner />}>
+          <Outlet />
+        </Suspense>
       </main>
 
       {/* Điện thoại: thanh tab dưới đáy */}
@@ -144,6 +160,7 @@ export function AppLayout() {
           ))}
         </div>
       </nav>
+      <CharacterSheet />
     </div>
   )
 }
@@ -152,7 +169,10 @@ export function AppLayout() {
 export function FocusLayout() {
   return (
     <div className="min-h-screen bg-background">
-      <Outlet />
+      <Suspense fallback={<PageSpinner />}>
+        <Outlet />
+      </Suspense>
+      <CharacterSheet />
     </div>
   )
 }

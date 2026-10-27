@@ -1,3 +1,4 @@
+import { lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from '@/routes/ProtectedRoute'
 import { AdminRoute } from '@/routes/AdminRoute'
@@ -6,22 +7,38 @@ import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { FlashcardPage } from '@/pages/FlashcardPage'
 import { HardWordsPage } from '@/pages/HardWordsPage'
-import { GoalPage } from '@/pages/GoalPage'
-import { ProgressPage } from '@/pages/ProgressPage'
-import { ExamSetupPage } from '@/pages/ExamSetupPage'
-import { ExamWorkspacePage } from '@/pages/ExamWorkspacePage'
-import { ExamResultPage } from '@/pages/ExamResultPage'
-import { ExamSittingPage } from '@/pages/ExamSittingPage'
-import { AdminKanjiPage } from '@/pages/AdminKanjiPage'
-import { AdminGrammarPage } from '@/pages/AdminGrammarPage'
-import { AdminQuestionsPage } from '@/pages/AdminQuestionsPage'
 import { StudyBrowsePage } from '@/pages/StudyBrowsePage'
 import { StudyVocabListPage } from '@/pages/StudyVocabListPage'
 import { StudyFlashcardPage } from '@/pages/StudyFlashcardPage'
 import { StudyQuizPage } from '@/pages/StudyQuizPage'
-import { GrammarPracticePage } from '@/pages/GrammarPracticePage'
+import { useThemeSync } from '@/lib/theme'
+
+// Trang học và ôn hằng ngày nằm trong bundle chính; các trang ít mở hơn (thi, tiến bộ, quản trị...) tải riêng khi cần,
+// nên người học không phải tải code quản trị và biểu đồ ngay lần đầu. Layout bọc <Outlet /> trong <Suspense>.
+const GoalPage = lazy(() => import('@/pages/GoalPage').then((m) => ({ default: m.GoalPage })))
+const ProgressPage = lazy(() => import('@/pages/ProgressPage').then((m) => ({ default: m.ProgressPage })))
+const ExamSetupPage = lazy(() => import('@/pages/ExamSetupPage').then((m) => ({ default: m.ExamSetupPage })))
+const ExamWorkspacePage = lazy(() => import('@/pages/ExamWorkspacePage').then((m) => ({ default: m.ExamWorkspacePage })))
+const ExamResultPage = lazy(() => import('@/pages/ExamResultPage').then((m) => ({ default: m.ExamResultPage })))
+const ExamSittingPage = lazy(() => import('@/pages/ExamSittingPage').then((m) => ({ default: m.ExamSittingPage })))
+const GrammarPracticePage = lazy(() =>
+  import('@/pages/GrammarPracticePage').then((m) => ({ default: m.GrammarPracticePage })),
+)
+const AdminKanjiPage = lazy(() => import('@/pages/AdminKanjiPage').then((m) => ({ default: m.AdminKanjiPage })))
+const AdminGrammarPage = lazy(() => import('@/pages/AdminGrammarPage').then((m) => ({ default: m.AdminGrammarPage })))
+const AdminQuestionsPage = lazy(() =>
+  import('@/pages/AdminQuestionsPage').then((m) => ({ default: m.AdminQuestionsPage })),
+)
+const CharacterPage = lazy(() => import('@/pages/CharacterPage').then((m) => ({ default: m.CharacterPage })))
+const SearchPage = lazy(() => import('@/pages/SearchPage').then((m) => ({ default: m.SearchPage })))
+const WelcomePage = lazy(() => import('@/pages/WelcomePage').then((m) => ({ default: m.WelcomePage })))
+const GrammarListPage = lazy(() => import('@/pages/GrammarListPage').then((m) => ({ default: m.GrammarListPage })))
+const GrammarReviewPage = lazy(() =>
+  import('@/pages/GrammarReviewPage').then((m) => ({ default: m.GrammarReviewPage })),
+)
 
 export default function App() {
+  useThemeSync()
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
@@ -35,6 +52,9 @@ export default function App() {
           <Route path="flashcards" element={<FlashcardPage />} />
           <Route path="flashcards/hard-words" element={<HardWordsPage />} />
           <Route path="goals" element={<GoalPage />} />
+          <Route path="characters/:character" element={<CharacterPage />} />
+          <Route path="search" element={<SearchPage />} />
+          <Route path="grammar" element={<GrammarListPage />} />
           <Route path="progress" element={<ProgressPage />} />
           <Route path="exam" element={<ExamSetupPage />} />
           <Route path="exam/:attemptId/result" element={<ExamResultPage />} />
@@ -52,6 +72,8 @@ export default function App() {
           <Route path="study/quiz" element={<StudyQuizPage />} />
           <Route path="exam/:attemptId" element={<ExamWorkspacePage />} />
           <Route path="exam/grammar-practice" element={<GrammarPracticePage />} />
+          <Route path="welcome" element={<WelcomePage />} />
+          <Route path="grammar/review" element={<GrammarReviewPage />} />
         </Route>
       </Route>
 

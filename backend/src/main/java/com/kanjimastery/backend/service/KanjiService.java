@@ -101,6 +101,8 @@ public class KanjiService {
     private void applyRequest(Kanji kanji, KanjiRequest request) {
         kanji.setCharacter(request.getCharacter());
         kanji.setHanViet(StringUtils.hasText(request.getHanViet()) ? request.getHanViet() : "");
+        // Không tách được (số âm khác số chữ Hán...) thì bỏ các chữ cũ, để không hiện âm của cách viết trước.
+        kanji.replaceCharacterParts(HanVietSplitter.split(kanji.getCharacter(), kanji.getHanViet()).parts());
         kanji.setReading(StringUtils.hasText(request.getReading()) ? request.getReading().trim() : null);
         kanji.setStrokeCount(request.getStrokeCount());
         kanji.setJlptLevel(Levels.require(request.getJlptLevel()));
