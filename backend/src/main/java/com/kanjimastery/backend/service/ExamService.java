@@ -58,6 +58,9 @@ import com.kanjimastery.backend.repository.UserExamAttemptRepository;
 @RequiredArgsConstructor
 public class ExamService {
 
+    /** Đáp án tới trễ hơn giờ hết bài chừng này (giây) vẫn nhận - bù độ trễ mạng. */
+    static final int LATE_ANSWER_GRACE_SECONDS = 5;
+
     private final ExamQuestionRepository questionRepository;
     private final UserExamAttemptRepository attemptRepository;
     private final UserExamAnswerRepository answerRepository;
@@ -152,10 +155,20 @@ public class ExamService {
         return picked;
     }
 
+    /**
+     * Lưu đáp án đang chọn vào Redis. Hết giờ thì không nhận nữa, kể cả khi lượt thi chưa kịp được chốt (sự kiện hết hạn
+     * của Redis bị lỡ, chờ job quét) - chỉ cho trễ {@value #LATE_ANSWER_GRACE_SECONDS} giây cho lần lưu ngay trước khi
+     * trình duyệt tự nộp.
+     */
     public void saveAnswer(Long userId, Long attemptId, SaveAnswerRequest request) {
         UserExamAttempt attempt = getOwnedInProgressAttempt(attemptId, userId);
+        int durationSeconds = examProperties.durationOf(attempt);
+        LocalDateTime closesAt = attempt.getStartedAt().plusSeconds(durationSeconds + LATE_ANSWER_GRACE_SECONDS);
+        if (LocalDateTime.now(clock).isAfter(closesAt)) {
+            throw new BadRequestException("Đã hết giờ làm bài, không lưu thêm đáp án được");
+        }
         String option = request.getSelectedOption() != null ? request.getSelectedOption().toUpperCase() : null;
-        examSessionStore.saveAnswer(attemptId, request.getQuestionId(), option, examProperties.durationOf(attempt));
+        examSessionStore.saveAnswer(attemptId, request.getQuestionId(), option, durationSeconds);
     }
 
     public ExamSessionResponse getSession(Long userId, Long attemptId) {
