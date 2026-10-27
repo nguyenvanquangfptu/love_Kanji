@@ -21,6 +21,9 @@ import { cn } from '@/lib/utils'
 
 const OPTIONS = ['A', 'B', 'C', 'D'] as const
 
+/** Nộp tay khi vẫn còn đáp án chưa lưu được lên máy chủ: dừng lại để người học kiểm tra kết nối rồi nộp lại. */
+class UnsavedAnswersError extends Error {}
+
 export function ExamWorkspacePage() {
   const { attemptId: attemptIdParam } = useParams()
   const attemptId = Number(attemptIdParam)
@@ -42,6 +45,11 @@ export function ExamWorkspacePage() {
   const [confirmingSubmit, setConfirmingSubmit] = useState(false)
 
   const saveTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>())
+  // Đáp án đã chọn mà máy chủ chưa xác nhận đã lưu (đang chờ, đang gửi hoặc gửi lỗi): questionId -> đáp án.
+  const unsaved = useRef(new Map<number, string>())
+  // Các câu có lần lưu gần nhất bị lỗi - hiện cảnh báo, gửi lại lúc nộp bài.
+  const failedSaves = useRef(new Set<number>())
+  const [failedCount, setFailedCount] = useState(0)
   // Mốc hết giờ trên đồng hồ đơn điệu của trình duyệt (performance.now()), tính từ remainingSeconds Backend trả về.
   const deadline = useRef<number | null>(null)
   const autoSubmitted = useRef(false)
@@ -82,10 +90,45 @@ export function ExamWorkspacePage() {
   const afterSubmit = (sittingId: number | null) =>
     sittingId ? `/exam/jlpt/${sittingId}` : `/exam/${attemptId}/result`
 
+  // Gửi một đáp án. Lưu được thì bỏ khỏi danh sách chưa lưu, trừ khi trong lúc gửi đã chọn đáp án khác cho câu đó.
+  async function persist(questionId: number, option: string) {
+    try {
+      await examApi.saveAnswer(attemptId, { questionId, selectedOption: option as 'A' | 'B' | 'C' | 'D' })
+      if (unsaved.current.get(questionId) === option) {
+        unsaved.current.delete(questionId)
+        failedSaves.current.delete(questionId)
+      }
+    } catch {
+      if (unsaved.current.get(questionId) === option) failedSaves.current.add(questionId)
+    }
+    setFailedCount(failedSaves.current.size)
+  }
+
+  // Trước khi nộp: gửi ngay các đáp án còn chờ debounce và gửi lại các đáp án lưu lỗi. Trả số đáp án vẫn chưa lưu được.
+  async function flushAnswers() {
+    saveTimers.current.forEach(clearTimeout)
+    saveTimers.current.clear()
+    await Promise.all([...unsaved.current].map(([questionId, option]) => persist(questionId, option)))
+    return unsaved.current.size
+  }
+
   const submitMutation = useMutation({
-    mutationFn: () => examApi.submit(attemptId),
+    // force: hết giờ thì vẫn nộp dù còn đáp án chưa lưu được - không nộp thì máy chủ cũng tự chốt bài.
+    mutationFn: async ({ force }: { force: boolean }) => {
+      const notSaved = await flushAnswers()
+      if (notSaved > 0 && !force) {
+        throw new UnsavedAnswersError(
+          `Còn ${notSaved} đáp án chưa lưu được lên máy chủ. Kiểm tra kết nối mạng rồi bấm nộp lại.`,
+        )
+      }
+      return examApi.submit(attemptId)
+    },
     onSuccess: (result) => navigate(afterSubmit(result.sittingId), { replace: true }),
-    onError: async () => {
+    onError: async (error) => {
+      if (error instanceof UnsavedAnswersError) {
+        setLocked(false)
+        return
+      }
       // Máy chủ có thể đã tự chốt bài khi hết giờ (Redis, job dự phòng) trước khi trình duyệt kịp nộp: bài đã có
       // kết quả thì sang trang kết quả luôn.
       try {
@@ -113,7 +156,7 @@ export function ExamWorkspacePage() {
         autoSubmitted.current = true
         setLocked(true)
         setAutoSubmitNotice(true)
-        submitExam()
+        submitExam({ force: true })
       }
     }
     tick()
@@ -144,6 +187,7 @@ export function ExamWorkspacePage() {
   function selectOption(questionId: number, option: string) {
     if (locked) return
     setAnswers((prev) => ({ ...prev, [questionId]: option }))
+    unsaved.current.set(questionId, option)
 
     const timers = saveTimers.current
     const existing = timers.get(questionId)
@@ -151,10 +195,8 @@ export function ExamWorkspacePage() {
     timers.set(
       questionId,
       setTimeout(() => {
-        examApi.saveAnswer(attemptId, { questionId, selectedOption: option as 'A' | 'B' | 'C' | 'D' }).catch(() => {
-          // Auto-save best-effort: lỗi mạng tạm thời sẽ tự thử lại ở lần chọn kế tiếp hoặc lúc nộp bài
-        })
         timers.delete(questionId)
+        persist(questionId, option)
       }, 300),
     )
   }
@@ -166,7 +208,7 @@ export function ExamWorkspacePage() {
   function confirmSubmit() {
     setConfirmingSubmit(false)
     setLocked(true)
-    submitMutation.mutate()
+    submitMutation.mutate({ force: false })
   }
 
   const total = questions?.length ?? 0
@@ -207,6 +249,13 @@ export function ExamWorkspacePage() {
 
   const answeredCount = Object.keys(answers).length
   const unansweredCount = Math.max(0, total - answeredCount)
+  const submitError = submitMutation.isError && (
+    <Alert>
+      {submitMutation.error instanceof UnsavedAnswersError
+        ? submitMutation.error.message
+        : extractErrorMessage(submitMutation.error)}
+    </Alert>
+  )
 
   const confirmDialog = (
     <ConfirmDialog
@@ -263,7 +312,7 @@ export function ExamWorkspacePage() {
               Không thể khôi phục nội dung câu hỏi sau khi tải lại trang (nội dung câu hỏi chỉ được lưu tạm trên
               trình duyệt). Bạn vẫn có thể nộp bài với các đáp án đã lưu.
             </p>
-            {submitMutation.isError && <Alert>{extractErrorMessage(submitMutation.error)}</Alert>}
+            {submitError}
           </Card>
         </div>
         {confirmDialog}
@@ -284,7 +333,12 @@ export function ExamWorkspacePage() {
       <div className="mx-auto grid max-w-5xl gap-6 px-4 py-6 lg:grid-cols-[1fr_280px]">
         <div className="flex flex-col gap-5">
           {autoSubmitNotice && <Alert>Đã hết giờ làm bài — đang tự động nộp bài...</Alert>}
-          {submitMutation.isError && <Alert>{extractErrorMessage(submitMutation.error)}</Alert>}
+          {submitError}
+          {failedCount > 0 && !submitMutation.isError && (
+            <Alert>
+              {failedCount} đáp án chưa lưu được lên máy chủ (mất kết nối?) - sẽ gửi lại khi bạn nộp bài.
+            </Alert>
+          )}
 
           {section && (
             <p className="flex flex-wrap items-baseline gap-x-2 text-sm font-bold text-muted-foreground">
