@@ -112,6 +112,10 @@ springdoc:
 logging:
   level:
     com.kanjimastery.backend: DEBUG
+  pattern:
+    # Thêm mã request và người gọi (RequestLoggingFilter đặt vào MDC) sau mức log, vd. "INFO [rid=7f3a9c21 user=taro]".
+    # Request chưa đăng nhập thì bỏ phần "user="; dòng log của job chạy nền không có request nên bỏ hẳn phần trong ngoặc.
+    level: "%5p%replace(%replace( [rid=%X{rid} user=%X{user}]){' user=\\]', ']'}){' \\[rid=\\]', ''}"
 
 ---
 spring:
