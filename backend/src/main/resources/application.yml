@@ -144,3 +144,13 @@ spring:
 app:
   jwt:
     secret: ${JWT_SECRET:dev-only-change-this-super-secret-key-min-32-bytes-long!!}
+# Máy dev: ngoài màn hình còn ghi ra backend/logs/backend.log (UTF-8) để tìm lại log cũ khi debug.
+# File đầy 10 MB thì xoay sang file mới, giữ tối đa 7 ngày và 100 MB. Docker vẫn chỉ log ra stdout (docker logs).
+logging:
+  file:
+    name: logs/backend.log
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 7
+      total-size-cap: 100MB
