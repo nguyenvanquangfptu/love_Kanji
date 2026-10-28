@@ -10,7 +10,9 @@ import com.kanjimastery.backend.dto.AdminUserResponse;
 import com.kanjimastery.backend.dto.CreateUserRequest;
 import com.kanjimastery.backend.dto.CreatedUserResponse;
 import com.kanjimastery.backend.dto.RegisterRequest;
+import com.kanjimastery.backend.security.LogSanitizer;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -20,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.kanjimastery.backend.model.User;
 import com.kanjimastery.backend.repository.UserRepository;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -50,6 +53,8 @@ public class UserService {
         User user = newLearner(request.getUsername(), request.getEmail(), temporaryPassword);
         user.setMustChangePassword(true);
         User saved = userRepository.save(user);
+        // Người cấp là "user" trong MDC của dòng log; mật khẩu tạm tuyệt đối không ghi ra log.
+        log.info("Quản trị viên cấp tài khoản người học: user={} id={}", LogSanitizer.clean(saved.getUsername()), saved.getId());
         return new CreatedUserResponse(AdminUserResponse.from(saved), temporaryPassword);
     }
 

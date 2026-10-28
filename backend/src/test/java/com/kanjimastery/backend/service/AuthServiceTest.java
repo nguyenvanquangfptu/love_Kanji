@@ -18,6 +18,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -35,7 +37,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class AuthServiceTest {
 
     @Mock
@@ -194,6 +196,39 @@ class AuthServiceTest {
                 .isInstanceOf(TooManyRequestsException.class);
         verify(userService, never()).passwordMatches(any(), anyString());
         verify(userService, never()).setPassword(any(), anyString());
+    }
+
+    @Test
+    void changePassword_shouldLogTheChange_butNeverThePasswords(CapturedOutput output) {
+        ChangePasswordRequest request = changeRequest("old-password", "new-password123");
+        User user = User.builder().id(7L).username("taro").build();
+        when(userService.getByUsername("taro")).thenReturn(user);
+        when(userService.passwordMatches(user, "old-password")).thenReturn(true);
+
+        authService.changePassword("taro", null, request);
+
+        assertThat(output).contains("user=taro id=7").doesNotContain("old-password", "new-password123");
+    }
+
+    @Test
+    void changePassword_shouldLogAWrongCurrentPassword_withoutWritingIt(CapturedOutput output) {
+        User user = User.builder().id(7L).username("taro").build();
+        when(userService.getByUsername("taro")).thenReturn(user);
+        when(userService.passwordMatches(user, "wrong-password")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.changePassword("taro", "access-token",
+                changeRequest("wrong-password", "new-password123")))
+                .isInstanceOf(BadRequestException.class);
+        assertThat(output).contains("user=taro id=7").doesNotContain("wrong-password", "new-password123");
+    }
+
+    @Test
+    void login_shouldLogAFailedAttempt_withoutThePasswordTried(CapturedOutput output) {
+        when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Bad credentials"));
+
+        assertThatThrownBy(() -> authService.login(loginRequest("taro\nINFO gia-mao", "sai-mat-khau")))
+                .isInstanceOf(BadCredentialsException.class);
+        assertThat(output).contains("user=taro_INFO gia-mao").doesNotContain("sai-mat-khau");
     }
 
     private static ChangePasswordRequest changeRequest(String oldPassword, String newPassword) {

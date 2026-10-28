@@ -12,6 +12,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Clock;
@@ -25,7 +27,7 @@ import static org.mockito.Mockito.*;
 import com.kanjimastery.backend.model.User;
 import com.kanjimastery.backend.repository.UserRepository;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class UserServiceTest {
 
     @Mock
@@ -131,6 +133,21 @@ class UserServiceTest {
         assertThat(created.user().id()).isEqualTo(15L);
         assertThat(created.user().username()).isEqualTo("hanako");
         assertThat(created.user().mustChangePassword()).isTrue();
+    }
+
+    @Test
+    void createAccount_shouldLogTheNewAccount_butNeverItsTemporaryPassword(CapturedOutput output) {
+        when(passwordEncoder.encode(any())).thenReturn("hashed-temporary");
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User user = invocation.getArgument(0);
+            user.setId(15L);
+            return user;
+        });
+
+        CreatedUserResponse created = userService.createAccount(createRequest("hanako", "hanako@example.com"));
+
+        assertThat(output).contains("user=hanako id=15")
+                .doesNotContain(created.temporaryPassword(), "hashed-temporary", "hanako@example.com");
     }
 
     @Test

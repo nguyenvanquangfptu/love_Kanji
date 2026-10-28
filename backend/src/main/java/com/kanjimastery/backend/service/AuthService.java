@@ -11,7 +11,9 @@ import com.kanjimastery.backend.dto.ChangePasswordRequest;
 import com.kanjimastery.backend.dto.LoginRequest;
 import com.kanjimastery.backend.dto.RefreshTokenRequest;
 import com.kanjimastery.backend.dto.RegisterRequest;
+import com.kanjimastery.backend.security.LogSanitizer;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -22,6 +24,7 @@ import java.time.Duration;
 import java.util.Date;
 import com.kanjimastery.backend.config.JwtProperties;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -44,6 +47,7 @@ public class AuthService {
             throw new ForbiddenException("Đăng ký tài khoản mới đang tắt. Hãy liên hệ quản trị viên để được cấp tài khoản.");
         }
         User user = userService.register(request);
+        log.info("Đăng ký tài khoản mới: user={} id={}", LogSanitizer.clean(user.getUsername()), user.getId());
         return issueTokens(user);
     }
 
@@ -53,11 +57,13 @@ public class AuthService {
         try {
             authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(username, request.getPassword()));
         } catch (BadCredentialsException ex) {
+            log.info("Đăng nhập thất bại (sai tên đăng nhập hoặc mật khẩu): user={}", LogSanitizer.clean(username));
             loginAttemptService.recordFailure(username);
             throw ex;
         }
         loginAttemptService.recordSuccess(username);
         User user = userService.getByUsername(username);
+        log.info("Đăng nhập thành công: user={} id={}", LogSanitizer.clean(username), user.getId());
         return issueTokens(user);
     }
 
@@ -77,6 +83,7 @@ public class AuthService {
         String jti = jwtService.extractJti(refreshToken);
 
         if (!refreshTokenService.isValid(userId, jti)) {
+            log.warn("Refresh token đã dùng rồi bị gửi lại (có thể bị lộ token) - thu hồi mọi phiên của userId={}", userId);
             refreshTokenService.revokeAll(userId);
             throw new UnauthorizedException("Refresh token đã được sử dụng hoặc không còn hiệu lực. Vui lòng đăng nhập lại.");
         }
@@ -89,6 +96,7 @@ public class AuthService {
     }
 
     public void logout(String accessToken, String refreshToken) {
+        log.info("Đăng xuất");
         blacklistAccessToken(accessToken);
 
         if (refreshToken != null && jwtService.isTokenValid(refreshToken, JwtService.TokenType.REFRESH)) {
@@ -110,6 +118,8 @@ public class AuthService {
         loginAttemptService.ensureNotLocked(username);
         User user = userService.getByUsername(username);
         if (!userService.passwordMatches(user, request.getOldPassword())) {
+            log.info("Đổi mật khẩu thất bại (sai mật khẩu hiện tại): user={} id={}",
+                    LogSanitizer.clean(username), user.getId());
             loginAttemptService.recordFailure(username);
             throw new BadRequestException("Mật khẩu hiện tại không đúng");
         }
@@ -117,6 +127,7 @@ public class AuthService {
         userService.setPassword(user, request.getNewPassword());
         refreshTokenService.revokeAll(user.getId());
         blacklistAccessToken(accessToken);
+        log.info("Đổi mật khẩu thành công, đã thu hồi mọi phiên: user={} id={}", LogSanitizer.clean(username), user.getId());
     }
 
     private void blacklistAccessToken(String accessToken) {
