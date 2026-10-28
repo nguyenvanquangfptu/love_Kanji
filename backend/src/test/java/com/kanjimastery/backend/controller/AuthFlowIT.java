@@ -3,10 +3,12 @@ package com.kanjimastery.backend.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.dto.AuthResponse;
+import com.kanjimastery.backend.dto.CreateUserRequest;
 import com.kanjimastery.backend.dto.LoginRequest;
 import com.kanjimastery.backend.dto.RegisterRequest;
 import com.kanjimastery.backend.repository.UserRepository;
 import com.kanjimastery.backend.service.AuthService;
+import com.kanjimastery.backend.service.UserService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -39,6 +42,8 @@ class AuthFlowIT extends AbstractIntegrationTest {
     private AuthService authService;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private UserService userService;
 
     private final List<String> usernames = new ArrayList<>();
 
@@ -93,6 +98,27 @@ class AuthFlowIT extends AbstractIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("username", usernames.getLast(), "password", "mat-khau-moi-2026"))))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void anAccountCreatedByAnAdmin_shouldAskForANewPassword_untilTheLearnerSetsOne() throws Exception {
+        String username = "auth-" + UUID.randomUUID().toString().substring(0, 8);
+        usernames.add(username);
+        CreateUserRequest request = new CreateUserRequest();
+        request.setUsername(username);
+        request.setEmail(username + "@example.com");
+        String temporaryPassword = userService.createAccount(request).temporaryPassword();
+
+        AuthResponse first = authService.login(loginRequest(username, temporaryPassword));
+        assertThat(first.isMustChangePassword()).isTrue();
+
+        mockMvc.perform(post("/api/v1/auth/change-password")
+                        .header(AUTHORIZATION, "Bearer " + first.getAccessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("oldPassword", temporaryPassword, "newPassword", "mat-khau-cua-toi"))))
+                .andExpect(status().isNoContent());
+
+        assertThat(authService.login(loginRequest(username, "mat-khau-cua-toi")).isMustChangePassword()).isFalse();
     }
 
     @Test

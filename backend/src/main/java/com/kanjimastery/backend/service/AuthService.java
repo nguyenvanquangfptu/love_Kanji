@@ -138,6 +138,7 @@ public class AuthService {
                 .refreshToken(refresh.token())
                 .tokenType("Bearer")
                 .expiresInSeconds(jwtProperties.getAccessTokenExpirationMs() / 1000)
+                .mustChangePassword(user.isMustChangePassword())
                 .build();
     }
 }

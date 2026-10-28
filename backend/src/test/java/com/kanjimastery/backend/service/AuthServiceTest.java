@@ -131,6 +131,15 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_shouldTellTheClient_whenTheAccountStillHasATemporaryPassword() {
+        User user = User.builder().id(9L).username("hanako").mustChangePassword(true).build();
+        when(userService.getByUsername("hanako")).thenReturn(user);
+        stubTokens(user);
+
+        assertThat(authService.login(loginRequest("hanako", "mat-khau-tam")).isMustChangePassword()).isTrue();
+    }
+
+    @Test
     void changePassword_shouldEndEverySession_andBlacklistThisAccessToken() {
         ChangePasswordRequest request = changeRequest("old-password", "new-password123");
         User user = User.builder().id(7L).username("taro").build();

@@ -35,6 +35,11 @@ public class User {
     @Builder.Default
     private String role = "ROLE_USER";
 
+    /** Tài khoản quản trị viên cấp, còn mật khẩu tạm: phải đổi mật khẩu trước khi học. */
+    @Column(name = "must_change_password", nullable = false)
+    @Builder.Default
+    private boolean mustChangePassword = false;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
