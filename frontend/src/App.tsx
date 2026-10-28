@@ -29,6 +29,7 @@ const AdminGrammarPage = lazy(() => import('@/pages/AdminGrammarPage').then((m) 
 const AdminQuestionsPage = lazy(() =>
   import('@/pages/AdminQuestionsPage').then((m) => ({ default: m.AdminQuestionsPage })),
 )
+const AdminUsersPage = lazy(() => import('@/pages/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })))
 const AccountPage = lazy(() => import('@/pages/AccountPage').then((m) => ({ default: m.AccountPage })))
 const CharacterPage = lazy(() => import('@/pages/CharacterPage').then((m) => ({ default: m.CharacterPage })))
 const SearchPage = lazy(() => import('@/pages/SearchPage').then((m) => ({ default: m.SearchPage })))
@@ -66,6 +67,7 @@ export default function App() {
             <Route path="admin/kanji" element={<AdminKanjiPage />} />
             <Route path="admin/grammar" element={<AdminGrammarPage />} />
             <Route path="admin/questions" element={<AdminQuestionsPage />} />
+            <Route path="admin/users" element={<AdminUsersPage />} />
           </Route>
         </Route>
 

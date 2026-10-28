@@ -32,6 +32,27 @@ export interface ChangePasswordRequest {
   newPassword: string
 }
 
+/** Một tài khoản trên trang quản trị. */
+export interface AdminUser {
+  id: number
+  username: string
+  email: string
+  role: string
+  mustChangePassword: boolean
+  createdAt: string
+}
+
+export interface CreateUserRequest {
+  username: string
+  email: string
+}
+
+/** Tài khoản vừa cấp; mật khẩu tạm chỉ có trong response này. */
+export interface CreatedUser {
+  user: AdminUser
+  temporaryPassword: string
+}
+
 /** Trang kết quả kiểu Spring Data Page<T>. */
 export interface Page<T> {
   content: T[]
