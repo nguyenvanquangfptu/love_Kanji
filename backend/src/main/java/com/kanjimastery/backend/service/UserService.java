@@ -5,7 +5,6 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.ResourceNotFoundException;
-import com.kanjimastery.backend.dto.ChangePasswordRequest;
 import com.kanjimastery.backend.dto.RegisterRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -50,13 +49,14 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng: " + username));
     }
 
+    public boolean passwordMatches(User user, String rawPassword) {
+        return passwordEncoder.matches(rawPassword, user.getPasswordHash());
+    }
+
+    /** Đặt mật khẩu mới (đã kiểm tra mật khẩu cũ ở {@link AuthService}). */
     @Transactional
-    public User changePassword(String username, ChangePasswordRequest request) {
-        User user = getByUsername(username);
-        if (!passwordEncoder.matches(request.getOldPassword(), user.getPasswordHash())) {
-            throw new BadRequestException("Mật khẩu hiện tại không đúng");
-        }
-        user.setPasswordHash(hash(request.getNewPassword()));
+    public User setPassword(User user, String newPassword) {
+        user.setPasswordHash(hash(newPassword));
         return userRepository.save(user);
     }
 

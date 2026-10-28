@@ -1,5 +1,6 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.exception.ForbiddenException;
 import com.kanjimastery.backend.exception.UnauthorizedException;
 import com.kanjimastery.backend.model.User;
@@ -101,9 +102,19 @@ public class AuthService {
      * A new password ends every session, this one included, so whoever may hold a stolen token loses it: all refresh
      * tokens are revoked and the access token of this request is blacklisted. Access tokens held on other devices
      * keep working until they expire (at most 15 minutes), since only their refresh is blocked.
+     * <p>
+     * Nhập sai mật khẩu hiện tại được tính như đăng nhập sai ({@link LoginAttemptService}): ai cầm access token lấy
+     * trộm cũng không dò được mật khẩu qua đây, và tài khoản đang bị khoá đăng nhập thì cũng không đổi được.
      */
     public void changePassword(String username, String accessToken, ChangePasswordRequest request) {
-        User user = userService.changePassword(username, request);
+        loginAttemptService.ensureNotLocked(username);
+        User user = userService.getByUsername(username);
+        if (!userService.passwordMatches(user, request.getOldPassword())) {
+            loginAttemptService.recordFailure(username);
+            throw new BadRequestException("Mật khẩu hiện tại không đúng");
+        }
+        loginAttemptService.recordSuccess(username);
+        userService.setPassword(user, request.getNewPassword());
         refreshTokenService.revokeAll(user.getId());
         blacklistAccessToken(accessToken);
     }

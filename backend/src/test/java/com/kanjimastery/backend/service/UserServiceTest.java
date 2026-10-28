@@ -1,7 +1,6 @@
 package com.kanjimastery.backend.service;
 
 import com.kanjimastery.backend.exception.BadRequestException;
-import com.kanjimastery.backend.dto.ChangePasswordRequest;
 import com.kanjimastery.backend.dto.RegisterRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,7 +12,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.Clock;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -107,64 +105,33 @@ class UserServiceTest {
     }
 
     @Test
-    void changePassword_shouldRefuseANewPasswordLongerThan72Bytes() {
+    void setPassword_shouldStoreTheNewHash() {
         User existing = User.builder().id(1L).username("taro").passwordHash("old-hash").build();
-        ChangePasswordRequest request = new ChangePasswordRequest();
-        request.setOldPassword("old-password");
-        request.setNewPassword("a".repeat(73));
-        when(userRepository.findByUsername("taro")).thenReturn(Optional.of(existing));
-        when(passwordEncoder.matches("old-password", "old-hash")).thenReturn(true);
-
-        assertThatThrownBy(() -> userService.changePassword("taro", request))
-                .isInstanceOf(BadRequestException.class);
-        assertThat(existing.getPasswordHash()).isEqualTo("old-hash");
-        verify(userRepository, never()).save(any());
-    }
-
-    @Test
-    void changePassword_shouldUpdateHash_whenOldPasswordMatches() {
-        User existing = User.builder()
-                .id(1L)
-                .username("taro")
-                .email("taro@example.com")
-                .passwordHash("old-hash")
-                .role("ROLE_USER")
-                .build();
-
-        ChangePasswordRequest request = new ChangePasswordRequest();
-        request.setOldPassword("old-password");
-        request.setNewPassword("new-password123");
-
-        when(userRepository.findByUsername("taro")).thenReturn(Optional.of(existing));
-        when(passwordEncoder.matches("old-password", "old-hash")).thenReturn(true);
         when(passwordEncoder.encode("new-password123")).thenReturn("new-hash");
 
-        userService.changePassword("taro", request);
+        userService.setPassword(existing, "new-password123");
 
         assertThat(existing.getPasswordHash()).isEqualTo("new-hash");
         verify(userRepository).save(existing);
     }
 
     @Test
-    void changePassword_shouldThrow_whenOldPasswordDoesNotMatch() {
-        User existing = User.builder()
-                .id(1L)
-                .username("taro")
-                .email("taro@example.com")
-                .passwordHash("old-hash")
-                .role("ROLE_USER")
-                .build();
+    void setPassword_shouldRefuseANewPasswordLongerThan72Bytes() {
+        User existing = User.builder().id(1L).username("taro").passwordHash("old-hash").build();
 
-        ChangePasswordRequest request = new ChangePasswordRequest();
-        request.setOldPassword("wrong-password");
-        request.setNewPassword("new-password123");
+        assertThatThrownBy(() -> userService.setPassword(existing, "a".repeat(73)))
+                .isInstanceOf(BadRequestException.class);
+        assertThat(existing.getPasswordHash()).isEqualTo("old-hash");
+        verify(userRepository, never()).save(any());
+    }
 
-        when(userRepository.findByUsername("taro")).thenReturn(Optional.of(existing));
+    @Test
+    void passwordMatches_shouldCompareWithTheStoredHash() {
+        User existing = User.builder().id(1L).username("taro").passwordHash("old-hash").build();
+        when(passwordEncoder.matches("old-password", "old-hash")).thenReturn(true);
         when(passwordEncoder.matches("wrong-password", "old-hash")).thenReturn(false);
 
-        assertThatThrownBy(() -> userService.changePassword("taro", request))
-                .isInstanceOf(BadRequestException.class);
-
-        verify(userRepository, never()).save(any());
+        assertThat(userService.passwordMatches(existing, "old-password")).isTrue();
+        assertThat(userService.passwordMatches(existing, "wrong-password")).isFalse();
     }
 }

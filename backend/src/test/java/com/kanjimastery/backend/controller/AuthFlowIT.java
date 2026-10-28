@@ -96,6 +96,19 @@ class AuthFlowIT extends AbstractIntegrationTest {
     }
 
     @Test
+    void aWrongCurrentPassword_shouldBeA400_notA401ThatWouldSignTheLearnerOut() throws Exception {
+        AuthResponse tokens = newLearner();
+
+        mockMvc.perform(post("/api/v1/auth/change-password")
+                        .header(AUTHORIZATION, "Bearer " + tokens.getAccessToken())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("oldPassword", "sai-mat-khau", "newPassword", "mat-khau-moi-2026"))))
+                .andExpect(status().isBadRequest());
+
+        callApi(tokens.getAccessToken()).andExpect(status().isOk());
+    }
+
+    @Test
     void register_shouldRefuseAPasswordBcryptCannotHold_withA400() throws Exception {
         String username = "auth-" + UUID.randomUUID().toString().substring(0, 8);
         usernames.add(username);
