@@ -12,6 +12,8 @@ export interface AuthResponse {
   refreshToken: string
   tokenType: string
   expiresInSeconds: number
+  /** Còn mật khẩu tạm do quản trị viên cấp: đưa người học tới trang đổi mật khẩu trước. */
+  mustChangePassword: boolean
 }
 
 export interface RegisterRequest {
