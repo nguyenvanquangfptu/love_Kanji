@@ -3,6 +3,7 @@ package com.kanjimastery.backend.exception;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.kanjimastery.backend.dto.ApiErrorResponse;
+import com.kanjimastery.backend.security.LogSanitizer;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -131,6 +132,12 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<ApiErrorResponse> build(HttpStatus status, String message, HttpServletRequest request, List<String> fieldErrors) {
+        // Lỗi 4xx đã xử lý: ghi lý do để biết vì sao request bị từ chối. Lỗi trường chỉ có tên trường và lời báo,
+        // không có giá trị người dùng gửi; lời báo có thể chứa chữ người dùng gõ (vd. tên đăng nhập) nên phải làm sạch.
+        if (status.is4xxClientError()) {
+            log.info("Từ chối {} {} -> {}: {}{}", request.getMethod(), LogSanitizer.clean(request.getRequestURI()),
+                    status.value(), LogSanitizer.clean(message), fieldErrors == null ? "" : " " + fieldErrors);
+        }
         ApiErrorResponse body = ApiErrorResponse.builder()
                 .timestamp(Instant.now())
                 .status(status.value())
