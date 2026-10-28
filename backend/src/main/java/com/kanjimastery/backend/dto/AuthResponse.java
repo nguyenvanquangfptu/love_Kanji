@@ -13,4 +13,6 @@ public class AuthResponse {
     @Builder.Default
     private String tokenType = "Bearer";
     private long expiresInSeconds;
+    /** Còn mật khẩu tạm do quản trị viên cấp: client đưa người học tới trang đổi mật khẩu trước. */
+    private boolean mustChangePassword;
 }

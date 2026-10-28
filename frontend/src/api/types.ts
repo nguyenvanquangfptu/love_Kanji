@@ -12,6 +12,8 @@ export interface AuthResponse {
   refreshToken: string
   tokenType: string
   expiresInSeconds: number
+  /** Còn mật khẩu tạm do quản trị viên cấp: đưa người học tới trang đổi mật khẩu trước. */
+  mustChangePassword: boolean
 }
 
 export interface RegisterRequest {
@@ -28,6 +30,27 @@ export interface LoginRequest {
 export interface ChangePasswordRequest {
   oldPassword: string
   newPassword: string
+}
+
+/** Một tài khoản trên trang quản trị. */
+export interface AdminUser {
+  id: number
+  username: string
+  email: string
+  role: string
+  mustChangePassword: boolean
+  createdAt: string
+}
+
+export interface CreateUserRequest {
+  username: string
+  email: string
+}
+
+/** Tài khoản vừa cấp; mật khẩu tạm chỉ có trong response này. */
+export interface CreatedUser {
+  user: AdminUser
+  temporaryPassword: string
 }
 
 /** Trang kết quả kiểu Spring Data Page<T>. */

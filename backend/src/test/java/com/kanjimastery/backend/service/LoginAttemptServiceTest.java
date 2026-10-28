@@ -7,9 +7,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 import java.time.Duration;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -18,7 +21,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class LoginAttemptServiceTest {
 
     @Mock
@@ -65,6 +68,15 @@ class LoginAttemptServiceTest {
                 .hasMessageContaining("15 phút");
         verify(rateLimiter).lock("login:lock:taro", Duration.ofMinutes(15));
         verify(rateLimiter).reset("login:failures:taro");
+    }
+
+    @Test
+    void recordFailure_shouldLeaveAWarning_whenItLocksTheAccount(CapturedOutput output) {
+        when(rateLimiter.increment("login:failures:taro", Duration.ofMinutes(15))).thenReturn(10L);
+
+        assertThatThrownBy(() -> loginAttemptService.recordFailure("taro"))
+                .isInstanceOf(TooManyRequestsException.class);
+        assertThat(output).contains("WARN").contains("user=taro");
     }
 
     @Test

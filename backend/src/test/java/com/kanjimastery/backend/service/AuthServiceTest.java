@@ -18,6 +18,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -35,7 +37,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class AuthServiceTest {
 
     @Mock
@@ -131,27 +133,109 @@ class AuthServiceTest {
     }
 
     @Test
+    void login_shouldTellTheClient_whenTheAccountStillHasATemporaryPassword() {
+        User user = User.builder().id(9L).username("hanako").mustChangePassword(true).build();
+        when(userService.getByUsername("hanako")).thenReturn(user);
+        stubTokens(user);
+
+        assertThat(authService.login(loginRequest("hanako", "mat-khau-tam")).isMustChangePassword()).isTrue();
+    }
+
+    @Test
     void changePassword_shouldEndEverySession_andBlacklistThisAccessToken() {
-        ChangePasswordRequest request = new ChangePasswordRequest();
-        when(userService.changePassword("taro", request)).thenReturn(User.builder().id(7L).username("taro").build());
+        ChangePasswordRequest request = changeRequest("old-password", "new-password123");
+        User user = User.builder().id(7L).username("taro").build();
+        when(userService.getByUsername("taro")).thenReturn(user);
+        when(userService.passwordMatches(user, "old-password")).thenReturn(true);
         when(jwtService.isTokenValid("access-token", JwtService.TokenType.ACCESS)).thenReturn(true);
         when(jwtService.extractJti("access-token")).thenReturn("jti-a");
         when(jwtService.extractExpiration("access-token")).thenReturn(new Date(System.currentTimeMillis() + 60_000));
 
         authService.changePassword("taro", "access-token", request);
 
+        verify(userService).setPassword(user, "new-password123");
+        verify(loginAttemptService).recordSuccess("taro");
         verify(refreshTokenService).revokeAll(7L);
         verify(tokenBlacklistService).blacklist(eq("jti-a"), any(Duration.class));
     }
 
     @Test
-    void changePassword_shouldKeepTheSessions_whenTheOldPasswordIsWrong() {
-        ChangePasswordRequest request = new ChangePasswordRequest();
-        when(userService.changePassword("taro", request)).thenThrow(new BadRequestException("Mật khẩu hiện tại không đúng"));
+    void changePassword_shouldCountAWrongOldPasswordAsAFailedLogin_andKeepTheSessions() {
+        ChangePasswordRequest request = changeRequest("wrong-password", "new-password123");
+        User user = User.builder().id(7L).username("taro").build();
+        when(userService.getByUsername("taro")).thenReturn(user);
+        when(userService.passwordMatches(user, "wrong-password")).thenReturn(false);
 
         assertThatThrownBy(() -> authService.changePassword("taro", "access-token", request))
-                .isInstanceOf(BadRequestException.class);
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Mật khẩu hiện tại không đúng");
+        verify(loginAttemptService).recordFailure("taro");
+        verify(userService, never()).setPassword(any(), anyString());
         verifyNoInteractions(refreshTokenService, tokenBlacklistService);
+    }
+
+    @Test
+    void changePassword_shouldLockTheAccount_whenTheOldPasswordIsGuessedTooOften() {
+        ChangePasswordRequest request = changeRequest("wrong-password", "new-password123");
+        User user = User.builder().id(7L).username("taro").build();
+        when(userService.getByUsername("taro")).thenReturn(user);
+        when(userService.passwordMatches(user, "wrong-password")).thenReturn(false);
+        doThrow(new TooManyRequestsException("Tài khoản tạm khoá")).when(loginAttemptService).recordFailure("taro");
+
+        assertThatThrownBy(() -> authService.changePassword("taro", "access-token", request))
+                .isInstanceOf(TooManyRequestsException.class);
+        verify(userService, never()).setPassword(any(), anyString());
+    }
+
+    @Test
+    void changePassword_shouldNotCheckThePassword_whenTheAccountIsLocked() {
+        doThrow(new TooManyRequestsException("Tài khoản tạm khoá")).when(loginAttemptService).ensureNotLocked("taro");
+
+        assertThatThrownBy(() -> authService.changePassword("taro", "access-token",
+                changeRequest("old-password", "new-password123")))
+                .isInstanceOf(TooManyRequestsException.class);
+        verify(userService, never()).passwordMatches(any(), anyString());
+        verify(userService, never()).setPassword(any(), anyString());
+    }
+
+    @Test
+    void changePassword_shouldLogTheChange_butNeverThePasswords(CapturedOutput output) {
+        ChangePasswordRequest request = changeRequest("old-password", "new-password123");
+        User user = User.builder().id(7L).username("taro").build();
+        when(userService.getByUsername("taro")).thenReturn(user);
+        when(userService.passwordMatches(user, "old-password")).thenReturn(true);
+
+        authService.changePassword("taro", null, request);
+
+        assertThat(output).contains("user=taro id=7").doesNotContain("old-password", "new-password123");
+    }
+
+    @Test
+    void changePassword_shouldLogAWrongCurrentPassword_withoutWritingIt(CapturedOutput output) {
+        User user = User.builder().id(7L).username("taro").build();
+        when(userService.getByUsername("taro")).thenReturn(user);
+        when(userService.passwordMatches(user, "wrong-password")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.changePassword("taro", "access-token",
+                changeRequest("wrong-password", "new-password123")))
+                .isInstanceOf(BadRequestException.class);
+        assertThat(output).contains("user=taro id=7").doesNotContain("wrong-password", "new-password123");
+    }
+
+    @Test
+    void login_shouldLogAFailedAttempt_withoutThePasswordTried(CapturedOutput output) {
+        when(authenticationManager.authenticate(any())).thenThrow(new BadCredentialsException("Bad credentials"));
+
+        assertThatThrownBy(() -> authService.login(loginRequest("taro\nINFO gia-mao", "sai-mat-khau")))
+                .isInstanceOf(BadCredentialsException.class);
+        assertThat(output).contains("user=taro_INFO gia-mao").doesNotContain("sai-mat-khau");
+    }
+
+    private static ChangePasswordRequest changeRequest(String oldPassword, String newPassword) {
+        ChangePasswordRequest request = new ChangePasswordRequest();
+        request.setOldPassword(oldPassword);
+        request.setNewPassword(newPassword);
+        return request;
     }
 
     private static RefreshTokenRequest refreshRequest(String token) {

@@ -1,6 +1,6 @@
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, type Location } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { authApi } from '@/api/auth'
 import { extractErrorMessage } from '@/api/client'
 import { useAuthStore } from '@/store/authStore'
@@ -16,12 +16,31 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const setSession = useAuthStore((s) => s.setSession)
+  const clearSession = useAuthStore((s) => s.clearSession)
+  const queryClient = useQueryClient()
+  // from: trang định vào trước khi bị đưa về đăng nhập; notice: lời nhắn sau khi đổi mật khẩu;
+  // signedOut: máy chủ đã thu hồi phiên (đổi mật khẩu), xoá phiên trong trình duyệt khi đã sang trang này.
+  const state = location.state as { from?: Location; notice?: string; signedOut?: boolean } | null
+  const signedOut = state?.signedOut === true
+
+  useEffect(() => {
+    if (signedOut) {
+      clearSession()
+      queryClient.clear()
+    }
+  }, [signedOut, clearSession, queryClient])
 
   const loginMutation = useMutation({
     mutationFn: authApi.login,
     onSuccess: (data) => {
-      setSession({ accessToken: data.accessToken, refreshToken: data.refreshToken, username })
-      const from = (location.state as { from?: Location } | null)?.from?.pathname ?? '/study'
+      setSession({
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        username,
+        mustChangePassword: data.mustChangePassword,
+      })
+      // Còn mật khẩu tạm do quản trị viên cấp thì đặt mật khẩu mới trước đã.
+      const from = data.mustChangePassword ? '/account' : (state?.from?.pathname ?? '/study')
       navigate(from, { replace: true })
     },
   })
@@ -45,6 +64,11 @@ export function LoginPage() {
       }
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        {state?.notice && !loginMutation.isError && (
+          <p role="status" className="rounded-2xl border-2 border-success/30 bg-success-soft px-4 py-3 text-sm font-semibold text-success-dark">
+            {state.notice}
+          </p>
+        )}
         {loginMutation.isError && <Alert>{extractErrorMessage(loginMutation.error)}</Alert>}
         <Label htmlFor="username" className="sr-only">
           Tên đăng nhập

@@ -2,7 +2,9 @@ package com.kanjimastery.backend.service;
 
 import com.kanjimastery.backend.config.RateLimitProperties;
 import com.kanjimastery.backend.exception.TooManyRequestsException;
+import com.kanjimastery.backend.security.LogSanitizer;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -12,6 +14,7 @@ import java.time.Duration;
  * tài khoản đó, dù request đến từ IP nào. Bổ sung cho giới hạn theo IP ở RateLimitFilter - kẻ dò mật khẩu
  * đổi IP liên tục vẫn bị chặn.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class LoginAttemptService {
@@ -25,6 +28,8 @@ public class LoginAttemptService {
     public void ensureNotLocked(String username) {
         Duration remaining = rateLimiter.remaining(LOCK_PREFIX + username);
         if (remaining != null) {
+            log.info("Từ chối vì tài khoản đang bị khoá đăng nhập (còn {} giây): user={}",
+                    remaining.toSeconds(), LogSanitizer.clean(username));
             throw lockedException(remaining);
         }
     }
@@ -37,8 +42,11 @@ public class LoginAttemptService {
             Duration lockDuration = Duration.ofSeconds(config.getLockSeconds());
             rateLimiter.lock(LOCK_PREFIX + username, lockDuration);
             rateLimiter.reset(FAILURES_PREFIX + username);
+            log.warn("Khoá đăng nhập {} phút vì sai mật khẩu {} lần liên tiếp (có thể đang bị dò mật khẩu): user={}",
+                    lockDuration.toMinutes(), failures, LogSanitizer.clean(username));
             throw lockedException(lockDuration);
         }
+        log.debug("Sai mật khẩu lần {}/{}: user={}", failures, config.getMaxFailures(), LogSanitizer.clean(username));
     }
 
     public void recordSuccess(String username) {

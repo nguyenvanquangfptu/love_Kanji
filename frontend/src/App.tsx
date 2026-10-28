@@ -29,6 +29,8 @@ const AdminGrammarPage = lazy(() => import('@/pages/AdminGrammarPage').then((m) 
 const AdminQuestionsPage = lazy(() =>
   import('@/pages/AdminQuestionsPage').then((m) => ({ default: m.AdminQuestionsPage })),
 )
+const AdminUsersPage = lazy(() => import('@/pages/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })))
+const AccountPage = lazy(() => import('@/pages/AccountPage').then((m) => ({ default: m.AccountPage })))
 const CharacterPage = lazy(() => import('@/pages/CharacterPage').then((m) => ({ default: m.CharacterPage })))
 const SearchPage = lazy(() => import('@/pages/SearchPage').then((m) => ({ default: m.SearchPage })))
 const WelcomePage = lazy(() => import('@/pages/WelcomePage').then((m) => ({ default: m.WelcomePage })))
@@ -59,11 +61,13 @@ export default function App() {
           <Route path="exam" element={<ExamSetupPage />} />
           <Route path="exam/:attemptId/result" element={<ExamResultPage />} />
           <Route path="exam/jlpt/:sittingId" element={<ExamSittingPage />} />
+          <Route path="account" element={<AccountPage />} />
           <Route element={<AdminRoute />}>
             <Route path="admin" element={<Navigate to="/admin/kanji" replace />} />
             <Route path="admin/kanji" element={<AdminKanjiPage />} />
             <Route path="admin/grammar" element={<AdminGrammarPage />} />
             <Route path="admin/questions" element={<AdminQuestionsPage />} />
+            <Route path="admin/users" element={<AdminUsersPage />} />
           </Route>
         </Route>
 

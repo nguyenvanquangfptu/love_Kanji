@@ -20,7 +20,12 @@ export function RegisterPage() {
   const registerMutation = useMutation({
     mutationFn: authApi.register,
     onSuccess: (data) => {
-      setSession({ accessToken: data.accessToken, refreshToken: data.refreshToken, username })
+      setSession({
+        accessToken: data.accessToken,
+        refreshToken: data.refreshToken,
+        username,
+        mustChangePassword: data.mustChangePassword,
+      })
       // Người mới: đi qua hướng dẫn đặt mục tiêu và bài đầu tiên trước.
       navigate('/welcome', { replace: true })
     },

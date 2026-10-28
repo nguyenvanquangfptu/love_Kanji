@@ -41,3 +41,6 @@ k_ho_ch_tri_n_khai_d_n_spring_boot.md
 CLAUDE.md
 ke_hoach_*.md
 db-backup/
+
+# Log backend khi chạy dev (có tên đăng nhập người dùng - không commit)
+backend/logs/

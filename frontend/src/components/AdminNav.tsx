@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { BookOpenText, FileCheck2, Languages } from 'lucide-react'
+import { BookOpenText, FileCheck2, Languages, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const ITEMS = [
   { to: '/admin/kanji', label: 'Từ vựng', icon: Languages },
   { to: '/admin/grammar', label: 'Ngữ pháp', icon: BookOpenText },
   { to: '/admin/questions', label: 'Câu hỏi thi', icon: FileCheck2 },
+  { to: '/admin/users', label: 'Tài khoản', icon: Users },
 ]
 
 /** Chuyển giữa các trang quản trị. */

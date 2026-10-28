@@ -93,8 +93,14 @@ export function AppLayout() {
         </nav>
         <StreakBadge className="mt-4" />
         <div className="mt-auto flex items-center gap-3 rounded-2xl border-2 border-border p-3">
-          <Avatar name={username} />
-          <span className="flex-1 truncate font-extrabold">{username}</span>
+          <Link
+            to="/account"
+            title="Tài khoản"
+            className="-m-1 flex min-w-0 flex-1 items-center gap-3 rounded-xl p-1 hover:bg-muted"
+          >
+            <Avatar name={username} />
+            <span className="flex-1 truncate font-extrabold">{username}</span>
+          </Link>
           <ThemeToggle />
           <button
             type="button"
@@ -116,7 +122,9 @@ export function AppLayout() {
         <div className="flex items-center gap-2">
           <SearchLauncher compact />
           <ThemeToggle />
-          <Avatar name={username} />
+          <Link to="/account" aria-label="Tài khoản" title="Tài khoản" className="rounded-full">
+            <Avatar name={username} />
+          </Link>
           <button
             type="button"
             onClick={logout}

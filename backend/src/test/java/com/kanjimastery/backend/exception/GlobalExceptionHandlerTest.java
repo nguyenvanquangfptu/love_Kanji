@@ -2,6 +2,9 @@ package com.kanjimastery.backend.exception;
 
 import com.kanjimastery.backend.model.SchedulerType;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.web.servlet.MockMvc;
@@ -15,12 +18,14 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@ExtendWith(OutputCaptureExtension.class)
 class GlobalExceptionHandlerTest {
 
     private final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new SampleController())
@@ -73,6 +78,14 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(post("/cards/1/review"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409));
+    }
+
+    @Test
+    void handledClientError_shouldLogWhyTheRequestWasRefused(CapturedOutput output) throws Exception {
+        mockMvc.perform(get("/schedules").param("scheduler", "ANKI"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(output).contains("GET /schedules -> 400").contains("[scheduler: ");
     }
 
     @Test
