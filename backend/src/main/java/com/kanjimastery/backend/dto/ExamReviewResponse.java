@@ -33,7 +33,9 @@ public class ExamReviewResponse {
     private ExamSection section;
     /** Điểm theo từng 問題 của phần đề JLPT, theo thứ tự trong đề; rỗng với thi nhanh. */
     private List<MondaiScore> mondai;
-    /** Đoạn văn của các câu 文章の文法 trong bài; rỗng nếu không có. */
+    /** Số trong đề thật của câu đầu tiên (Đọc hiểu N3: 24); 1 với phần đánh số từ đầu và thi nhanh. */
+    private int firstQuestionNumber;
+    /** Đoạn văn của các câu 文章の文法 và bài đọc trong bài; rỗng nếu không có. */
     private List<ExamPassageResponse> passages;
 
     @Getter

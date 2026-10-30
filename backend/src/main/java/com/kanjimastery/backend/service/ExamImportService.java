@@ -367,6 +367,7 @@ public class ExamImportService {
             String title = strip(item.title());
             passage = ExamPassage.builder()
                     .jlptLevel(level)
+                    .section(ExamSection.GRAMMAR)
                     .title(title == null ? "Đề " + code : title.substring(0, Math.min(title.length(), MAX_TITLE_LENGTH)))
                     .content(renumbered.toString())
                     .review(new ReviewState(ExamQuestionStatus.DRAFT))

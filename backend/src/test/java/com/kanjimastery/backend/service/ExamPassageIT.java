@@ -77,7 +77,7 @@ class ExamPassageIT extends AbstractIntegrationTest {
         String suffix = String.valueOf(System.nanoTime());
         userId = userRepository.save(User.builder().username("passage_" + suffix)
                 .email("passage_" + suffix + "@test.local").passwordHash("x").build()).getId();
-        passage = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).title("わたしの朝ご飯")
+        passage = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).section(ExamSection.GRAMMAR).title("わたしの朝ご飯")
                 .content(CONTENT).build());
         // Lưu câu thứ hai trước: thứ tự trong đề phải theo chỗ trống, không theo id.
         second = blank(2, "から", "まで", "ので", "のに");
@@ -105,7 +105,7 @@ class ExamPassageIT extends AbstractIntegrationTest {
 
     @Test
     void aPassage_shouldBeReviewedAsAWhole_andComeIntoTheExamWithAllItsBlanksInOrder() {
-        AdminExamPassageResponse draft = passageReviewService.search(LEVEL.name(), ExamQuestionStatus.DRAFT, 0, 10)
+        AdminExamPassageResponse draft = passageReviewService.search(LEVEL.name(), null, null, ExamQuestionStatus.DRAFT, 0, 10)
                 .getContent().get(0);
         assertThat(draft.getQuestions()).extracting(question -> question.getId())
                 .containsExactly(first.getId(), second.getId());
@@ -136,11 +136,20 @@ class ExamPassageIT extends AbstractIntegrationTest {
         assertThat(review.getQuestions()).extracting(QuestionReviewItem::getBlankNo).containsExactly(1, 2);
 
         // Lần làm đề sau: đoạn văn chưa gặp đứng trước đoạn đã làm.
-        ExamPassage unseen = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).content("【1】")
-                .review(new ReviewState(ExamQuestionStatus.APPROVED)).build());
+        ExamPassage unseen = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).section(ExamSection.GRAMMAR)
+                .content("【1】").review(new ReviewState(ExamQuestionStatus.APPROVED)).build());
+        questionRepository.save(ExamQuestion.builder().jlptLevel(LEVEL).questionText("【1】").optionA("あ")
+                .optionB("い").optionC("う").optionD("え").correctOption("A").questionType(JlptQuestionType.TEXT_GRAMMAR)
+                .review(new ReviewState(ExamQuestionStatus.APPROVED)).passageId(unseen.getId()).blankNo(1).build());
         try {
-            assertThat(passageRepository.findApprovedForLearner(userId, LEVEL.name(), null, 10)).extracting(ExamPassage::getId)
+            assertThat(passageRepository.findApprovedForLearner(userId, LEVEL.name(), "GRAMMAR", "TEXT_GRAMMAR", null, 10))
+                    .extracting(ExamPassage::getId)
                     .containsExactly(unseen.getId(), passage.getId());
+            // Đoạn của phần khác, hoặc không có câu đúng dạng, thì không lấy.
+            assertThat(passageRepository.findApprovedForLearner(userId, LEVEL.name(), "READING", "TEXT_GRAMMAR", null, 10))
+                    .isEmpty();
+            assertThat(passageRepository.findApprovedForLearner(userId, LEVEL.name(), "GRAMMAR", "READING_SHORT", null, 10))
+                    .isEmpty();
         } finally {
             passageRepository.deleteById(unseen.getId());
         }

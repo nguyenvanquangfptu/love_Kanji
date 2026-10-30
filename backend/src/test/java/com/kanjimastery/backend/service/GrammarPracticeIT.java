@@ -8,6 +8,7 @@ import com.kanjimastery.backend.dto.QuestionReviewItem;
 import com.kanjimastery.backend.dto.WeakGrammarResponse;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamPassage;
+import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.GrammarPoint;
@@ -75,7 +76,7 @@ class GrammarPracticeIT extends AbstractIntegrationTest {
                 .explanationVi("Nêu lý do chủ quan.\nVí dụ: 時間がありませんから、タクシーで行きましょう。").build());
         after = grammarPointRepository.save(GrammarPoint.builder().jlptLevel(LEVEL).pattern("Vてから")
                 .meaningVi("Sau khi V1 rồi V2").build());
-        passage = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).content("【1】")
+        passage = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).section(ExamSection.GRAMMAR).content("【1】")
                 .review(new ReviewState(ExamQuestionStatus.APPROVED)).build());
     }
 

@@ -18,6 +18,7 @@ import com.kanjimastery.backend.model.ExamSitting;
 import com.kanjimastery.backend.model.ExamSittingStatus;
 import com.kanjimastery.backend.model.UserExamAnswer;
 import com.kanjimastery.backend.model.UserExamAttempt;
+import com.kanjimastery.backend.repository.ExamPassageRepository;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.ExamSittingRepository;
 import com.kanjimastery.backend.repository.UserExamAnswerRepository;
@@ -41,8 +42,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Làm đề JLPT theo cấu trúc đề thật: một buổi thi ({@link ExamSitting}) gồm các phần đã chọn (Từ vựng, Ngữ pháp), mỗi
- * phần là một lượt thi có giờ riêng - đếm giờ, tự nộp, chấm điểm, xem lại dùng chung với thi nhanh. Phần sau chỉ bắt
+ * Làm đề JLPT theo cấu trúc đề thật: một buổi thi ({@link ExamSitting}) gồm các phần đã chọn (Từ vựng, Ngữ pháp, Đọc
+ * hiểu), mỗi phần là một lượt thi có giờ riêng - đếm giờ, tự nộp, chấm điểm, xem lại dùng chung với thi nhanh. Phần sau chỉ bắt
  * đầu khi phần trước đã nộp hoặc hết giờ, và không quay lại phần trước được, như đề thật.
  */
 @Service
@@ -67,6 +68,7 @@ public class JlptExamService {
     private final JlptBlueprintProperties blueprints;
     private final JlptExamAssembler assembler;
     private final ExamQuestionRepository questionRepository;
+    private final ExamPassageRepository passageRepository;
     private final ExamSittingRepository sittingRepository;
     private final UserExamAttemptRepository attemptRepository;
     private final UserExamAnswerRepository answerRepository;
@@ -91,9 +93,10 @@ public class JlptExamService {
                 .map(section -> {
                     List<JlptLevelResponse.Mondai> mondai = new ArrayList<>();
                     int questionCount = 0;
+                    int number = blueprints.firstMondaiNumber(level, section.getName());
                     for (Map.Entry<JlptQuestionType, Integer> entry : section.getQuestions().entrySet()) {
                         int have = available.getOrDefault(entry.getKey(), 0L).intValue();
-                        mondai.add(new JlptLevelResponse.Mondai(mondai.size() + 1, entry.getKey(), entry.getValue(),
+                        mondai.add(new JlptLevelResponse.Mondai(number + mondai.size(), entry.getKey(), entry.getValue(),
                                 have));
                         questionCount += Math.min(have, entry.getValue());
                     }
@@ -103,6 +106,7 @@ public class JlptExamService {
                             .plannedMinutes(section.getMinutes())
                             .questionCount(questionCount)
                             .minutes(durationSeconds(section, questionCount) / 60)
+                            .locked(locked(section, available))
                             .mondai(mondai)
                             .build();
                 })
@@ -136,10 +140,15 @@ public class JlptExamService {
         // Phần nào chưa có câu thì báo ngay, không để người học làm xong phần đầu mới biết phần sau không có đề.
         Map<JlptQuestionType, Long> available = availableByType(level, request.getSource());
         for (JlptBlueprintProperties.Section section : blueprint.getSections()) {
-            if (sections.contains(section.getName())
-                    && section.types().stream().noneMatch(type -> available.getOrDefault(type, 0L) > 0)) {
+            if (!sections.contains(section.getName())) {
+                continue;
+            }
+            if (section.types().stream().noneMatch(type -> available.getOrDefault(type, 0L) > 0)) {
                 throw new BadRequestException(
                         "Phần " + section.getName().vietnameseName() + " của đề " + level + " chưa có câu hỏi");
+            }
+            if (locked(section, available)) {
+                throw new BadRequestException(notFullSet(level, section.getName()));
             }
         }
 
@@ -210,13 +219,18 @@ public class JlptExamService {
         JlptBlueprintProperties.Section section = blueprints.section(sitting.getJlptLevel(), sectionName)
                 .orElseThrow(() -> new BadRequestException("Không còn cấu trúc đề cho phần thi: " + sectionName));
         List<JlptExamAssembler.Mondai> mondai = assembler.assemble(sitting.getUserId(), sitting.getJlptLevel(), section,
-                        wordsAsked, sitting.getQuestionSource()).stream()
+                        blueprints.firstMondaiNumber(sitting.getJlptLevel(), sectionName), wordsAsked,
+                        sitting.getQuestionSource()).stream()
                 .filter(part -> !part.questions().isEmpty())
                 .toList();
         List<ExamQuestion> questions = mondai.stream().flatMap(part -> part.questions().stream()).toList();
         if (questions.isEmpty()) {
             throw new BadRequestException("Phần " + sectionName.vietnameseName() + " của đề "
                     + sitting.getJlptLevel() + " chưa có câu hỏi");
+        }
+        // Lúc tạo buổi thi đã đủ bài nhưng bài có thể vừa bị rút: không ghép đề thiếu bài.
+        if (section.isFullSetOnly() && questions.size() < section.plannedQuestions()) {
+            throw new BadRequestException(notFullSet(sitting.getJlptLevel(), sectionName));
         }
 
         UserExamAttempt attempt = UserExamAttempt.builder()
@@ -279,12 +293,14 @@ public class JlptExamService {
                 .toList();
         boolean canContinue = ExamSittingStatus.IN_PROGRESS.equals(sitting.getStatus())
                 && attempts.stream().noneMatch(JlptExamService::inProgress);
-        int correct = 0;
-        int total = 0;
+        // Kiến thức ngôn ngữ và Đọc hiểu là hai môn, mỗi môn một thang 0-60 như đề thật.
+        int[] language = new int[2];
+        int[] reading = new int[2];
         for (ExamSittingResponse.Section section : sections) {
             if (section.getTotalQuestions() != null) {
-                correct += section.getTotalScore() == null ? 0 : section.getTotalScore();
-                total += section.getTotalQuestions();
+                int[] tally = section.getName().languageKnowledge() ? language : reading;
+                tally[0] += section.getTotalScore() == null ? 0 : section.getTotalScore();
+                tally[1] += section.getTotalQuestions();
             }
         }
         return ExamSittingResponse.builder()
@@ -297,7 +313,8 @@ public class JlptExamService {
                 .customTime(sitting.hasCustomTime())
                 .sections(sections)
                 .nextSection(canContinue ? nextSection(sitting, attempts) : null)
-                .estimatedScore(total > 0 ? estimatedScore(correct, total) : null)
+                .estimatedScore(language[1] > 0 ? estimatedScore(language[0], language[1]) : null)
+                .readingEstimatedScore(reading[1] > 0 ? estimatedScore(reading[0], reading[1]) : null)
                 .build();
     }
 
@@ -342,24 +359,30 @@ public class JlptExamService {
     }
 
     /**
-     * Kết quả cả buổi thi để lên bảng xếp hạng: chỉ khi buổi thi gồm mọi phần trong cấu trúc đề của cấp độ (đề trọn vẹn)
-     * và làm đúng giờ đề thật - có thêm giờ thì điểm không so được với người khác.
+     * Kết quả môn Kiến thức ngôn ngữ của buổi thi để lên bảng xếp hạng: chỉ khi buổi thi gồm mọi phần Kiến thức ngôn ngữ
+     * trong cấu trúc đề của cấp độ (Từ vựng và Ngữ pháp) và làm đúng giờ đề thật - có thêm giờ thì điểm không so được
+     * với người khác. Phần Đọc hiểu (nếu có làm) không tính vào bảng xếp hạng.
      */
     private Optional<CompletedSitting> completedSitting(ExamSitting sitting, List<UserExamAttempt> attempts) {
         if (sitting.hasCustomTime()) {
             return Optional.empty();
         }
         JlptBlueprintProperties.Level blueprint = blueprints.getLevels().get(sitting.getJlptLevel());
-        List<ExamSection> allSections = blueprint == null
+        List<ExamSection> required = blueprint == null
                 ? List.of()
-                : blueprint.getSections().stream().map(JlptBlueprintProperties.Section::getName).toList();
-        if (allSections.isEmpty() || !sitting.sectionList().containsAll(allSections)) {
+                : blueprint.getSections().stream().map(JlptBlueprintProperties.Section::getName)
+                        .filter(ExamSection::languageKnowledge)
+                        .toList();
+        if (required.isEmpty() || !sitting.sectionList().containsAll(required)) {
             return Optional.empty();
         }
         int correct = 0;
         int total = 0;
         int seconds = 0;
         for (UserExamAttempt attempt : attempts) {
+            if (!attempt.getSection().languageKnowledge()) {
+                continue;
+            }
             correct += attempt.getTotalScore() == null ? 0 : attempt.getTotalScore();
             total += (int) answerRepository.countByAttemptId(attempt.getId());
             int spent = attempt.getTimeSpentSeconds() == null ? 0 : attempt.getTimeSpentSeconds();
@@ -391,10 +414,42 @@ public class JlptExamService {
         return (int) minutes * 60;
     }
 
+    /**
+     * Số câu đã duyệt hiện có của từng dạng. Dạng lấy theo bài ({@link JlptBlueprintProperties.Section#getPerPassage()})
+     * chỉ tính câu của các bài trọn vẹn: bài đã duyệt có đúng số câu mỗi bài.
+     */
     private Map<JlptQuestionType, Long> availableByType(JlptLevel level, ExamQuestionSource source) {
-        return questionRepository.countApprovedByType(level.name(), source == null ? null : source.name()).stream()
-                .collect(Collectors.toMap(ExamQuestionRepository.TypeCount::getType,
-                        ExamQuestionRepository.TypeCount::getCount));
+        String sourceName = source == null ? null : source.name();
+        Map<JlptQuestionType, Long> available = new EnumMap<>(JlptQuestionType.class);
+        questionRepository.countApprovedByType(level.name(), sourceName)
+                .forEach(count -> available.put(count.getType(), count.getCount()));
+        JlptBlueprintProperties.Level blueprint = blueprints.getLevels().get(level);
+        if (blueprint == null) {
+            return available;
+        }
+        for (JlptBlueprintProperties.Section section : blueprint.getSections()) {
+            if (section.getPerPassage().isEmpty()) {
+                continue;
+            }
+            List<ExamPassageRepository.PassageCount> sizes = passageRepository.countApprovedBySize(level.name(),
+                    section.getName().name(), sourceName);
+            section.getPerPassage().forEach((type, perPassage) -> available.put(type, perPassage * sizes.stream()
+                    .filter(size -> type.equals(size.getType()) && perPassage.equals(size.getQuestions()))
+                    .mapToLong(ExamPassageRepository.PassageCount::getPassages)
+                    .sum()));
+        }
+        return available;
+    }
+
+    /** Phần chỉ làm được khi đủ câu của đề thật mà còn dạng chưa đủ câu. */
+    private static boolean locked(JlptBlueprintProperties.Section section, Map<JlptQuestionType, Long> available) {
+        return section.isFullSetOnly() && section.getQuestions().entrySet().stream()
+                .anyMatch(entry -> available.getOrDefault(entry.getKey(), 0L) < entry.getValue());
+    }
+
+    private static String notFullSet(JlptLevel level, ExamSection section) {
+        return "Hiện chưa thể làm phần " + section.vietnameseName() + " của đề " + level
+                + ": ngân hàng chưa đủ bài đã duyệt cho một đề trọn vẹn";
     }
 
     /** Phần đầu tiên (theo thứ tự làm bài) chưa bắt đầu; null nếu đã bắt đầu hết. */

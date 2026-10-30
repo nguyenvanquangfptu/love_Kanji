@@ -105,6 +105,7 @@ public class PassageDraftService {
         String title = root.path("title").asText("").strip();
         ExamPassage passage = ExamPassage.builder()
                 .jlptLevel(normalized)
+                .section(ExamSection.GRAMMAR)
                 .title(title.isEmpty() ? null : title.substring(0, Math.min(title.length(), MAX_TITLE_LENGTH)))
                 .content(content)
                 .source(ExamQuestionSource.AI)

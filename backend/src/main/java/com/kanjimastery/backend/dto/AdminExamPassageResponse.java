@@ -2,6 +2,7 @@ package com.kanjimastery.backend.dto;
 
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.ExamQuestionFlag;
+import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.ExamQuestionSource;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
 import lombok.AllArgsConstructor;
@@ -11,15 +12,17 @@ import lombok.Getter;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** Một đoạn văn 文章の文法 trên trang duyệt, kèm các câu hỏi theo thứ tự chỗ trống. */
+/** Một đoạn văn (文章の文法 hoặc bài đọc) trên trang duyệt, kèm các câu hỏi theo thứ tự chỗ trống / thứ tự câu. */
 @Getter
 @Builder
 @AllArgsConstructor
 public class AdminExamPassageResponse {
     private Long id;
     private JlptLevel jlptLevel;
+    /** {@link com.kanjimastery.backend.model.ExamSection}: GRAMMAR (文章の文法) hoặc READING (bài đọc). */
+    private ExamSection section;
     private String title;
-    /** Chỗ trống đánh dấu 【1】【2】... */
+    /** Ngữ pháp: chỗ trống đánh dấu 【1】【2】...; Đọc hiểu: gạch chân 〔下線〕...〔/下線〕, bảng | ô | ô |. */
     private String content;
     /** {@link com.kanjimastery.backend.model.ExamQuestionStatus} */
     private ExamQuestionStatus status;
