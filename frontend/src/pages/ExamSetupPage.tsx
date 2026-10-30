@@ -116,7 +116,7 @@ function JlptSetup() {
     levels.find((l) => l.jlptLevel === level) ??
     levels.find((l) => l.sections.some((s) => s.questionCount > 0)) ??
     levels[0]
-  const chosen = current.sections.filter((s) => s.questionCount > 0 && !unchecked.includes(s.name))
+  const chosen = current.sections.filter((s) => canTake(s) && !unchecked.includes(s.name))
   // Giờ tự đặt của các phần đã chọn; phần gõ chưa hợp lệ thì chưa cho bắt đầu.
   const timed = chosen.filter((s) => customMinutes[s.name] !== undefined)
   const invalidTime = timed.some((s) => !validMinutes(customMinutes[s.name]))
@@ -197,7 +197,7 @@ function JlptSetup() {
           <h2 className="mb-3 font-black">3. Chọn phần thi</h2>
           <div className="flex flex-col gap-2">
             {current.sections.map((s) => {
-              const ready = s.questionCount > 0
+              const ready = canTake(s)
               const checked = ready && !unchecked.includes(s.name)
               return (
                 <div key={s.name} className="flex flex-col gap-2">
@@ -222,9 +222,17 @@ function JlptSetup() {
                         {ready ? (
                           `${s.questionCount} câu · ${s.minutes} phút`
                         ) : (
-                          <span className="text-muted-foreground">Chưa có câu hỏi</span>
+                          <span className="text-muted-foreground">
+                            {s.locked && s.questionCount > 0 ? 'Hiện chưa thể dùng chức năng này' : 'Chưa có câu hỏi'}
+                          </span>
                         )}
                       </span>
+                      {s.locked && (
+                        <span className="block text-xs font-semibold text-muted-foreground">
+                          Cần đủ bài đọc đã duyệt cho một đề trọn vẹn ({s.plannedQuestions} câu ·{' '}
+                          {s.plannedMinutes} phút)
+                        </span>
+                      )}
                       {ready && s.questionCount < s.plannedQuestions && (
                         <span className="block text-xs font-semibold text-muted-foreground">
                           Đề thật {s.plannedQuestions} câu · {s.plannedMinutes} phút
@@ -262,6 +270,12 @@ function JlptSetup() {
           <li className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4 shrink-0 text-accent-dark" strokeWidth={3} /> Kết quả theo từng 問題
           </li>
+          {current.sections.some((s) => s.name === 'READING') && (
+            <li className="flex items-center gap-2">
+              <Trophy className="h-4 w-4 shrink-0 text-accent-dark" strokeWidth={3} /> Đọc hiểu chấm điểm riêng (thang
+              60), bảng xếp hạng chỉ tính Từ vựng + Ngữ pháp
+            </li>
+          )}
         </ul>
 
         <Button
@@ -293,6 +307,11 @@ function JlptSetup() {
       </div>
     </div>
   )
+}
+
+/** Phần làm được lúc này: có câu, và (với phần cần đủ đề thật như Đọc hiểu) đã đủ bài. */
+function canTake(section: JlptLevelResponse['sections'][number]) {
+  return section.questionCount > 0 && !section.locked
 }
 
 const MIN_MINUTES = 5
@@ -369,7 +388,7 @@ function SectionTime({
 
 /** Cấu trúc đề của cấp độ: các 問題 với số câu đề thật và số câu đề này lấy được. */
 function StructureCard({ level }: { level: JlptLevelResponse }) {
-  const shortened = level.sections.some((s) => s.questionCount > 0 && s.questionCount < s.plannedQuestions)
+  const shortened = level.sections.some((s) => canTake(s) && s.questionCount < s.plannedQuestions)
   return (
     <Card className="p-5">
       <h2 className="font-black">Cấu trúc đề {level.jlptLevel}</h2>

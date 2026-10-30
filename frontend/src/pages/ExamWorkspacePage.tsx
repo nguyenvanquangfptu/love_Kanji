@@ -5,12 +5,13 @@ import { ChevronLeft, ChevronRight, Send } from 'lucide-react'
 import { examApi } from '@/api/exam'
 import { extractErrorMessage } from '@/api/client'
 import { getCachedExamQuestions } from '@/lib/examCache'
-import { mondaiAt, mondaiRanges, QUESTION_TYPE_META, SECTION_META, type MondaiRange } from '@/lib/jlpt'
+import { isReadingType, mondaiAt, mondaiRanges, QUESTION_TYPE_META, SECTION_META, type MondaiRange } from '@/lib/jlpt'
 import type { ExamPassage, ExamQuestionPublicResponse, ExamSectionName } from '@/api/types'
 import { Countdown } from '@/components/Countdown'
 import { QuestionPalette } from '@/components/QuestionPalette'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
 import { PassageText } from '@/components/PassageText'
+import { ReadingPassage, UnderlinedText } from '@/components/ReadingPassage'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Alert } from '@/components/ui/alert'
@@ -32,8 +33,10 @@ export function ExamWorkspacePage() {
   const [questions, setQuestions] = useState<ExamQuestionPublicResponse[] | null>(null)
   // Phần đề JLPT: các 問題 (câu xếp liền nhau theo thứ tự) và tên phần; rỗng/null với thi nhanh.
   const [mondai, setMondai] = useState<MondaiRange[]>([])
-  // Đoạn văn của các câu 文章の文法.
+  // Đoạn văn của các câu 文章の文法 và bài đọc của phần Đọc hiểu.
   const [passages, setPassages] = useState<ExamPassage[]>([])
+  // Số trong đề thật của câu đầu tiên: phần Đọc hiểu N3 đánh số tiếp theo phần Ngữ pháp (câu 24...).
+  const [firstNumber, setFirstNumber] = useState(1)
   const [section, setSection] = useState<ExamSectionName | null>(null)
   const [answers, setAnswers] = useState<Record<number, string>>({})
   const [currentIndex, setCurrentIndex] = useState(0)
@@ -69,6 +72,7 @@ export function ExamWorkspacePage() {
           setQuestions(cached.questions)
           setMondai(mondaiRanges(cached.mondai))
           setPassages(cached.passages ?? [])
+          setFirstNumber(cached.firstQuestionNumber ?? 1)
         }
         setSection(session.section)
         setAnswers(Object.fromEntries(Object.entries(session.answers).map(([k, v]) => [Number(k), v])))
@@ -323,15 +327,41 @@ export function ExamWorkspacePage() {
   const current = questions[currentIndex]
   const currentMondai = mondaiAt(mondai, currentIndex)
   const passage = current.passageId ? passages.find((p) => p.id === current.passageId) : undefined
+  const reading = isReadingType(current.questionType)
   // Vị trí trong bài của câu điền vào chỗ trống n của đoạn văn đang làm.
   const indexOfBlank = (blankNo: number) =>
     questions.findIndex((q) => q.passageId === current.passageId && q.blankNo === blankNo)
+  // Câu của bài đọc đang làm (để ghi "câu 24-26" trên bài đọc).
+  const passageIndexes = reading ? questions.flatMap((q, i) => (q.passageId === current.passageId ? [i] : [])) : []
+
+  const passageView = passage && reading && (
+    <section className="rounded-2xl border-2 border-border bg-card lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:overflow-y-auto">
+      {/* Màn hẹp: bài đọc thu gọn được để nhìn thấy câu hỏi; màn rộng: bài đọc nằm cạnh câu hỏi. */}
+      <details open className="group px-4 py-3">
+        <summary className="cursor-pointer text-xs font-extrabold text-muted-foreground lg:pointer-events-none lg:list-none">
+          Bài đọc · câu {firstNumber + passageIndexes[0]}
+          {passageIndexes.length > 1 && `-${firstNumber + passageIndexes[passageIndexes.length - 1]}`}
+          <span className="ml-1 lg:hidden">(bấm để thu gọn / mở)</span>
+        </summary>
+        {passage.title && <h2 className="mt-2 text-center font-jp font-black">{passage.title}</h2>}
+        <ReadingPassage content={passage.content} className="mt-2" />
+      </details>
+    </section>
+  )
 
   return (
     <>
       {header}
-      <div className="mx-auto grid max-w-5xl gap-6 px-4 py-6 lg:grid-cols-[1fr_280px]">
-        <div className="flex flex-col gap-5">
+      <div
+        className={cn(
+          'mx-auto grid gap-6 px-4 py-6',
+          passageView
+            ? 'max-w-7xl lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_240px]'
+            : 'max-w-5xl lg:grid-cols-[1fr_280px]',
+        )}
+      >
+        {passageView}
+        <div className="flex min-w-0 flex-col gap-5">
           {autoSubmitNotice && <Alert>Đã hết giờ làm bài — đang tự động nộp bài...</Alert>}
           {submitError}
           {failedCount > 0 && !submitMutation.isError && (
@@ -347,7 +377,7 @@ export function ExamWorkspacePage() {
             </p>
           )}
           {currentMondai && <MondaiHeader mondai={currentMondai} />}
-          {passage && (
+          {passage && !reading && (
             <section className="max-h-[45vh] overflow-y-auto rounded-2xl border-2 border-border bg-card px-4 py-3">
               {passage.title && <h2 className="mb-1 text-center font-jp font-black">{passage.title}</h2>}
               <PassageText
@@ -364,11 +394,19 @@ export function ExamWorkspacePage() {
 
           <div key={current.id} className="animate-pop-in">
             <p className="text-sm font-extrabold uppercase tracking-wider text-secondary">
-              Câu {currentIndex + 1} / {total}
+              Câu {firstNumber + currentIndex}
+              {firstNumber > 1 ? ` · ${currentIndex + 1}/${total}` : ` / ${total}`}
             </p>
-            {/* Đề JLPT: câu dẫn đã có ở đầu 問題, câu có câu ví dụ thì không nhắc lại. */}
-            {!(currentMondai && current.sentence) && !current.passageId && (
-              <h1 className="mt-2 font-jp text-xl font-bold leading-relaxed sm:text-2xl">{current.questionText}</h1>
+            {/* Đề JLPT: câu dẫn đã có ở đầu 問題, câu có câu ví dụ thì không nhắc lại; câu Đọc hiểu luôn có câu hỏi riêng. */}
+            {reading ? (
+              <h1 className="mt-2 font-jp text-xl font-bold leading-relaxed">
+                <UnderlinedText text={current.questionText} />
+              </h1>
+            ) : (
+              !(currentMondai && current.sentence) &&
+              !current.passageId && (
+                <h1 className="mt-2 font-jp text-xl font-bold leading-relaxed sm:text-2xl">{current.questionText}</h1>
+              )
             )}
             {current.sentence && (
               <p className="mt-4 rounded-2xl border-2 border-border bg-card px-4 py-3 font-jp text-xl leading-loose sm:text-2xl">
@@ -440,6 +478,7 @@ export function ExamWorkspacePage() {
                       total={total}
                       from={m.start}
                       count={m.questionCount}
+                      firstNumber={firstNumber}
                       currentIndex={currentIndex}
                       isAnswered={(i) => answers[questions[i].id] !== undefined}
                       onSelect={setCurrentIndex}

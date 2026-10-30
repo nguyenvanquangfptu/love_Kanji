@@ -22,7 +22,9 @@ interface CachedExam {
   sittingId?: number | null
   section?: ExamSectionName | null
   mondai?: ExamMondai[] | null
-  /** Đoạn văn của các câu 文章の文法. */
+  /** Số trong đề thật của câu đầu tiên (thiếu ở cache cũ = 1). */
+  firstQuestionNumber?: number
+  /** Đoạn văn của các câu 文章の文法 và bài đọc. */
   passages?: ExamPassage[] | null
 }
 
@@ -46,6 +48,7 @@ export function cacheStartedExam(data: StartExamResponse) {
     sittingId: data.sittingId,
     section: data.section,
     mondai: data.mondai,
+    firstQuestionNumber: data.firstQuestionNumber,
     passages: data.passages,
   })
 }
