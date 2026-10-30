@@ -8,6 +8,7 @@ import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
 import com.kanjimastery.backend.dto.QuestionBankStatsResponse;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.model.ExamPassage;
+import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionFlag;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
@@ -107,7 +108,7 @@ class ExamQuestionReviewIT extends AbstractIntegrationTest {
         ExamQuestion approved = questionRepository.save(grammarQuestion("を", "が")
                 .review(new ReviewState(ExamQuestionStatus.APPROVED)).build());
         ExamQuestion broken = questionRepository.save(grammarQuestion("を", "を").build());
-        ExamPassage passage = passageRepository.save(ExamPassage.builder().jlptLevel(JlptLevel.N5).content("【1】").build());
+        ExamPassage passage = passageRepository.save(ExamPassage.builder().jlptLevel(JlptLevel.N5).section(ExamSection.GRAMMAR).content("【1】").build());
         ExamQuestion blank = questionRepository.save(grammarQuestion("を", "が").questionText("【1】")
                 .questionType(JlptQuestionType.TEXT_GRAMMAR).passageId(passage.getId()).blankNo(1).build());
         try {

@@ -2,15 +2,21 @@ import { useRef, useState } from 'react'
 import { CheckCircle2, FileUp, ListChecks, Upload } from 'lucide-react'
 import { examAdminApi } from '@/api/examAdmin'
 import { extractErrorMessage } from '@/api/client'
-import type { ExamImportResult } from '@/api/types'
+import type { ExamImportResult, JlptQuestionType } from '@/api/types'
+import { QUESTION_TYPE_META } from '@/lib/jlpt'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 
+/** Dạng bài đọc nhập lẻ được (một file JSON là một bài đọc). */
+const READING_TYPES: JlptQuestionType[] = ['READING_SHORT', 'READING_MID', 'READING_LONG', 'INFO_SEARCH']
+
 /** Một file đề đã chọn: nội dung đọc được, kết quả chạy thử và kết quả nhập. */
 interface ImportFile {
   name: string
+  /** Dạng bài đọc khi nhập một bài lẻ; không có = file là cả một đề. */
+  type?: JlptQuestionType
   /** Nội dung JSON của file; null nếu không đọc được. */
   test: unknown
   /** Cấp độ ghi trong file ("cap_do"), để mở đúng cấp độ khi duyệt. */
@@ -31,20 +37,33 @@ function ready(file: ImportFile) {
   )
 }
 
+/** Chạy thử hoặc nhập một file: cả đề, hay một bài đọc lẻ của dạng đã chọn. */
+function send(file: ImportFile, dryRun: boolean) {
+  return file.type
+    ? examAdminApi.importReading(file.type, file.test, dryRun)
+    : examAdminApi.importTest(file.test, dryRun)
+}
+
 /**
- * Nhập đề tự soạn: mỗi file JSON là một đề (phần Từ vựng và Ngữ pháp). Chọn file thì chạy thử ngay - xem lỗi phải sửa
- * theo số câu trong đề và các cảnh báo - rồi mới nhập những đề không còn lỗi. Câu nhập vào ở trạng thái chờ duyệt;
+ * Nhập đề tự soạn: mỗi file JSON là một đề (phần Từ vựng, Ngữ pháp, Đọc hiểu), hoặc chế độ "Một bài đọc lẻ": mỗi file
+ * là một bài đọc của dạng chọn trong danh sách. Chọn file thì chạy thử ngay - xem lỗi phải sửa theo số câu trong đề
+ * và các cảnh báo - rồi mới nhập những file không còn lỗi. Câu nhập vào ở trạng thái chờ duyệt;
  * nhập lại một đề đã nhập không tạo câu trùng.
  */
 export function ExamImportPanel({
   onImported,
   onReview,
+  onReviewReading,
 }: {
   onImported: () => void
   /** Mở danh sách câu chờ duyệt của một đề. */
   onReview: (testCode: string, level: string | null) => void
+  /** Mở danh sách bài đọc chờ duyệt của một dạng. */
+  onReviewReading: (type: JlptQuestionType, level: string | null) => void
 }) {
   const [files, setFiles] = useState<ImportFile[]>([])
+  // null = mỗi file là cả một đề; một dạng bài đọc = mỗi file là một bài đọc lẻ của dạng đó.
+  const [readingType, setReadingType] = useState<JlptQuestionType | null>(null)
   const [busy, setBusy] = useState<'checking' | 'importing' | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -52,12 +71,12 @@ export function ExamImportPanel({
     setBusy('checking')
     const checked: ImportFile[] = []
     for (const file of selected) {
-      const entry: ImportFile = { name: file.name, test: null, level: null }
+      const entry: ImportFile = { name: file.name, type: readingType ?? undefined, test: null, level: null }
       try {
         entry.test = JSON.parse(await file.text())
         const level = (entry.test as { cap_do?: unknown }).cap_do
         entry.level = typeof level === 'string' ? level.trim().toUpperCase() : null
-        entry.check = await examAdminApi.importTest(entry.test, true)
+        entry.check = await send(entry, true)
       } catch (error) {
         entry.failure =
           error instanceof SyntaxError ? 'Không đọc được file: nội dung không phải JSON hợp lệ.' : extractErrorMessage(error)
@@ -74,7 +93,7 @@ export function ExamImportPanel({
     for (let i = 0; i < next.length; i++) {
       if (!ready(next[i])) continue
       try {
-        next[i] = { ...next[i], result: await examAdminApi.importTest(next[i].test, false) }
+        next[i] = { ...next[i], result: await send(next[i], false) }
       } catch (error) {
         next[i] = { ...next[i], failure: extractErrorMessage(error) }
       }
@@ -92,10 +111,30 @@ export function ExamImportPanel({
         <div className="min-w-0 flex-1">
           <p className="font-black">Nhập đề tự soạn</p>
           <p className="text-sm font-semibold text-muted-foreground">
-            Mỗi file JSON là một đề. Chọn file thì chạy thử ngay, chưa ghi gì; đề không còn lỗi mới nhập được. Câu nhập
-            vào ở trạng thái chờ duyệt, nhập lại một đề không tạo câu trùng.
+            {readingType
+              ? `Mỗi file JSON là một bài ${QUESTION_TYPE_META[readingType].jp} (${QUESTION_TYPE_META[readingType].vi}).`
+              : 'Mỗi file JSON là một đề.'}{' '}
+            Chọn file thì chạy thử ngay, chưa ghi gì; file không còn lỗi mới nhập được. Câu nhập vào ở trạng thái chờ
+            duyệt, nhập lại không tạo câu trùng.
           </p>
         </div>
+        <select
+          className="h-10 rounded-xl border-2 border-border bg-card px-3 text-sm font-bold"
+          value={readingType ?? ''}
+          disabled={busy !== null}
+          onChange={(e) => {
+            setReadingType((e.target.value || null) as JlptQuestionType | null)
+            setFiles([])
+          }}
+          aria-label="Loại file nhập"
+        >
+          <option value="">Cả đề</option>
+          {READING_TYPES.map((type) => (
+            <option key={type} value={type}>
+              Một bài đọc lẻ: {QUESTION_TYPE_META[type].jp}
+            </option>
+          ))}
+        </select>
         <input
           ref={inputRef}
           type="file"
@@ -110,22 +149,30 @@ export function ExamImportPanel({
           }}
         />
         <Button variant="outline" disabled={busy !== null} onClick={() => inputRef.current?.click()}>
-          <FileUp className="h-4 w-4" /> {busy === 'checking' ? 'Đang chạy thử...' : 'Chọn file đề'}
+          <FileUp className="h-4 w-4" />{' '}
+          {busy === 'checking' ? 'Đang chạy thử...' : readingType ? 'Chọn file bài đọc' : 'Chọn file đề'}
         </Button>
       </div>
 
       {files.map((file, index) => (
-        <ImportFileReport key={`${index}-${file.name}`} file={file} onReview={onReview} />
+        <ImportFileReport
+          key={`${index}-${file.name}`}
+          file={file}
+          onReview={onReview}
+          onReviewReading={onReviewReading}
+        />
       ))}
 
       {files.length > 0 && (
         <div className="flex flex-wrap items-center justify-end gap-3">
           {readyCount === 0 && busy === null && (
-            <p className="text-sm font-semibold text-muted-foreground">Không có đề nào sẵn sàng để nhập.</p>
+            <p className="text-sm font-semibold text-muted-foreground">Không có file nào sẵn sàng để nhập.</p>
           )}
           <Button disabled={readyCount === 0 || busy !== null} onClick={() => void importReady()}>
             <Upload className="h-4 w-4" />
-            {busy === 'importing' ? 'Đang nhập...' : `Nhập ${readyCount} đề không có lỗi`}
+            {busy === 'importing'
+              ? 'Đang nhập...'
+              : `Nhập ${readyCount} ${readingType ? 'bài đọc' : 'đề'} không có lỗi`}
           </Button>
         </div>
       )}
@@ -136,16 +183,19 @@ export function ExamImportPanel({
 function ImportFileReport({
   file,
   onReview,
+  onReviewReading,
 }: {
   file: ImportFile
   onReview: (testCode: string, level: string | null) => void
+  onReviewReading: (type: JlptQuestionType, level: string | null) => void
 }) {
   const report = file.result ?? file.check
   return (
     <div className="rounded-2xl border-2 border-border p-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="min-w-0 break-all font-bold">{file.name}</span>
-        {report && <Badge variant="outline">Mã đề {report.testCode}</Badge>}
+        {file.type && <Badge variant="purple">{QUESTION_TYPE_META[file.type].jp}</Badge>}
+        {report?.testCode && <Badge variant="outline">Mã đề {report.testCode}</Badge>}
         {file.failure ? (
           <Badge variant="destructive">Không nhập được</Badge>
         ) : file.result ? (
@@ -192,9 +242,12 @@ function ImportFileReport({
           size="sm"
           variant="outline"
           className="mt-2"
-          onClick={() => onReview(file.result!.testCode, file.level)}
+          onClick={() => {
+            if (file.type) onReviewReading(file.type, file.level)
+            else if (file.result?.testCode) onReview(file.result.testCode, file.level)
+          }}
         >
-          <ListChecks className="h-4 w-4" /> Duyệt đề này
+          <ListChecks className="h-4 w-4" /> {file.type ? 'Duyệt bài đọc' : 'Duyệt đề này'}
         </Button>
       )}
     </div>

@@ -32,10 +32,12 @@ public class ExamSittingResponse {
     /** Phần làm tiếp theo; null khi đang làm dở một phần, đã làm hết, hoặc buổi thi đã kết thúc. */
     private ExamSection nextSection;
     /**
-     * Điểm ước tính thang 0-60 trên các phần đã chốt điểm (tỉ lệ đúng × 60); null khi chưa phần nào xong. Chỉ để tham
-     * khảo: JLPT thật quy đổi điểm theo thống kê và có điểm sàn từng phần.
+     * Điểm ước tính môn Kiến thức ngôn ngữ thang 0-60 trên các phần Từ vựng, Ngữ pháp đã chốt điểm (tỉ lệ đúng × 60);
+     * null khi chưa phần nào xong. Chỉ để tham khảo: JLPT thật quy đổi điểm theo thống kê và có điểm sàn từng phần.
      */
     private Integer estimatedScore;
+    /** Điểm ước tính môn Đọc hiểu thang 0-60, tính như {@link #estimatedScore}; null khi chưa làm xong phần Đọc hiểu. */
+    private Integer readingEstimatedScore;
 
     @Getter
     @Builder

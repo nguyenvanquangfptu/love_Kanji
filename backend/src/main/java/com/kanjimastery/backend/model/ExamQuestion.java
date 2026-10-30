@@ -72,11 +72,11 @@ public class ExamQuestion {
     @Builder.Default
     private ReviewState review = new ReviewState(ExamQuestionStatus.APPROVED);
 
-    /** Đoạn văn chứa câu hỏi (問題3 文章の文法); null với câu đứng riêng. */
+    /** Đoạn văn chứa câu hỏi (文章の文法, bài đọc của phần Đọc hiểu); null với câu đứng riêng. */
     @Column(name = "passage_id")
     private Long passageId;
 
-    /** Chỗ trống 【n】 trong đoạn văn mà câu hỏi này điền vào. */
+    /** Chỗ trống 【n】 trong đoạn văn mà câu hỏi này điền vào; với bài đọc là thứ tự câu hỏi trong bài (1..n). */
     @Column(name = "blank_no")
     private Integer blankNo;
 

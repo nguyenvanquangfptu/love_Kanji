@@ -8,6 +8,7 @@ import com.kanjimastery.backend.dto.QuestionReviewItem;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.model.ExamAttemptStatus;
 import com.kanjimastery.backend.model.ExamPassage;
+import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionFlag;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
@@ -76,7 +77,7 @@ class QuestionReportIT extends AbstractIntegrationTest {
     @BeforeEach
     void setUp() {
         standalone = questionRepository.save(question().build());
-        passage = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).content("【1】【2】")
+        passage = passageRepository.save(ExamPassage.builder().jlptLevel(LEVEL).section(ExamSection.GRAMMAR).content("【1】【2】")
                 .review(new ReviewState(ExamQuestionStatus.APPROVED)).build());
         firstBlank = questionRepository.save(question().questionText("【1】").questionType(JlptQuestionType.TEXT_GRAMMAR)
                 .sentence(null).passageId(passage.getId()).blankNo(1).build());

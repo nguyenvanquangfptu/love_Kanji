@@ -296,15 +296,19 @@ export interface ExamQuestionPublicResponse {
   blankNo: number | null
 }
 
-/** Đoạn văn của 問題3 文章の文法: chỗ trống đánh dấu 【1】【2】... theo blankNo của câu hỏi. */
+/**
+ * Đoạn văn trong bài thi. Ngữ pháp (文章の文法): chỗ trống đánh dấu 【1】【2】... theo blankNo của câu hỏi. Đọc hiểu:
+ * bài đọc, gạch chân 〔下線〕...〔/下線〕, bảng viết thành các dòng | ô | ô |; blankNo là thứ tự câu trong bài.
+ */
 export interface ExamPassage {
   id: number
+  section: ExamSectionName
   title: string | null
   content: string
 }
 
-/** Các phần của đề JLPT (chỉ phần Kiến thức ngôn ngữ). */
-export type ExamSectionName = 'VOCABULARY' | 'GRAMMAR'
+/** Các phần của đề JLPT (chưa có Nghe hiểu). */
+export type ExamSectionName = 'VOCABULARY' | 'GRAMMAR' | 'READING'
 
 /** Dạng câu (大問) trong đề JLPT. */
 export type JlptQuestionType =
@@ -316,6 +320,10 @@ export type JlptQuestionType =
   | 'GRAMMAR_FORM'
   | 'SENTENCE_ORDER'
   | 'TEXT_GRAMMAR'
+  | 'READING_SHORT'
+  | 'READING_MID'
+  | 'READING_LONG'
+  | 'INFO_SEARCH'
 
 /** Một 問題 của phần đề JLPT đang làm: câu hỏi của bài xếp liền nhau theo thứ tự các 問題. */
 export interface ExamMondai {
@@ -337,7 +345,9 @@ export interface StartExamResponse {
   sittingId: number | null
   section: ExamSectionName | null
   mondai: ExamMondai[] | null
-  /** Đoạn văn của các câu 文章の文法 trong bài. */
+  /** Số trong đề thật của câu đầu tiên (Đọc hiểu N3: 24); 1 với phần đánh số từ đầu và thi nhanh. */
+  firstQuestionNumber: number
+  /** Đoạn văn của các câu 文章の文法 và bài đọc trong bài. */
   passages: ExamPassage[] | null
 }
 
@@ -361,6 +371,9 @@ export interface JlptLevelResponse {
     /** Đề ghép được lúc này (dạng chưa đủ câu thì ít câu hơn, thời gian giảm theo tỉ lệ); 0 câu = chưa làm được. */
     questionCount: number
     minutes: number
+    /** Phần chỉ làm được khi đủ mọi câu của đề thật (Đọc hiểu) mà ngân hàng chưa đủ. */
+    locked: boolean
+    /** available: dạng lấy theo bài thì chỉ tính câu của các bài trọn vẹn. */
     mondai: { number: number; type: JlptQuestionType; plannedCount: number; available: number }[]
   }[]
 }
@@ -391,8 +404,10 @@ export interface ExamSittingResponse {
   }[]
   /** Phần làm tiếp theo; null khi đang làm dở một phần, đã làm hết hoặc buổi thi đã kết thúc. */
   nextSection: ExamSectionName | null
-  /** Điểm ước tính thang 0-60 trên các phần đã chốt điểm; null khi chưa phần nào xong. */
+  /** Điểm ước tính môn Kiến thức ngôn ngữ (Từ vựng + Ngữ pháp) thang 0-60; null khi chưa phần nào xong. */
   estimatedScore: number | null
+  /** Điểm ước tính môn Đọc hiểu thang 0-60; null khi chưa làm xong phần Đọc hiểu. */
+  readingEstimatedScore: number | null
 }
 
 export interface SaveAnswerRequest {
@@ -560,7 +575,9 @@ export interface ExamReviewResponse {
   section: ExamSectionName | null
   /** Điểm theo từng 問題 của phần đề JLPT, theo thứ tự trong đề; rỗng với thi nhanh. */
   mondai: { number: number; type: JlptQuestionType; correct: number; total: number }[]
-  /** Đoạn văn của các câu 文章の文法 trong bài. */
+  /** Số trong đề thật của câu đầu tiên (Đọc hiểu N3: 24). */
+  firstQuestionNumber: number
+  /** Đoạn văn của các câu 文章の文法 và bài đọc trong bài. */
   passages: ExamPassage[]
 }
 
@@ -776,7 +793,8 @@ export type ExamQuestionSource = 'MANUAL' | 'GENERATED' | 'AI' | 'IMPORTED'
 
 /** Kết quả nhập một đề tự soạn; có lỗi thì không ghi gì, chạy thử (dryRun) thì chỉ kiểm tra. */
 export interface ExamImportResult {
-  testCode: string
+  /** Mã đề; null khi nhập một bài đọc lẻ không ghi mã. */
+  testCode: string | null
   dryRun: boolean
   imported: boolean
   /** Số câu đã ghi, hoặc sẽ ghi khi chạy thử. */
@@ -796,10 +814,11 @@ export interface PassageDraftResult {
   questions: number
 }
 
-/** Một đoạn văn 文章の文法 trên trang duyệt, kèm các câu hỏi theo thứ tự chỗ trống. */
+/** Một đoạn văn (文章の文法 hoặc bài đọc) trên trang duyệt, kèm các câu hỏi theo thứ tự chỗ trống / thứ tự câu. */
 export interface AdminExamPassage {
   id: number
   jlptLevel: string
+  section: ExamSectionName
   title: string | null
   content: string
   status: ExamQuestionStatus

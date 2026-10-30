@@ -135,13 +135,22 @@ export function ExamSittingPage() {
             <StatTile label="Câu đúng" value={`${score}/${total}`} tone="primary" icon={Check} />
             <StatTile label="Tỉ lệ đúng" value={`${Math.round((score / total) * 100)}%`} tone="secondary" icon={Target} />
             {sitting.estimatedScore !== null && (
-              <StatTile label="Điểm ước tính" value={`${sitting.estimatedScore}/60`} tone="purple" icon={Award} />
+              <StatTile
+                label={sitting.readingEstimatedScore !== null ? 'Kiến thức ngôn ngữ' : 'Điểm ước tính'}
+                value={`${sitting.estimatedScore}/60`}
+                tone="purple"
+                icon={Award}
+              />
+            )}
+            {sitting.readingEstimatedScore !== null && (
+              <StatTile label="Đọc hiểu" value={`${sitting.readingEstimatedScore}/60`} tone="purple" icon={Award} />
             )}
             <StatTile label="Thời gian" value={formatMinutes(timeSpent)} tone="orange" icon={Clock} />
           </div>
           <p className="text-xs font-semibold text-muted-foreground">
-            Điểm ước tính = tỉ lệ đúng × 60, chỉ để tham khảo: JLPT thật quy đổi điểm theo thống kê và có điểm sàn cho
-            từng phần{sitting.sections.some((s) => s.totalQuestions === null) ? '; ở đây chỉ tính các phần đã làm' : ''}.
+            Điểm ước tính = tỉ lệ đúng × 60, tính riêng cho Kiến thức ngôn ngữ (Từ vựng + Ngữ pháp) và Đọc hiểu như đề
+            thật, chỉ để tham khảo: JLPT thật quy đổi điểm theo thống kê và có điểm sàn cho từng phần
+            {sitting.sections.some((s) => s.totalQuestions === null) ? '; ở đây chỉ tính các phần đã làm' : ''}.
           </p>
         </div>
       )}

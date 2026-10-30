@@ -1,8 +1,10 @@
-# Cấu trúc đề JLPT (phần Kiến thức ngôn ngữ, chỉ Từ vựng + Ngữ pháp) - xem ke_hoach_de_jlpt.md.
+# Cấu trúc đề JLPT (Kiến thức ngôn ngữ và Đọc hiểu, chưa có Nghe hiểu) - xem ke_hoach_de_jlpt.md.
 # Số câu mỗi dạng theo jlpt.jp (là con số dự kiến, mỗi kỳ có thể chênh): N4, N5 theo thay đổi từ kỳ 12/2020,
-# N3 theo sách hướng dẫn chính thức. Thời gian phần Từ vựng theo đề thật; phần Ngữ pháp trong đề thật gộp với
-# Đọc hiểu nên thời gian ở đây là con số tự đặt.
+# N3 theo sách hướng dẫn chính thức. Thời gian phần Từ vựng theo đề thật; trong đề thật phần Ngữ pháp gộp với
+# Đọc hiểu (N3: 70 phút) nên thời gian hai phần đó ở đây là con số tự đặt.
 # Thứ tự các dạng trong mỗi phần là thứ tự 問題1, 問題2...
+# per-passage: dạng lấy theo bài -> số câu mỗi bài. numbering-after: số 問題 và số câu đánh tiếp theo phần đó.
+# full-set-only: chỉ làm được khi đủ mọi câu của đề thật.
 app:
   jlpt:
     levels:
@@ -30,3 +32,9 @@ app:
           - name: GRAMMAR
             minutes: 25
             questions: { GRAMMAR_FORM: 13, SENTENCE_ORDER: 5, TEXT_GRAMMAR: 5 }
+          - name: READING
+            minutes: 45
+            numbering-after: GRAMMAR
+            full-set-only: true
+            questions: { READING_SHORT: 4, READING_MID: 6, READING_LONG: 4, INFO_SEARCH: 2 }
+            per-passage: { READING_SHORT: 1, READING_MID: 3, READING_LONG: 4, INFO_SEARCH: 2 }

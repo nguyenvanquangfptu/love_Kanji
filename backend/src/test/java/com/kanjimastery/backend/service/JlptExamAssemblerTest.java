@@ -7,6 +7,7 @@ import com.kanjimastery.backend.model.ExamPassage;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.ExamSection;
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.repository.ExamPassageRepository;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import org.junit.jupiter.api.Test;
@@ -15,6 +16,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,6 +25,8 @@ import java.util.Set;
 import static com.kanjimastery.backend.model.JlptQuestionType.CONTEXT;
 import static com.kanjimastery.backend.model.JlptQuestionType.KANJI_READING;
 import static com.kanjimastery.backend.model.JlptQuestionType.ORTHOGRAPHY;
+import static com.kanjimastery.backend.model.JlptQuestionType.READING_MID;
+import static com.kanjimastery.backend.model.JlptQuestionType.READING_SHORT;
 import static com.kanjimastery.backend.model.JlptQuestionType.TEXT_GRAMMAR;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -60,7 +64,7 @@ class JlptExamAssemblerTest {
         when(questionRepository.findForLearnerByLevelAndType(USER_ID, "N4", CONTEXT.name(), null, 24)).thenReturn(context);
         when(questionRepository.findAllWithWordsByIdIn(List.of(5L, 6L, 7L, 8L))).thenReturn(context);
 
-        List<JlptExamAssembler.Mondai> mondai = assembler.assemble(USER_ID, JlptLevel.N4, section, askedWords, null);
+        List<JlptExamAssembler.Mondai> mondai = assembler.assemble(USER_ID, JlptLevel.N4, section, 1, askedWords, null);
 
         // 問題1 bỏ câu 2 (từ 11 đã hỏi); 問題2 chưa có câu; 問題3 bỏ câu 5 (từ 12 vừa hỏi ở 問題1) và đủ 2 câu thì thôi.
         assertThat(mondai).extracting(JlptExamAssembler.Mondai::number, JlptExamAssembler.Mondai::type,
@@ -81,16 +85,59 @@ class JlptExamAssemblerTest {
         section.getQuestions().put(TEXT_GRAMMAR, 4);
         ExamPassage tooLong = ExamPassage.builder().id(1L).jlptLevel(JlptLevel.N4).content("...").build();
         ExamPassage fits = ExamPassage.builder().id(2L).jlptLevel(JlptLevel.N4).content("...").build();
-        when(passageRepository.findApprovedForLearner(USER_ID, "N4", null, 10)).thenReturn(List.of(tooLong, fits));
+        when(passageRepository.findApprovedForLearner(USER_ID, "N4", "GRAMMAR", "TEXT_GRAMMAR", null, 10)).thenReturn(List.of(tooLong, fits));
         when(questionRepository.findAllWithLinksByPassageIdIn(List.of(1L, 2L))).thenReturn(List.of(
                 blank(11L, 1L, 1), blank(12L, 1L, 2), blank(13L, 1L, 3), blank(14L, 1L, 4), blank(15L, 1L, 5),
                 blank(23L, 2L, 3), blank(21L, 2L, 1), blank(22L, 2L, 2), blank(24L, 2L, 4)));
 
-        List<JlptExamAssembler.Mondai> mondai = assembler.assemble(USER_ID, JlptLevel.N4, section, new HashSet<>(), null);
+        List<JlptExamAssembler.Mondai> mondai = assembler.assemble(USER_ID, JlptLevel.N4, section, 1, new HashSet<>(), null);
 
         // Đoạn 1 có 5 chỗ trống, quá 4 câu của 問題: bỏ qua; đoạn 2 lấy trọn, theo thứ tự chỗ trống.
         assertThat(mondai).singleElement().satisfies(part -> assertThat(part.questions())
                 .extracting(ExamQuestion::getId).containsExactly(21L, 22L, 23L, 24L));
+    }
+
+    @Test
+    void assemble_shouldTakeWholeReadingPassagesOfTheRightSize_numberedAfterGrammar() {
+        JlptBlueprintProperties.Section section = new JlptBlueprintProperties.Section();
+        section.setName(ExamSection.READING);
+        section.setMinutes(45);
+        section.getQuestions().put(READING_SHORT, 2);
+        section.getQuestions().put(READING_MID, 3);
+        section.getPerPassage().put(READING_SHORT, 1);
+        section.getPerPassage().put(READING_MID, 3);
+        // Bài ngắn: bài 1 có 2 câu (sai cỡ) bị bỏ, bài 2 và 3 mỗi bài 1 câu.
+        when(passageRepository.findApprovedForLearner(USER_ID, "N3", "READING", "READING_SHORT", null, 12))
+                .thenReturn(List.of(passage(1L), passage(2L), passage(3L)));
+        when(questionRepository.findAllWithLinksByPassageIdIn(List.of(1L, 2L, 3L))).thenReturn(List.of(
+                reading(11L, 1L, 1, READING_SHORT), reading(12L, 1L, 2, READING_SHORT),
+                reading(21L, 2L, 1, READING_SHORT), reading(31L, 3L, 1, READING_SHORT)));
+        // Bài trung bình: bài 4 còn một câu chưa duyệt nên chỉ có 2 câu đã duyệt - không trọn bài, bị bỏ.
+        ExamQuestion draft = reading(43L, 4L, 3, READING_MID);
+        draft.getReview().decide(ExamQuestionStatus.DRAFT, LocalDateTime.now());
+        when(passageRepository.findApprovedForLearner(USER_ID, "N3", "READING", "READING_MID", null, 11))
+                .thenReturn(List.of(passage(4L), passage(5L)));
+        when(questionRepository.findAllWithLinksByPassageIdIn(List.of(4L, 5L))).thenReturn(List.of(
+                reading(41L, 4L, 1, READING_MID), reading(42L, 4L, 2, READING_MID), draft,
+                reading(53L, 5L, 3, READING_MID), reading(51L, 5L, 1, READING_MID), reading(52L, 5L, 2, READING_MID)));
+
+        List<JlptExamAssembler.Mondai> mondai = assembler.assemble(USER_ID, JlptLevel.N3, section, 4, new HashSet<>(),
+                null);
+
+        assertThat(mondai).extracting(JlptExamAssembler.Mondai::number, JlptExamAssembler.Mondai::type)
+                .containsExactly(tuple(4, READING_SHORT), tuple(5, READING_MID));
+        assertThat(mondai.get(0).questions()).extracting(ExamQuestion::getId).containsExactly(21L, 31L);
+        assertThat(mondai.get(1).questions()).extracting(ExamQuestion::getId).containsExactly(51L, 52L, 53L);
+    }
+
+    private static ExamPassage passage(Long id) {
+        return ExamPassage.builder().id(id).jlptLevel(JlptLevel.N3).section(ExamSection.READING).content("...").build();
+    }
+
+    private static ExamQuestion reading(Long id, Long passageId, int order, JlptQuestionType type) {
+        return ExamQuestion.builder().id(id).jlptLevel(JlptLevel.N3).questionText("問" + order).optionA("1")
+                .optionB("2").optionC("3").optionD("4").correctOption("A").questionType(type)
+                .review(new ReviewState(ExamQuestionStatus.APPROVED)).passageId(passageId).blankNo(order).build();
     }
 
     private static ExamQuestion blank(Long id, Long passageId, int blankNo) {

@@ -4,6 +4,7 @@ import type { ExamMondai, ExamSectionName, JlptQuestionType } from '@/api/types'
 export const SECTION_META: Record<ExamSectionName, { jp: string; vi: string }> = {
   VOCABULARY: { jp: '言語知識（文字・語彙）', vi: 'Từ vựng' },
   GRAMMAR: { jp: '言語知識（文法）', vi: 'Ngữ pháp' },
+  READING: { jp: '読解', vi: 'Đọc hiểu' },
 }
 
 /** Các dạng câu (大問): tên và câu dẫn tiếng Nhật theo kiểu đề thật, kèm bản dịch. */
@@ -59,6 +60,56 @@ export const QUESTION_TYPE_META: Record<
     instruction: '文章を 読んで、（　　）に 入る ものを えらんで ください。',
     instructionVi: 'Đọc đoạn văn rồi chọn từ hoặc cụm điền vào chỗ trống.',
   },
+  READING_SHORT: {
+    jp: '内容理解（短文）',
+    vi: 'Đọc hiểu đoạn ngắn',
+    instruction: '次の 文章を 読んで、質問に 答えて ください。',
+    instructionVi: 'Đọc từng đoạn văn ngắn rồi trả lời câu hỏi của đoạn đó.',
+  },
+  READING_MID: {
+    jp: '内容理解（中文）',
+    vi: 'Đọc hiểu đoạn vừa',
+    instruction: '次の 文章を 読んで、質問に 答えて ください。',
+    instructionVi: 'Đọc đoạn văn rồi trả lời các câu hỏi về nội dung, lý do, ý của người viết.',
+  },
+  READING_LONG: {
+    jp: '内容理解（長文）',
+    vi: 'Đọc hiểu đoạn dài',
+    instruction: '次の 文章を 読んで、質問に 答えて ください。',
+    instructionVi: 'Đọc bài văn dài rồi trả lời các câu hỏi về toàn bài.',
+  },
+  INFO_SEARCH: {
+    jp: '情報検索',
+    vi: 'Tìm thông tin',
+    instruction: '次の お知らせを 見て、質問に 答えて ください。',
+    instructionVi: 'Xem thông báo, tờ hướng dẫn hoặc bảng rồi tìm thông tin để trả lời.',
+  },
+}
+
+/** Phần thi của từng dạng câu (như JlptQuestionType.section() ở backend). */
+export const QUESTION_TYPE_SECTION: Record<JlptQuestionType, ExamSectionName> = {
+  KANJI_READING: 'VOCABULARY',
+  ORTHOGRAPHY: 'VOCABULARY',
+  CONTEXT: 'VOCABULARY',
+  PARAPHRASE: 'VOCABULARY',
+  USAGE: 'VOCABULARY',
+  GRAMMAR_FORM: 'GRAMMAR',
+  SENTENCE_ORDER: 'GRAMMAR',
+  TEXT_GRAMMAR: 'GRAMMAR',
+  READING_SHORT: 'READING',
+  READING_MID: 'READING',
+  READING_LONG: 'READING',
+  INFO_SEARCH: 'READING',
+}
+
+/** Dạng câu đi theo một đoạn văn (文章の文法, các dạng Đọc hiểu): duyệt theo cả đoạn, ở danh sách đoạn văn. */
+export function usesPassage(type: JlptQuestionType | null | undefined) {
+  return type === 'TEXT_GRAMMAR' || isReadingType(type)
+}
+
+/** Dạng câu của phần Đọc hiểu: câu hỏi đi theo một bài đọc, không có chỗ trống trong bài. */
+export function isReadingType(type: JlptQuestionType | null | undefined) {
+  return type === 'READING_SHORT' || type === 'READING_MID' || type === 'READING_LONG' || type === 'INFO_SEARCH'
 }
 
 /** Một 問題 kèm vị trí các câu của nó trong bài (câu hỏi xếp liền nhau theo thứ tự 問題). */

@@ -58,6 +58,9 @@ class StatusCheckConstraintsTest {
         assertThat(checks.keySet()).containsAll(COLUMNS.keySet());
         COLUMNS.forEach((constraint, type) -> assertThat(checks.get(constraint)).as(constraint)
                 .containsExactlyInAnyOrderElementsOf(names(type)));
+        // Phần Từ vựng không có đoạn văn.
+        assertThat(checks.get("ck_exam_passages_section")).containsExactlyInAnyOrder(ExamSection.GRAMMAR.name(),
+                ExamSection.READING.name());
         // Câu thi chỉ có các kỹ năng thi, không có hướng hỏi riêng của phần học (gõ cách đọc).
         assertThat(checks.get("ck_exam_questions_skill")).containsExactlyInAnyOrderElementsOf(
                 QuizDirection.examSkills().stream().map(Enum::name).toList());
@@ -68,8 +71,13 @@ class StatusCheckConstraintsTest {
         Matcher matcher = Pattern.compile("ck_exam_sittings_sections CHECK \\(sections ~ '\\^\\(([A-Z_|]+)\\)")
                 .matcher(migration());
 
-        assertThat(matcher.find()).isTrue();
-        assertThat(Set.of(matcher.group(1).split("\\|"))).containsExactlyInAnyOrderElementsOf(names(ExamSection.class));
+        // Định nghĩa ở migration mới nhất được tính.
+        String allowed = null;
+        while (matcher.find()) {
+            allowed = matcher.group(1);
+        }
+        assertThat(allowed).isNotNull();
+        assertThat(Set.of(allowed.split("\\|"))).containsExactlyInAnyOrderElementsOf(names(ExamSection.class));
     }
 
     private static Map<String, Set<String>> checks() throws IOException {

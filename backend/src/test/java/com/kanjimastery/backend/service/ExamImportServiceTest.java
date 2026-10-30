@@ -4,10 +4,13 @@ import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.ExamImportRequest;
 import com.kanjimastery.backend.dto.ExamImportRequest.Item;
 import com.kanjimastery.backend.dto.ExamImportResponse;
+import com.kanjimastery.backend.dto.ExamPassageImportRequest;
+import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.model.ExamPassage;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionSource;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
+import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.GrammarPoint;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.JlptQuestionType;
@@ -43,12 +46,17 @@ import static com.kanjimastery.backend.service.ExamImportFixtures.item;
 import static com.kanjimastery.backend.service.ExamImportFixtures.n3Test;
 import static com.kanjimastery.backend.service.ExamImportFixtures.options;
 import static com.kanjimastery.backend.service.ExamImportFixtures.passage;
+import static com.kanjimastery.backend.service.ExamImportFixtures.reading;
+import static com.kanjimastery.backend.service.ExamImportFixtures.readingPassage;
+import static com.kanjimastery.backend.service.ExamImportFixtures.readingQuestion;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -188,7 +196,7 @@ class ExamImportServiceTest {
     @Test
     void passage_shouldTakeBlanksNumberedAsInTheTest_includingAPairForOneQuestion() {
         ExamImportRequest test = new ExamImportRequest("N3-05", "N3", null,
-                grammar(passage("【19】、【20a】と【20b】、【21】、【22】、【23】。")));
+                grammar(passage("【19】、【20a】と【20b】、【21】、【22】、【23】。")), null);
 
         ExamImportResponse report = service.importTest(test, false);
 
@@ -201,7 +209,7 @@ class ExamImportServiceTest {
     @Test
     void passage_shouldReportItsBlanks_inTheNumbersOfTheTest() {
         ExamImportRequest test = new ExamImportRequest("N3-05", "N3", null,
-                grammar(passage("【19】、【20】、【21】、【22】、【24】。")));
+                grammar(passage("【19】、【20】、【21】、【22】、【24】。")), null);
 
         assertThat(service.importTest(test, true).errors()).containsExactly(
                 "NP đoạn văn: chỗ trống 【24】 không ứng với câu nào (câu 19-23)",
@@ -295,6 +303,106 @@ class ExamImportServiceTest {
         return new Item(item.number(), item.sentence(), item.highlight(), item.keyword(), item.before(), item.after(),
                 item.options(), item.answer(), item.order(), item.star(), item.word(), item.grammarPattern(),
                 "Giải thích câu " + item.number());
+    }
+
+    @Test
+    void reading_shouldStoreEachPassageWithItsQuestions_numberedAfterGrammarAsInTheTest() {
+        long[] nextId = {100};
+        when(passageRepository.save(any(ExamPassage.class))).thenAnswer(invocation -> {
+            ExamPassage passage = invocation.getArgument(0);
+            passage.setId(nextId[0]++);
+            return passage;
+        });
+
+        ExamImportResponse report = service.importTest(new ExamImportRequest("N3-05", "N3", null, null, reading()), false);
+
+        assertThat(report.errors()).isEmpty();
+        assertThat(report.questions()).isEqualTo(16);
+        assertThat(report.passages()).isEqualTo(8);
+        ArgumentCaptor<ExamPassage> passages = ArgumentCaptor.forClass(ExamPassage.class);
+        verify(passageRepository, times(8)).save(passages.capture());
+        assertThat(passages.getAllValues()).allSatisfy(passage -> {
+            assertThat(passage.getSection()).isEqualTo(ExamSection.READING);
+            assertThat(passage.getStatus()).isEqualTo(ExamQuestionStatus.DRAFT);
+            assertThat(passage.getSource()).isEqualTo(ExamQuestionSource.IMPORTED);
+        });
+        assertThat(passages.getAllValues()).extracting(ExamPassage::getSourceRef).containsExactly(
+                "N3-05/DH/24", "N3-05/DH/25", "N3-05/DH/26", "N3-05/DH/27", "N3-05/DH/28-30", "N3-05/DH/31-33",
+                "N3-05/DH/34-37", "N3-05/DH/38-39");
+
+        List<ExamQuestion> saved = savedQuestions();
+        assertThat(saved).extracting(ExamQuestion::getSourceRef).startsWith("N3-05/DH/24").endsWith("N3-05/DH/39");
+        // Câu 31-33 là bài trung thứ hai: câu 1..3 của bài đó.
+        assertThat(saved).filteredOn(question -> question.getSourceRef().matches("N3-05/DH/3[123]"))
+                .extracting(ExamQuestion::getQuestionType, ExamQuestion::getPassageId, ExamQuestion::getBlankNo)
+                .containsExactly(tuple(JlptQuestionType.READING_MID, 105L, 1), tuple(JlptQuestionType.READING_MID, 105L, 2),
+                        tuple(JlptQuestionType.READING_MID, 105L, 3));
+        ExamQuestion last = byRef(saved, "N3-05/DH/39");
+        assertThat(last.getQuestionType()).isEqualTo(JlptQuestionType.INFO_SEARCH);
+        assertThat(last.getQuestionText()).isEqualTo("問39：筆者の考えに合うものはどれか。");
+        assertThat(last.getSentence()).isNull();
+        assertThat(last.getCorrectOption()).isEqualTo("B");
+    }
+
+    @Test
+    void reading_shouldReportMissingPassages_wrongSizes_andNumbering() {
+        ExamImportRequest.ReadingPart full = reading();
+        ExamImportRequest.ReadingPart broken = new ExamImportRequest.ReadingPart(
+                full.shortPassages().subList(0, 3),
+                List.of(readingPassage(27, 3), readingPassage(30, 2)),
+                full.longPassages(),
+                List.of(new ExamImportRequest.Passage(null, "表がない文章。", List.of(readingQuestion(37),
+                        readingQuestion(38)))));
+
+        ExamImportResponse report = service.importTest(new ExamImportRequest("N3-05", "N3", null, null, broken), true);
+
+        assertThat(report.errors()).contains(
+                "DH 問題4 (READING_SHORT): cần 4 bài, file có 3",
+                "DH bài câu 30-31: bài đọc dạng READING_MID cần 3 câu hỏi, đang có 2",
+                "DH bài câu 32-35: câu thứ 1 phải là câu 32, file ghi 34",
+                "DH bài câu 36-37: bài 情報検索 cần có bảng (các dòng | ô | ô |) hoặc mục liệt kê (dòng bắt đầu bằng ・ ■ ● ※...)");
+    }
+
+    @Test
+    void readingPassage_shouldImportOneLoosePassageOfTheChosenType() {
+        ExamPassageImportRequest request = new ExamPassageImportRequest("N3", "DH-trung-01", "ごみの出し方",
+                "〔下線〕ごみ〔/下線〕は朝出す。", List.of(readingQuestion(1), readingQuestion(2), readingQuestion(3)));
+
+        ExamImportResponse report = service.importPassage(JlptQuestionType.READING_MID, request, false);
+
+        assertThat(report.errors()).isEmpty();
+        assertThat(report.passages()).isEqualTo(1);
+        ArgumentCaptor<ExamPassage> passage = ArgumentCaptor.forClass(ExamPassage.class);
+        verify(passageRepository).save(passage.capture());
+        assertThat(passage.getValue().getSection()).isEqualTo(ExamSection.READING);
+        assertThat(passage.getValue().getSourceRef()).isEqualTo("DH-trung-01/DH/1-3");
+        assertThat(savedQuestions()).extracting(ExamQuestion::getSourceRef, ExamQuestion::getPassageId,
+                        ExamQuestion::getBlankNo)
+                .containsExactly(tuple("DH-trung-01/DH/1", PASSAGE_ID, 1), tuple("DH-trung-01/DH/2", PASSAGE_ID, 2),
+                        tuple("DH-trung-01/DH/3", PASSAGE_ID, 3));
+    }
+
+    @Test
+    void readingPassage_shouldCheckTheSizeOfTheChosenType_andSkipAPassageAlreadyInTheBank() {
+        ExamPassageImportRequest twoQuestions = new ExamPassageImportRequest("N3", null, null, "本文。",
+                List.of(readingQuestion(1), readingQuestion(2)));
+
+        assertThat(service.importPassage(JlptQuestionType.READING_MID, twoQuestions, true).errors())
+                .containsExactly("DH bài câu 1-2: bài đọc dạng READING_MID cần 3 câu hỏi, đang có 2");
+        assertThatThrownBy(() -> service.importPassage(JlptQuestionType.TEXT_GRAMMAR, twoQuestions, true))
+                .isInstanceOf(BadRequestException.class);
+
+        // Không có mã bài: bài cùng nội dung đã có trong kho thì bỏ qua cả bài.
+        when(passageRepository.existsByJlptLevelAndSectionAndContent(JlptLevel.N3, ExamSection.READING, "本文。"))
+                .thenReturn(true);
+        ExamImportResponse report = service.importPassage(JlptQuestionType.READING_MID,
+                new ExamPassageImportRequest("N3", null, null, "本文。",
+                        List.of(readingQuestion(1), readingQuestion(2), readingQuestion(3))), false);
+        assertThat(report.errors()).isEmpty();
+        assertThat(report.passages()).isZero();
+        assertThat(report.questions()).isZero();
+        assertThat(report.alreadyImported()).isEqualTo(3);
+        verify(questionRepository).saveAll(List.of());
     }
 
     @SuppressWarnings("unchecked")

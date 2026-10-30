@@ -1,6 +1,8 @@
 package com.kanjimastery.backend.controller;
 
 import com.kanjimastery.backend.model.ExamQuestionStatus;
+import com.kanjimastery.backend.model.ExamSection;
+import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.dto.AdminExamPassageResponse;
 import com.kanjimastery.backend.dto.ExamPassageRequest;
 import com.kanjimastery.backend.dto.ExamQuestionStatusRequest;
@@ -20,19 +22,24 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/v1/admin/exam-passages")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
-@Tag(name = "Admin - Exam passages", description = "Duyệt đoạn văn 文章の文法 (chỉ ADMIN)")
+@Tag(name = "Admin - Exam passages", description = "Duyệt đoạn văn 文章の文法 và bài đọc (chỉ ADMIN)")
 public class AdminExamPassageController {
 
     private final ExamPassageReviewService passageReviewService;
     private final PassageDraftService passageDraftService;
 
-    @Operation(summary = "Đoạn văn của một cấp độ", description = "Mới nhất trước, kèm câu hỏi theo thứ tự chỗ trống.")
+    @Operation(summary = "Đoạn văn của một cấp độ",
+            description = "Mới nhất trước, kèm câu hỏi theo thứ tự chỗ trống. section: GRAMMAR (文章の文法) hoặc READING "
+                    + "(bài đọc); bỏ trống = mọi phần.")
     @GetMapping
     public ResponseEntity<Page<AdminExamPassageResponse>> search(@RequestParam String level,
+                                                                 @RequestParam(required = false) ExamSection section,
+                                                                 @RequestParam(required = false) JlptQuestionType type,
                                                                  @RequestParam(required = false) ExamQuestionStatus status,
                                                                  @RequestParam(defaultValue = "0") int page,
                                                                  @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(passageReviewService.search(level, status, page, Math.min(Math.max(size, 1), 50)));
+        return ResponseEntity.ok(passageReviewService.search(level, section, type, status, page,
+                Math.min(Math.max(size, 1), 50)));
     }
 
     @Operation(summary = "Sửa tiêu đề, nội dung đoạn văn", description = "Chỗ trống 【n】 phải khớp với câu hỏi của đoạn.")

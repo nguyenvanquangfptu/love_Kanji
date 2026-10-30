@@ -1,22 +1,26 @@
 package com.kanjimastery.backend.service;
 
+import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
  * Kiểm tra cấu trúc một câu thi theo dạng câu JLPT: đủ 4 lựa chọn khác nhau, đáp án A-D, câu có đúng chỗ được hỏi
- * (phần gạch chân, ô （　　）, các ô của câu sắp xếp, các chỗ trống 【n】 của đoạn văn). Dùng khi sửa, duyệt câu và
- * khi nhận câu nháp từ AI.
+ * (phần gạch chân, ô （　　）, các ô của câu sắp xếp, các chỗ trống 【n】 của đoạn văn), đoạn văn có câu hỏi đúng phần
+ * thi của nó. Dùng khi sửa, duyệt câu, khi nhập đề và khi nhận câu nháp từ AI.
  */
 final class ExamQuestionValidator {
 
@@ -27,6 +31,18 @@ final class ExamQuestionValidator {
     static final int MAX_HIGHLIGHT_LENGTH = 100;
     /** Chỗ trống 【n】 trong đoạn văn 文章の文法; câu hỏi điền hai chỗ (a) và (b) thì đánh 【na】 và 【nb】. */
     static final Pattern PASSAGE_BLANK = Pattern.compile("【(\\d+)([ab]?)】");
+    /** Phần gạch chân trong bài đọc và câu hỏi Đọc hiểu: 〔下線〕...〔/下線〕. */
+    static final String UNDERLINE_OPEN = "〔下線〕";
+    static final String UNDERLINE_CLOSE = "〔/下線〕";
+    private static final Pattern UNDERLINE_MARK = Pattern.compile("〔(/?)下線〕");
+    /** Một dòng của bảng trong bài 情報検索: | ô | ô |. */
+    private static final Pattern TABLE_ROW = Pattern.compile("(?m)^[ \\t　]*\\|.*\\|[ \\t　]*$");
+    /** Một mục liệt kê trong thông báo, tờ rơi của bài 情報検索. */
+    private static final Pattern LIST_ITEM = Pattern.compile("(?m)^[ \\t　]*[・■□●○◆◇※]");
+
+    /** Một câu hỏi của đoạn văn: dạng câu và số thứ tự (chỗ trống 【n】, hoặc thứ tự câu trong bài đọc). */
+    record PassageQuestion(JlptQuestionType type, Integer number) {
+    }
 
     private ExamQuestionValidator() {
     }
@@ -73,12 +89,88 @@ final class ExamQuestionValidator {
                     problems.add("câu sắp xếp phải có 3 ô " + ORDER_SLOT + " và 1 ô " + ORDER_STAR);
                 }
             }
+            case JlptQuestionType.READING_SHORT, JlptQuestionType.READING_MID, JlptQuestionType.READING_LONG,
+                 JlptQuestionType.INFO_SEARCH -> underlineProblems(questionText).forEach(problem ->
+                    problems.add("câu hỏi: " + problem));
             default -> {
                 // 用法: bốn lựa chọn là bốn câu, không cần câu dẫn; 文章の文法: chỗ trống nằm trong đoạn văn
                 // (xem passageProblems).
             }
         }
         return problems;
+    }
+
+    /**
+     * Lỗi của một đoạn văn theo phần thi của nó; {@code perPassage} là số câu mỗi bài theo cấu trúc đề (null = không
+     * kiểm tra). Mọi câu hỏi phải là dạng của đúng phần thi đó - đoạn văn Ngữ pháp có câu Đọc hiểu (hay ngược lại) thì
+     * ghép đề sẽ lấy nhầm bài. Phần Ngữ pháp: các chỗ trống 【n】 như {@link #passageProblems(String, List)}. Phần Đọc
+     * hiểu: các câu cùng một dạng, đánh số 1..n, đủ số câu mỗi bài, 〔下線〕 đủ cặp; bài 情報検索 có bảng hoặc mục liệt kê.
+     */
+    static List<String> passageProblems(ExamSection section, String content, List<PassageQuestion> questions,
+                                        Integer perPassage) {
+        List<String> problems = new ArrayList<>();
+        if (section == null) {
+            problems.add("đoạn văn chưa ghi thuộc phần thi nào");
+            return problems;
+        }
+        questions.stream()
+                .filter(question -> question.type() == null || question.type().section() != section
+                        || !question.type().usesPassage())
+                .forEach(question -> problems.add("câu " + question.number() + " là dạng " + question.type()
+                        + ", không thuộc đoạn văn phần " + section.vietnameseName()));
+        List<Integer> numbers = questions.stream().map(PassageQuestion::number).toList();
+        if (section != ExamSection.READING) {
+            problems.addAll(passageProblems(content, numbers));
+            return problems;
+        }
+        if (!StringUtils.hasText(content)) {
+            problems.add("thiếu nội dung bài đọc");
+            return problems;
+        }
+        if (questions.isEmpty()) {
+            problems.add("bài đọc chưa có câu hỏi");
+            return problems;
+        }
+        Set<JlptQuestionType> types = questions.stream().map(PassageQuestion::type).filter(Objects::nonNull)
+                .collect(Collectors.toCollection(() -> EnumSet.noneOf(JlptQuestionType.class)));
+        if (types.size() > 1) {
+            problems.add("các câu hỏi của một bài đọc phải cùng một dạng, đang có " + types);
+        }
+        if (numbers.stream().anyMatch(Objects::isNull)
+                || !numbers.stream().sorted().toList().equals(IntStream.rangeClosed(1, numbers.size()).boxed().toList())) {
+            problems.add("thứ tự các câu hỏi phải là 1.." + numbers.size());
+        }
+        if (perPassage != null && questions.size() != perPassage) {
+            problems.add("bài đọc dạng " + questions.get(0).type() + " cần " + perPassage + " câu hỏi, đang có "
+                    + questions.size());
+        }
+        underlineProblems(content).forEach(problem -> problems.add("bài đọc: " + problem));
+        if (types.contains(JlptQuestionType.INFO_SEARCH) && countMatches(TABLE_ROW, content) < 2
+                && countMatches(LIST_ITEM, content) < 2) {
+            problems.add("bài 情報検索 cần có bảng (các dòng | ô | ô |) hoặc mục liệt kê (dòng bắt đầu bằng ・ ■ ● ※...)");
+        }
+        return problems;
+    }
+
+    /** 〔下線〕 và 〔/下線〕 phải đi thành cặp, không lồng nhau. */
+    private static List<String> underlineProblems(String text) {
+        if (text == null) {
+            return List.of();
+        }
+        Matcher matcher = UNDERLINE_MARK.matcher(text);
+        boolean open = false;
+        while (matcher.find()) {
+            boolean closing = !matcher.group(1).isEmpty();
+            if (closing != open) {
+                return List.of(UNDERLINE_OPEN + " và " + UNDERLINE_CLOSE + " phải đi thành cặp, không lồng nhau");
+            }
+            open = !open;
+        }
+        return open ? List.of("thiếu " + UNDERLINE_CLOSE + " sau " + UNDERLINE_OPEN) : List.of();
+    }
+
+    private static int countMatches(Pattern pattern, String text) {
+        return (int) pattern.matcher(text).results().count();
     }
 
     /**

@@ -33,6 +33,8 @@ public class JlptLevelResponse {
          */
         private int questionCount;
         private int minutes;
+        /** Phần chỉ làm được khi đủ mọi câu của đề thật (Đọc hiểu) mà ngân hàng chưa đủ: chưa làm được phần này. */
+        private boolean locked;
         private List<Mondai> mondai;
     }
 
@@ -45,7 +47,7 @@ public class JlptLevelResponse {
         /** {@link com.kanjimastery.backend.model.JlptQuestionType} */
         private JlptQuestionType type;
         private int plannedCount;
-        /** Số câu đã duyệt hiện có của dạng này. */
+        /** Số câu đã duyệt hiện có của dạng này; dạng lấy theo bài thì chỉ tính câu của các bài trọn vẹn. */
         private int available;
     }
 }

@@ -17,7 +17,10 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
-/** Đoạn văn của 問題3 文章の文法, chỗ trống đánh dấu 【1】【2】... - xem V25__add_exam_passages.sql. */
+/**
+ * Đoạn văn của một đề JLPT kèm các câu hỏi của nó: đoạn 文章の文法 của phần Ngữ pháp (chỗ trống đánh dấu 【1】【2】...)
+ * hoặc bài đọc của phần Đọc hiểu - xem V25__add_exam_passages.sql, V40__add_reading_section.sql.
+ */
 @Entity
 @Table(name = "exam_passages")
 @Getter
@@ -37,6 +40,11 @@ public class ExamPassage {
 
     @Column(length = 200)
     private String title;
+
+    /** Phần thi có đoạn văn này: GRAMMAR (文章の文法) hoặc READING; ghép đề chỉ lấy đoạn văn đúng phần. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 12)
+    private ExamSection section;
 
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;

@@ -4,6 +4,7 @@ import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.ExamMondaiResponse;
+import com.kanjimastery.backend.dto.ExamSittingResponse;
 import com.kanjimastery.backend.dto.JlptLevelResponse;
 import com.kanjimastery.backend.dto.StartExamResponse;
 import com.kanjimastery.backend.dto.StartJlptExamRequest;
@@ -16,6 +17,7 @@ import com.kanjimastery.backend.model.ExamSitting;
 import com.kanjimastery.backend.model.ExamSittingStatus;
 import com.kanjimastery.backend.model.UserExamAnswer;
 import com.kanjimastery.backend.model.UserExamAttempt;
+import com.kanjimastery.backend.repository.ExamPassageRepository;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.ExamSittingRepository;
 import com.kanjimastery.backend.repository.UserExamAnswerRepository;
@@ -43,6 +45,8 @@ import static com.kanjimastery.backend.model.JlptQuestionType.GRAMMAR_FORM;
 import static com.kanjimastery.backend.model.JlptQuestionType.KANJI_READING;
 import static com.kanjimastery.backend.model.JlptQuestionType.ORTHOGRAPHY;
 import static com.kanjimastery.backend.model.JlptQuestionType.PARAPHRASE;
+import static com.kanjimastery.backend.model.JlptQuestionType.READING_MID;
+import static com.kanjimastery.backend.model.JlptQuestionType.READING_SHORT;
 import static com.kanjimastery.backend.model.JlptQuestionType.SENTENCE_ORDER;
 import static com.kanjimastery.backend.model.JlptQuestionType.TEXT_GRAMMAR;
 import static com.kanjimastery.backend.model.JlptQuestionType.USAGE;
@@ -69,6 +73,8 @@ class JlptExamServiceTest {
     private JlptExamAssembler assembler;
     @Mock
     private ExamQuestionRepository questionRepository;
+    @Mock
+    private ExamPassageRepository passageRepository;
     @Mock
     private ExamSittingRepository sittingRepository;
     @Mock
@@ -178,7 +184,7 @@ class JlptExamServiceTest {
         });
         List<ExamQuestion> reading = questions(1, 7);
         List<ExamQuestion> context = questions(101, 8);
-        when(assembler.assemble(eq(USER_ID), eq(JlptLevel.N4), eq(vocabulary), any(), any())).thenReturn(List.of(
+        when(assembler.assemble(eq(USER_ID), eq(JlptLevel.N4), eq(vocabulary), eq(1), any(), any())).thenReturn(List.of(
                 new JlptExamAssembler.Mondai(1, KANJI_READING, 7, reading),
                 new JlptExamAssembler.Mondai(2, ORTHOGRAPHY, 5, List.of()),
                 new JlptExamAssembler.Mondai(3, CONTEXT, 8, context),
@@ -239,7 +245,7 @@ class JlptExamServiceTest {
         when(questionRepository.findAllWithWordsByIdIn(List.of(1L, 2L))).thenReturn(List.of(
                 ExamQuestion.builder().id(1L).kanjiIds(Set.of(10L)).build(),
                 ExamQuestion.builder().id(2L).kanjiIds(Set.of(11L)).build()));
-        when(assembler.assemble(USER_ID, JlptLevel.N4, grammar, Set.of(10L, 11L), null)).thenReturn(List.of(
+        when(assembler.assemble(USER_ID, JlptLevel.N4, grammar, 1, Set.of(10L, 11L), null)).thenReturn(List.of(
                 new JlptExamAssembler.Mondai(1, GRAMMAR_FORM, 13, questions(201, 1))));
         ArgumentCaptor<UserExamAttempt> attempt = ArgumentCaptor.forClass(UserExamAttempt.class);
         when(examService.begin(attempt.capture(), any(), any())).thenReturn(StartExamResponse.builder().build());
@@ -352,7 +358,111 @@ class JlptExamServiceTest {
         verify(sittingRepository).finishIfInProgress(eq(SITTING_ID), eq(ExamSittingStatus.COMPLETED), any());
     }
 
+    @Test
+    void levels_shouldLockReading_untilEveryTypeHasEnoughWholePassages() {
+        addReading();
+        when(questionRepository.countApprovedByType("N4", null)).thenReturn(List.of(
+                new Count(READING_SHORT, 4L), new Count(READING_MID, 5L)));
+        // Bài trung bình: một bài đủ 3 câu, một bài mới duyệt 2 câu (không trọn bài, không tính).
+        when(passageRepository.countApprovedBySize("N4", "READING", null)).thenReturn(
+                List.of(new Size(READING_SHORT, 1, 4L), new Size(READING_MID, 3, 1L), new Size(READING_MID, 2, 1L)),
+                List.of(new Size(READING_SHORT, 1, 4L), new Size(READING_MID, 3, 2L)));
+
+        JlptLevelResponse.Section reading = jlptExamService.levels(null).get(0).getSections().get(2);
+
+        assertThat(reading.isLocked()).isTrue();
+        // Số 問題 tiếp theo 3 問題 của phần Ngữ pháp.
+        assertThat(reading.getMondai())
+                .extracting(JlptLevelResponse.Mondai::getNumber, JlptLevelResponse.Mondai::getType,
+                        JlptLevelResponse.Mondai::getPlannedCount, JlptLevelResponse.Mondai::getAvailable)
+                .containsExactly(tuple(4, READING_SHORT, 4, 4), tuple(5, READING_MID, 6, 3));
+        // Đủ 2 bài trung bình trọn vẹn thì mở.
+        assertThat(jlptExamService.levels(null).get(0).getSections().get(2).isLocked()).isFalse();
+        // Phần không bắt buộc đủ bài thì không bao giờ khoá.
+        assertThat(jlptExamService.levels(null).get(0).getSections().get(1).isLocked()).isFalse();
+    }
+
+    @Test
+    void startSitting_shouldRefuseReading_untilThereIsAFullSet() {
+        addReading();
+        when(questionRepository.countApprovedByType("N4", null)).thenReturn(List.of(new Count(READING_SHORT, 4L)));
+        when(passageRepository.countApprovedBySize("N4", "READING", null)).thenReturn(
+                List.of(new Size(READING_SHORT, 1, 4L)));
+
+        assertThatThrownBy(() -> jlptExamService.startSitting(USER_ID, request("N4", "READING")))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Hiện chưa thể làm phần Đọc hiểu");
+        verify(sittingRepository, never()).save(any());
+    }
+
+    @Test
+    void getSitting_shouldScoreReadingOnItsOwnScale_apartFromLanguageKnowledge() {
+        addReading();
+        ExamSitting sitting = sitting(ExamSittingStatus.COMPLETED);
+        sitting.setSections("VOCABULARY,GRAMMAR,READING");
+        when(sittingRepository.findById(SITTING_ID)).thenReturn(Optional.of(sitting));
+        when(attemptRepository.findBySittingIdOrderByIdAsc(SITTING_ID)).thenReturn(List.of(
+                scored(30L, ExamSection.VOCABULARY, 20), scored(31L, ExamSection.GRAMMAR, 10),
+                scored(32L, ExamSection.READING, 8)));
+        when(answerRepository.countByAttemptId(30L)).thenReturn(28L);
+        when(answerRepository.countByAttemptId(31L)).thenReturn(21L);
+        when(answerRepository.countByAttemptId(32L)).thenReturn(16L);
+
+        ExamSittingResponse response = jlptExamService.getSitting(USER_ID, SITTING_ID);
+
+        // Kiến thức ngôn ngữ: 30/49 x 60 = 37; Đọc hiểu: 8/16 x 60 = 30.
+        assertThat(response.getEstimatedScore()).isEqualTo(37);
+        assertThat(response.getReadingEstimatedScore()).isEqualTo(30);
+    }
+
+    @Test
+    void onSectionFinished_shouldReportOnlyLanguageKnowledge_evenWhenReadingWasTaken() {
+        addReading();
+        ExamSitting sitting = sitting(ExamSittingStatus.IN_PROGRESS);
+        sitting.setSections("VOCABULARY,GRAMMAR,READING");
+        when(sittingRepository.findById(SITTING_ID)).thenReturn(Optional.of(sitting));
+        UserExamAttempt vocabularyDone = scored(30L, ExamSection.VOCABULARY, 20);
+        vocabularyDone.setTimeSpentSeconds(1500);
+        UserExamAttempt grammarDone = scored(31L, ExamSection.GRAMMAR, 15);
+        grammarDone.setTimeSpentSeconds(900);
+        UserExamAttempt readingDone = scored(32L, ExamSection.READING, 16);
+        readingDone.setTimeSpentSeconds(1800);
+        when(attemptRepository.findBySittingIdOrderByIdAsc(SITTING_ID))
+                .thenReturn(List.of(vocabularyDone, grammarDone, readingDone));
+        when(sittingRepository.finishIfInProgress(eq(SITTING_ID), eq(ExamSittingStatus.COMPLETED),
+                any(LocalDateTime.class))).thenReturn(1);
+        when(answerRepository.countByAttemptId(30L)).thenReturn(28L);
+        when(answerRepository.countByAttemptId(31L)).thenReturn(21L);
+
+        // Bảng xếp hạng như trước khi có Đọc hiểu: điểm và thời gian của Từ vựng + Ngữ pháp.
+        assertThat(jlptExamService.onSectionFinished(SITTING_ID))
+                .contains(new JlptExamService.CompletedSitting(USER_ID, JlptLevel.N4, 35, 49, 1500 + 900));
+        verify(answerRepository, never()).countByAttemptId(32L);
+    }
+
+    /** Thêm phần Đọc hiểu vào cấu trúc đề N4 của test: 4 bài ngắn × 1 câu, 2 bài trung bình × 3 câu. */
+    private void addReading() {
+        JlptBlueprintProperties.Section reading = section(ExamSection.READING, 30);
+        reading.getQuestions().put(READING_SHORT, 4);
+        reading.getQuestions().put(READING_MID, 6);
+        reading.getPerPassage().put(READING_SHORT, 1);
+        reading.getPerPassage().put(READING_MID, 3);
+        reading.setNumberingAfter(ExamSection.GRAMMAR);
+        reading.setFullSetOnly(true);
+        blueprints.getLevels().get(JlptLevel.N4).setSections(List.of(vocabulary, grammar, reading));
+    }
+
+    private static UserExamAttempt scored(Long id, ExamSection section, int score) {
+        UserExamAttempt attempt = attempt(id, section, ExamAttemptStatus.COMPLETED);
+        attempt.setTotalScore(score);
+        return attempt;
+    }
+
     private record Count(JlptQuestionType getType, Long getCount) implements ExamQuestionRepository.TypeCount {
+    }
+
+    private record Size(JlptQuestionType getType, Integer getQuestions, Long getPassages)
+            implements ExamPassageRepository.PassageCount {
     }
 
     private static JlptBlueprintProperties.Section section(ExamSection name, int minutes) {

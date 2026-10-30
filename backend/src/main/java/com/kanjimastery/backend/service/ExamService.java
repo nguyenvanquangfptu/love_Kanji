@@ -110,6 +110,7 @@ public class ExamService {
                 .sittingId(saved.getSittingId())
                 .section(saved.getSection())
                 .mondai(mondai)
+                .firstQuestionNumber(firstQuestionNumber(saved))
                 .passages(passagesOf(questions))
                 .build();
     }
@@ -254,6 +255,7 @@ public class ExamService {
                 .sittingId(attempt.getSittingId())
                 .section(attempt.getSection())
                 .mondai(mondaiScores(attempt, items))
+                .firstQuestionNumber(firstQuestionNumber(attempt))
                 .passages(passagesOf(answers.stream().map(answer -> questionsById.get(answer.getQuestionId()))
                         .filter(Objects::nonNull).toList()))
                 .build();
@@ -287,7 +289,8 @@ public class ExamService {
         Map<Long, ExamPassage> passages = passageRepository.findAllById(ids).stream()
                 .collect(Collectors.toMap(ExamPassage::getId, Function.identity()));
         return ids.stream().map(passages::get).filter(Objects::nonNull)
-                .map(passage -> new ExamPassageResponse(passage.getId(), passage.getTitle(), passage.getContent()))
+                .map(passage -> new ExamPassageResponse(passage.getId(), passage.getSection(), passage.getTitle(),
+                        passage.getContent()))
                 .toList();
     }
 
@@ -299,6 +302,7 @@ public class ExamService {
         List<JlptQuestionType> types = blueprints.section(attempt.getJlptLevel(), attempt.getSection())
                 .map(JlptBlueprintProperties.Section::types)
                 .orElse(List.of());
+        int firstMondai = blueprints.firstMondaiNumber(attempt.getJlptLevel(), attempt.getSection());
         Map<JlptQuestionType, int[]> byType = new LinkedHashMap<>();
         for (JlptQuestionType type : types) {
             byType.put(type, new int[2]);
@@ -314,9 +318,15 @@ public class ExamService {
         }
         return byType.entrySet().stream()
                 .filter(entry -> entry.getValue()[1] > 0)
-                .map(entry -> new ExamReviewResponse.MondaiScore(types.indexOf(entry.getKey()) + 1, entry.getKey(),
-                        entry.getValue()[0], entry.getValue()[1]))
+                .map(entry -> new ExamReviewResponse.MondaiScore(types.indexOf(entry.getKey()) + firstMondai,
+                        entry.getKey(), entry.getValue()[0], entry.getValue()[1]))
                 .toList();
+    }
+
+    /** Số trong đề thật của câu đầu tiên của lượt thi: phần đánh số tiếp theo phần trước (Đọc hiểu) thì lớn hơn 1. */
+    private int firstQuestionNumber(UserExamAttempt attempt) {
+        return attempt.getSection() == null ? 1
+                : blueprints.firstQuestionNumber(attempt.getJlptLevel(), attempt.getSection());
     }
 
     /** Từ của các câu đã trả lời sai, theo thứ tự câu hỏi, không lặp. */

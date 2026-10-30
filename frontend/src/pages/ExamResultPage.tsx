@@ -17,7 +17,7 @@ import {
 import { examApi } from '@/api/exam'
 import { extractErrorMessage } from '@/api/client'
 import type { ExamReviewResponse, QuizDirection } from '@/api/types'
-import { QUESTION_TYPE_META, SECTION_META } from '@/lib/jlpt'
+import { isReadingType, QUESTION_TYPE_META, SECTION_META } from '@/lib/jlpt'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -31,6 +31,7 @@ import { Meter } from '@/components/Meter'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
 import { FuriganaToggle } from '@/components/FuriganaToggle'
 import { PassageText } from '@/components/PassageText'
+import { ReadingPassage, UnderlinedText } from '@/components/ReadingPassage'
 import { GrammarPointList } from '@/components/GrammarPointNote'
 import { ReportQuestionDialog } from '@/components/ReportQuestionDialog'
 import { useQuizStart } from '@/lib/quizStart'
@@ -72,6 +73,8 @@ export function ExamResultPage() {
   const title = percent >= 90 ? 'Xuất sắc!' : percent >= 70 ? 'Làm tốt lắm!' : percent >= 50 ? 'Khá ổn!' : 'Cố gắng thêm nhé!'
   // Một phần của đề JLPT: không lên bảng xếp hạng thi nhanh, điểm theo 問題 thay cho theo kỹ năng.
   const sittingId = data.sittingId
+  // Số trong đề thật của câu đầu tiên (Đọc hiểu N3 bắt đầu từ câu 24).
+  const firstNumber = data.firstQuestionNumber || 1
 
   return (
     <div className="flex flex-col gap-6">
@@ -134,13 +137,15 @@ export function ExamResultPage() {
                 sittingId && q.questionType && q.questionType !== data.questions[idx - 1]?.questionType
                   ? data.mondai.find((m) => m.type === q.questionType)
                   : undefined
-              // Đoạn văn 文章の文法 hiện một lần, trước câu đầu tiên của nó.
+              // Đoạn văn 文章の文法 / bài đọc hiện một lần, trước câu đầu tiên của nó.
               const passage =
                 q.passageId && q.passageId !== data.questions[idx - 1]?.passageId
                   ? data.passages.find((p) => p.id === q.passageId)
                   : undefined
               const numberOf = (blankNo: number) =>
-                data.questions.findIndex((other) => other.passageId === q.passageId && other.blankNo === blankNo) + 1
+                data.questions.findIndex((other) => other.passageId === q.passageId && other.blankNo === blankNo) +
+                firstNumber
+              const reading = isReadingType(q.questionType)
               return (
                 <div key={q.questionId} className="flex flex-col gap-2">
                   {mondai && (
@@ -155,7 +160,11 @@ export function ExamResultPage() {
                   {passage && (
                     <Card className="px-4 py-3 sm:px-5">
                       {passage.title && <h4 className="mb-1 text-center font-jp font-black">{passage.title}</h4>}
-                      <PassageText content={passage.content} labelOf={numberOf} />
+                      {reading ? (
+                        <ReadingPassage content={passage.content} />
+                      ) : (
+                        <PassageText content={passage.content} labelOf={numberOf} />
+                      )}
                     </Card>
                   )}
                   <Card className={cn('p-4 sm:p-5', q.correct ? 'border-primary/40' : 'border-destructive/40')}>
@@ -167,8 +176,8 @@ export function ExamResultPage() {
                       )}
                       <div>
                         <p className="font-jp text-lg font-bold">
-                          <span className="font-sans text-muted-foreground">Câu {idx + 1}.</span>{' '}
-                          {q.passageId ? '' : q.questionText}
+                          <span className="font-sans text-muted-foreground">Câu {firstNumber + idx}.</span>{' '}
+                          {reading ? <UnderlinedText text={q.questionText} /> : q.passageId ? '' : q.questionText}
                         </p>
                         {q.sentence && (
                           <p className="mt-2 font-jp text-lg leading-loose">

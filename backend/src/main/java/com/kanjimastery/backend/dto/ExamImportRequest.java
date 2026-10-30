@@ -5,16 +5,32 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 /**
- * Một đề tự soạn (phần Từ vựng và Ngữ pháp) để nhập vào kho câu thi. Tên trường JSON là tiếng Việt cho dễ soạn tay;
- * các trường không dùng tới của một dạng câu thì bỏ trống. Số câu ({@code cau}) đánh liên tục trong mỗi phần như đề
- * thật: Từ vựng 1..35, Ngữ pháp 1..23 (với N3).
+ * Một đề tự soạn (phần Từ vựng, Ngữ pháp, Đọc hiểu) để nhập vào kho câu thi. Tên trường JSON là tiếng Việt cho dễ soạn
+ * tay; các trường không dùng tới của một dạng câu thì bỏ trống. Số câu ({@code cau}) đánh liên tục trong mỗi phần như
+ * đề thật: Từ vựng 1..35, Ngữ pháp 1..23, Đọc hiểu tiếp theo Ngữ pháp 24..39 (với N3).
  */
 public record ExamImportRequest(
         /** Mã đề, vd. "N3-05"; ghép với số câu thành mã câu đề gốc (N3-05/TV/12). */
         @JsonProperty("de") String testCode,
         @JsonProperty("cap_do") String level,
         @JsonProperty("tu_vung") VocabularyPart vocabulary,
-        @JsonProperty("ngu_phap") GrammarPart grammar) {
+        @JsonProperty("ngu_phap") GrammarPart grammar,
+        @JsonProperty("doc_hieu") ReadingPart reading) {
+
+    /**
+     * Phần Đọc hiểu: các bài của từng 問題, theo thứ tự trong đề. Mỗi bài là một {@link Passage}: "noi_dung" là toàn
+     * văn (gạch chân 〔下線〕...〔/下線〕, bảng viết thành các dòng | ô | ô |), "cau_hoi" của mỗi câu là câu hỏi về bài.
+     */
+    public record ReadingPart(
+            /** 内容理解（短文）: N3 4 bài × 1 câu. */
+            @JsonProperty("ngan") List<Passage> shortPassages,
+            /** 内容理解（中文）: N3 2 bài × 3 câu. */
+            @JsonProperty("trung") List<Passage> midPassages,
+            /** 内容理解（長文）: N3 1 bài × 4 câu. */
+            @JsonProperty("dai") List<Passage> longPassages,
+            /** 情報検索: N3 1 bài × 2 câu. */
+            @JsonProperty("tim_thong_tin") List<Passage> infoSearch) {
+    }
 
     public record VocabularyPart(
             /** 問題1 漢字読み. */
