@@ -86,6 +86,27 @@ export const QUESTION_TYPE_META: Record<
   },
 }
 
+/** Phần thi của từng dạng câu (như JlptQuestionType.section() ở backend). */
+export const QUESTION_TYPE_SECTION: Record<JlptQuestionType, ExamSectionName> = {
+  KANJI_READING: 'VOCABULARY',
+  ORTHOGRAPHY: 'VOCABULARY',
+  CONTEXT: 'VOCABULARY',
+  PARAPHRASE: 'VOCABULARY',
+  USAGE: 'VOCABULARY',
+  GRAMMAR_FORM: 'GRAMMAR',
+  SENTENCE_ORDER: 'GRAMMAR',
+  TEXT_GRAMMAR: 'GRAMMAR',
+  READING_SHORT: 'READING',
+  READING_MID: 'READING',
+  READING_LONG: 'READING',
+  INFO_SEARCH: 'READING',
+}
+
+/** Dạng câu đi theo một đoạn văn (文章の文法, các dạng Đọc hiểu): duyệt theo cả đoạn, ở danh sách đoạn văn. */
+export function usesPassage(type: JlptQuestionType | null | undefined) {
+  return type === 'TEXT_GRAMMAR' || isReadingType(type)
+}
+
 /** Dạng câu của phần Đọc hiểu: câu hỏi đi theo một bài đọc, không có chỗ trống trong bài. */
 export function isReadingType(type: JlptQuestionType | null | undefined) {
   return type === 'READING_SHORT' || type === 'READING_MID' || type === 'READING_LONG' || type === 'INFO_SEARCH'

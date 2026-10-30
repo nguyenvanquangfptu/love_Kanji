@@ -21,11 +21,12 @@ import {
   type AdminExamQuestion,
   type AdminExamQuestionRequest,
   type ExamQuestionStatus,
+  type ExamSectionName,
   type JlptLevel,
   type JlptQuestionType,
 } from '@/api/types'
 import { LEVEL_META } from '@/lib/levels'
-import { QUESTION_TYPE_META, SECTION_META } from '@/lib/jlpt'
+import { QUESTION_TYPE_META, QUESTION_TYPE_SECTION, SECTION_META, usesPassage } from '@/lib/jlpt'
 import { FLAG_LABEL, SOURCE_LABEL, STATUS_BADGE, sourceRefLabel } from '@/lib/questionReview'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -72,6 +73,16 @@ export function AdminQuestionsPage() {
   const [params, setParams] = useSearchParams()
   const level = (params.get('level') as JlptLevel | null) ?? 'N5'
   const type = (params.get('type') as JlptQuestionType | null) ?? undefined
+  /** Mọi bài đọc của phần Đọc hiểu (chưa chọn dạng): ?section=READING. */
+  const allReading = !type && params.get('section') === 'READING'
+  // Dạng câu đi theo đoạn văn (文章の文法, Đọc hiểu) duyệt theo cả đoạn, ở danh sách đoạn văn.
+  const passageSection: ExamSectionName | null = type
+    ? usesPassage(type)
+      ? QUESTION_TYPE_SECTION[type]
+      : null
+    : allReading
+      ? 'READING'
+      : null
   const status = params.has('status') ? (params.get('status') as ExamQuestionStatus | '') : 'DRAFT'
   const flagged = params.get('flagged') === 'true'
   const reported = params.get('reported') === 'true'
@@ -113,8 +124,7 @@ export function AdminQuestionsPage() {
     queryKey: ['admin', 'exam-questions', filter],
     queryFn: () => examAdminApi.search(filter),
     placeholderData: keepPreviousData,
-    // 文章の文法 duyệt theo cả đoạn văn, ở danh sách đoạn văn.
-    enabled: type !== 'TEXT_GRAMMAR',
+    enabled: passageSection === null,
   })
   const statsQuery = useQuery({ queryKey: ['admin', 'exam-questions', 'stats'], queryFn: examAdminApi.stats })
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin', 'exam-questions'] })
@@ -261,6 +271,19 @@ export function AdminQuestionsPage() {
               level: testLevel ?? level,
               status: 'DRAFT',
               type: undefined,
+              section: undefined,
+              grammarPointId: undefined,
+              flagged: undefined,
+              reported: undefined,
+            })
+          }
+          onReviewReading={(readingType, testLevel) =>
+            update({
+              level: testLevel ?? level,
+              status: 'DRAFT',
+              type: readingType,
+              section: undefined,
+              test: undefined,
               grammarPointId: undefined,
               flagged: undefined,
               reported: undefined,
@@ -289,15 +312,26 @@ export function AdminQuestionsPage() {
         </div>
         <select
           className="h-10 rounded-xl border-2 border-border bg-card px-3 text-sm font-bold"
-          value={type ?? ''}
-          onChange={(e) => update({ type: e.target.value || undefined })}
+          value={type ?? (allReading ? 'READING' : '')}
+          onChange={(e) =>
+            e.target.value === 'READING'
+              ? update({ type: undefined, section: 'READING' })
+              : update({ type: e.target.value || undefined, section: undefined })
+          }
           aria-label="Dạng câu"
         >
           <option value="">Mọi dạng câu</option>
-          {(Object.keys(QUESTION_TYPE_META) as JlptQuestionType[]).map((key) => (
-            <option key={key} value={key}>
-              {QUESTION_TYPE_META[key].jp} · {QUESTION_TYPE_META[key].vi}
-            </option>
+          {(Object.keys(SECTION_META) as ExamSectionName[]).map((section) => (
+            <optgroup key={section} label={`${SECTION_META[section].jp} · ${SECTION_META[section].vi}`}>
+              {section === 'READING' && <option value="READING">Mọi bài đọc</option>}
+              {(Object.keys(QUESTION_TYPE_META) as JlptQuestionType[])
+                .filter((key) => QUESTION_TYPE_SECTION[key] === section)
+                .map((key) => (
+                  <option key={key} value={key}>
+                    {QUESTION_TYPE_META[key].jp} · {QUESTION_TYPE_META[key].vi}
+                  </option>
+                ))}
+            </optgroup>
           ))}
         </select>
         <input
@@ -353,8 +387,14 @@ export function AdminQuestionsPage() {
         <VocabularyDraftPanel key={`${level}-${type}`} level={level} type={type} onDrafted={refresh} />
       )}
 
-      {type === 'TEXT_GRAMMAR' ? (
-        <PassageReviewList key={level} level={level} status={status || undefined} />
+      {passageSection ? (
+        <PassageReviewList
+          key={`${level}-${passageSection}-${type ?? ''}`}
+          level={level}
+          section={passageSection}
+          type={type}
+          status={status || undefined}
+        />
       ) : questionsQuery.isLoading ? (
         <PageSpinner label="Đang tải câu hỏi..." />
       ) : questionsQuery.isError || !data ? (

@@ -793,7 +793,8 @@ export type ExamQuestionSource = 'MANUAL' | 'GENERATED' | 'AI' | 'IMPORTED'
 
 /** Kết quả nhập một đề tự soạn; có lỗi thì không ghi gì, chạy thử (dryRun) thì chỉ kiểm tra. */
 export interface ExamImportResult {
-  testCode: string
+  /** Mã đề; null khi nhập một bài đọc lẻ không ghi mã. */
+  testCode: string | null
   dryRun: boolean
   imported: boolean
   /** Số câu đã ghi, hoặc sẽ ghi khi chạy thử. */

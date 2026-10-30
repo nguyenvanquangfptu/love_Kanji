@@ -3,15 +3,26 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { Check, ChevronLeft, ChevronRight, Pencil, RotateCcw, Sparkles, Undo2, X } from 'lucide-react'
 import { examAdminApi } from '@/api/examAdmin'
 import { extractErrorMessage } from '@/api/client'
-import type { AdminExamPassage, AdminExamQuestion, AdminExamQuestionRequest, ExamQuestionStatus } from '@/api/types'
+import type {
+  AdminExamPassage,
+  AdminExamQuestion,
+  AdminExamQuestionRequest,
+  ExamQuestionStatus,
+  ExamSectionName,
+  JlptQuestionType,
+} from '@/api/types'
 import { FLAG_LABEL, SOURCE_LABEL, STATUS_BADGE, passageDraftSummary, sourceRefLabel } from '@/lib/questionReview'
 
-/** Đoạn văn nhập từ đề tự soạn (mã "N3-05/NP/19-23"): chỗ trống n ghi theo số câu trong đề gốc (19, 20...). */
+/**
+ * Đoạn văn nhập từ đề tự soạn (mã "N3-05/NP/19-23", bài đọc "N3-05/DH/28-30"): chỗ trống / câu n ghi theo số câu
+ * trong đề gốc (19, 20...).
+ */
 function firstQuestionLabel(sourceRef: string | null): ((blankNo: number) => number) | undefined {
   const first = Number(sourceRef?.split('/')[2]?.split('-')[0])
   return Number.isInteger(first) && first > 0 ? (blankNo) => first + blankNo - 1 : undefined
 }
 import { cn } from '@/lib/utils'
+import { QUESTION_TYPE_META } from '@/lib/jlpt'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +33,7 @@ import { Modal } from '@/components/ui/modal'
 import { Textarea } from '@/components/ui/textarea'
 import { PageSpinner } from '@/components/ui/spinner'
 import { PassageText } from '@/components/PassageText'
+import { ReadingPassage, UnderlinedText } from '@/components/ReadingPassage'
 import { QuestionReports } from '@/components/QuestionReports'
 import { QuestionStats } from '@/components/QuestionStats'
 import { QuestionEditDialog } from '@/components/QuestionEditDialog'
@@ -31,10 +43,22 @@ const OPTIONS = ['A', 'B', 'C', 'D'] as const
 const PAGE_SIZE = 10
 
 /**
- * Đoạn văn 文章の文法 của một cấp độ: duyệt, loại, rút cả đoạn; sửa đoạn văn hoặc từng câu hỏi của đoạn; nhờ AI viết
- * nháp đoạn mới. Trang cha đổi key khi đổi cấp độ.
+ * Đoạn văn của một cấp độ - 文章の文法 (phần Ngữ pháp) hoặc bài đọc (phần Đọc hiểu, lọc thêm theo dạng): duyệt, loại,
+ * rút cả đoạn; sửa đoạn văn hoặc từng câu hỏi của đoạn; nhờ AI viết nháp đoạn 文章の文法 mới. Trang cha đổi key khi
+ * đổi cấp độ hoặc bộ lọc.
  */
-export function PassageReviewList({ level, status }: { level: string; status?: ExamQuestionStatus }) {
+export function PassageReviewList({
+  level,
+  section,
+  type,
+  status,
+}: {
+  level: string
+  section: ExamSectionName
+  type?: JlptQuestionType
+  status?: ExamQuestionStatus
+}) {
+  const reading = section === 'READING'
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
   const [dialogKey, setDialogKey] = useState(0)
@@ -43,7 +67,7 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
   const [editingQuestion, setEditingQuestion] = useState<AdminExamQuestion | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
 
-  const filter = { level, status, page, size: PAGE_SIZE }
+  const filter = { level, section, type, status, page, size: PAGE_SIZE }
   const passagesQuery = useQuery({
     queryKey: ['admin', 'exam-passages', filter],
     queryFn: () => examAdminApi.passages(filter),
@@ -100,35 +124,42 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
 
   return (
     <div className="flex flex-col gap-4">
-      <Card className="flex flex-col gap-3 p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="font-black">Nhờ AI viết nháp đoạn văn</p>
-            <p className="text-sm font-semibold text-muted-foreground">
-              Một đoạn văn mới cho đề {level}, đủ số chỗ trống như đề thật. Tốn 2 lượt Gemini: viết nháp và giải lại
-              để kiểm tra.
-            </p>
+      {/* AI chỉ viết nháp đoạn 文章の文法; bài đọc nhập từ file (Nhập đề tự soạn). */}
+      {!reading && (
+        <Card className="flex flex-col gap-3 p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="font-black">Nhờ AI viết nháp đoạn văn</p>
+              <p className="text-sm font-semibold text-muted-foreground">
+                Một đoạn văn mới cho đề {level}, đủ số chỗ trống như đề thật. Tốn 2 lượt Gemini: viết nháp và giải lại
+                để kiểm tra.
+              </p>
+            </div>
+            <Button disabled={draftMutation.isPending} onClick={() => draftMutation.mutate()}>
+              <Sparkles className="h-4 w-4" /> {draftMutation.isPending ? 'AI đang viết...' : 'Sinh đoạn văn'}
+            </Button>
           </div>
-          <Button disabled={draftMutation.isPending} onClick={() => draftMutation.mutate()}>
-            <Sparkles className="h-4 w-4" /> {draftMutation.isPending ? 'AI đang viết...' : 'Sinh đoạn văn'}
-          </Button>
-        </div>
-        {draftMutation.isError && <Alert>{extractErrorMessage(draftMutation.error)}</Alert>}
-        {draftMutation.data && (
-          <p className="rounded-2xl bg-secondary-soft px-4 py-3 text-sm font-bold text-secondary-dark">
-            {passageDraftSummary(draftMutation.data)}
-          </p>
-        )}
-      </Card>
+          {draftMutation.isError && <Alert>{extractErrorMessage(draftMutation.error)}</Alert>}
+          {draftMutation.data && (
+            <p className="rounded-2xl bg-secondary-soft px-4 py-3 text-sm font-bold text-secondary-dark">
+              {passageDraftSummary(draftMutation.data)}
+            </p>
+          )}
+        </Card>
+      )}
       {statusMutation.isError && <Alert>{extractErrorMessage(statusMutation.error)}</Alert>}
       {data.content.length === 0 ? (
         <Card className="p-6 text-center font-semibold text-muted-foreground">Không có đoạn văn nào khớp bộ lọc.</Card>
       ) : (
         <>
-          <p className="text-sm font-bold text-muted-foreground">{data.totalElements} đoạn văn</p>
+          <p className="text-sm font-bold text-muted-foreground">
+            {data.totalElements} {reading ? 'bài đọc' : 'đoạn văn'}
+          </p>
           {data.content.map((passage) => {
             const badge = STATUS_BADGE[passage.status]
             const busy = statusMutation.isPending
+            const labelOf = firstQuestionLabel(passage.sourceRef)
+            const passageType = passage.questions[0]?.questionType
             return (
               <Card key={passage.id} className={cn('p-4 sm:p-5', passage.flag && 'border-orange')}>
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -138,11 +169,22 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
                   <Badge variant="outline">
                     {passage.sourceRef ? sourceRefLabel(passage.sourceRef) : (SOURCE_LABEL[passage.source] ?? passage.source)}
                   </Badge>
-                  <Badge variant="outline">{passage.questions.length} chỗ trống</Badge>
+                  {reading && passageType && (
+                    <Badge variant="purple">
+                      {QUESTION_TYPE_META[passageType].jp} · {QUESTION_TYPE_META[passageType].vi}
+                    </Badge>
+                  )}
+                  <Badge variant="outline">
+                    {passage.questions.length} {reading ? 'câu hỏi' : 'chỗ trống'}
+                  </Badge>
                 </div>
                 {passage.title && <h3 className="mb-1 text-center font-jp font-black">{passage.title}</h3>}
                 <div className="rounded-2xl bg-muted px-4 py-3">
-                  <PassageText content={passage.content} labelOf={firstQuestionLabel(passage.sourceRef)} />
+                  {reading ? (
+                    <ReadingPassage content={passage.content} />
+                  ) : (
+                    <PassageText content={passage.content} labelOf={labelOf} />
+                  )}
                 </div>
                 {passage.reviewNote && (
                   <p
@@ -159,7 +201,11 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
                   {passage.questions.map((question) => (
                     <li key={question.id} className="rounded-2xl border-2 border-border p-3">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-black">【{question.blankNo}】</span>
+                        <span className="font-black">
+                          {reading
+                            ? `Câu ${question.blankNo !== null && labelOf ? labelOf(question.blankNo) : question.blankNo}`
+                            : `【${question.blankNo}】`}
+                        </span>
                         {question.flag && <Badge variant="orange">⚠ {FLAG_LABEL[question.flag]}</Badge>}
                         <Button
                           size="sm"
@@ -170,6 +216,11 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
                           <Pencil className="h-4 w-4" /> Sửa câu
                         </Button>
                       </div>
+                      {reading && (
+                        <p className="mt-2 font-jp font-bold">
+                          <UnderlinedText text={question.questionText} />
+                        </p>
+                      )}
                       <div className="mt-2 grid gap-2 sm:grid-cols-2">
                         {OPTIONS.map((opt) => (
                           <div
@@ -209,7 +260,7 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
                         disabled={busy}
                         onClick={() => statusMutation.mutate({ id: passage.id, status: 'APPROVED' })}
                       >
-                        <Check className="h-4 w-4" /> Duyệt cả đoạn
+                        <Check className="h-4 w-4" /> {reading ? 'Duyệt cả bài' : 'Duyệt cả đoạn'}
                       </Button>
                       <Button
                         size="sm"
@@ -242,7 +293,7 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
                     </Button>
                   )}
                   <Button size="sm" variant="ghost" onClick={() => openDialog(() => setEditingPassage(passage))}>
-                    <Pencil className="h-4 w-4" /> Sửa đoạn văn
+                    <Pencil className="h-4 w-4" /> {reading ? 'Sửa bài đọc' : 'Sửa đoạn văn'}
                   </Button>
                 </div>
               </Card>
@@ -267,13 +318,14 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
       <ReviewNoteDialog
         key={`note-${dialogKey}`}
         action={pending?.status ?? null}
-        subject="đoạn văn"
+        subject={reading ? 'bài đọc' : 'đoạn văn'}
         busy={statusMutation.isPending}
         onConfirm={(note) => pending && statusMutation.mutate({ id: pending.passage.id, status: pending.status, note })}
         onCancel={() => setPending(null)}
       />
       <PassageEditDialog
         key={`passage-${dialogKey}`}
+        reading={reading}
         passage={editingPassage}
         submitting={passageMutation.isPending}
         errorMessage={editError}
@@ -294,14 +346,19 @@ export function PassageReviewList({ level, status }: { level: string; status?: E
   )
 }
 
-/** Sửa tiêu đề và nội dung đoạn văn; các chỗ trống 【n】 phải giữ nguyên số lượng và số thứ tự. */
+/**
+ * Sửa tiêu đề và nội dung đoạn văn; 文章の文法: các chỗ trống 【n】 phải giữ nguyên số lượng và số thứ tự; bài đọc: phần
+ * gạch chân 〔下線〕...〔/下線〕 phải đóng mở đủ cặp.
+ */
 function PassageEditDialog({
+  reading,
   passage,
   submitting,
   errorMessage,
   onSubmit,
   onCancel,
 }: {
+  reading: boolean
   passage: AdminExamPassage | null
   submitting: boolean
   errorMessage: string | null
@@ -315,7 +372,11 @@ function PassageEditDialog({
       open={passage !== null}
       onClose={onCancel}
       title={passage ? `Sửa đoạn văn #${passage.id}` : 'Sửa đoạn văn'}
-      description="Giữ đủ các chỗ trống 【1】【2】... - mỗi chỗ đúng một lần."
+      description={
+        reading
+          ? 'Gạch chân viết 〔下線〕...〔/下線〕, bảng viết mỗi hàng một dòng | ô | ô |.'
+          : 'Giữ đủ các chỗ trống 【1】【2】... - mỗi chỗ đúng một lần.'
+      }
       className="sm:max-w-2xl"
       footer={
         <>

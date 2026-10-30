@@ -6,6 +6,7 @@ import type {
   BulkApprovalResult,
   ExamImportResult,
   ExamQuestionStatus,
+  ExamSectionName,
   JlptQuestionType,
   Page,
   PassageDraftResult,
@@ -61,6 +62,12 @@ export const examAdminApi = {
       .post<ExamImportResult>('/admin/exam-questions/import', test, { params: { dryRun }, timeout: 60_000 })
       .then((r) => r.data),
 
+  /** Nhập một bài đọc lẻ của phần Đọc hiểu (dạng {@code type}); dryRun = chỉ kiểm tra. Có lỗi thì không ghi gì. */
+  importReading: (type: JlptQuestionType, passage: unknown, dryRun: boolean) =>
+    apiClient
+      .post<ExamImportResult>('/admin/exam-questions/import/reading', passage, { params: { type, dryRun }, timeout: 60_000 })
+      .then((r) => r.data),
+
   /** Nhờ AI viết nháp câu ngữ pháp cho một điểm ngữ pháp (tốn 2 request Gemini); câu nháp chờ người duyệt. */
   draft: (grammarPointId: number, type: JlptQuestionType, count: number) =>
     apiClient
@@ -73,9 +80,15 @@ export const examAdminApi = {
       .post<QuestionDraftResult>('/admin/exam-questions/vocabulary-drafts', { level, type, count }, { timeout: 120_000 })
       .then((r) => r.data),
 
-  /** Đoạn văn 文章の文法 của một cấp độ, kèm câu hỏi. */
-  passages: (filter: { level: string; status?: ExamQuestionStatus; page?: number; size?: number }) =>
-    apiClient.get<Page<AdminExamPassage>>('/admin/exam-passages', { params: filter }).then((r) => r.data),
+  /** Đoạn văn của một cấp độ (文章の文法, bài đọc), kèm câu hỏi; lọc thêm theo phần thi, dạng câu, trạng thái. */
+  passages: (filter: {
+    level: string
+    section?: ExamSectionName
+    type?: JlptQuestionType
+    status?: ExamQuestionStatus
+    page?: number
+    size?: number
+  }) => apiClient.get<Page<AdminExamPassage>>('/admin/exam-passages', { params: filter }).then((r) => r.data),
 
   updatePassage: (id: number, payload: { title: string; content: string }) =>
     apiClient.put<AdminExamPassage>(`/admin/exam-passages/${id}`, payload).then((r) => r.data),
