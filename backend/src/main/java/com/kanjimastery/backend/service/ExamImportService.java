@@ -4,6 +4,7 @@ import com.kanjimastery.backend.config.JlptBlueprintProperties;
 import com.kanjimastery.backend.dto.ExamImportRequest;
 import com.kanjimastery.backend.dto.ExamImportRequest.Item;
 import com.kanjimastery.backend.dto.ExamImportResponse;
+import com.kanjimastery.backend.dto.ExamPassageImportRequest;
 import com.kanjimastery.backend.exception.BadRequestException;
 import com.kanjimastery.backend.model.ExamPassage;
 import com.kanjimastery.backend.model.ExamQuestion;
@@ -42,13 +43,14 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * Nhập một đề tự soạn ({@link ExamImportRequest}, phần Từ vựng và Ngữ pháp) vào kho câu thi: mỗi câu thành một câu thi
- * đúng dạng 問題 của đề thật, đoạn văn 文章の文法 thành một đoạn văn kèm các câu hỏi. Câu vào kho ở trạng thái DRAFT,
- * nguồn IMPORTED, chờ duyệt ở trang quản trị; thứ tự lựa chọn giữ như đề gốc.
+ * Nhập một đề tự soạn ({@link ExamImportRequest}, phần Từ vựng, Ngữ pháp và Đọc hiểu) vào kho câu thi: mỗi câu thành
+ * một câu thi đúng dạng 問題 của đề thật, đoạn văn 文章の文法 và mỗi bài đọc thành một đoạn văn kèm các câu hỏi của nó.
+ * Cũng nhập được một bài đọc lẻ ({@link ExamPassageImportRequest}). Câu vào kho ở trạng thái DRAFT, nguồn IMPORTED,
+ * chờ duyệt ở trang quản trị; thứ tự lựa chọn giữ như đề gốc.
  * <p>
- * Kiểm tra hết trước khi ghi: mỗi 問題 đủ đúng số câu theo cấu trúc đề, số câu đánh liên tục, câu nào sai cấu trúc
- * (thiếu phần gạch chân, ★ không khớp đáp án...) thì báo lỗi và không ghi gì - sửa file rồi nhập lại. Câu đã nhập ở
- * lần trước (cùng mã câu đề gốc, vd. N3-05/NP/15) được bỏ qua, nên nhập lại một đề không tạo câu trùng.
+ * Kiểm tra hết trước khi ghi: mỗi 問題 đủ đúng số câu (số bài) theo cấu trúc đề, số câu đánh liên tục, câu nào sai cấu
+ * trúc (thiếu phần gạch chân, ★ không khớp đáp án...) thì báo lỗi và không ghi gì - sửa file rồi nhập lại. Câu đã nhập
+ * ở lần trước (cùng mã câu đề gốc, vd. N3-05/NP/15) được bỏ qua, nên nhập lại một đề không tạo câu trùng.
  */
 @Slf4j
 @Service
@@ -57,6 +59,7 @@ public class ExamImportService {
 
     static final String VOCABULARY_PART = "TV";
     static final String GRAMMAR_PART = "NP";
+    static final String READING_PART = "DH";
     static final String KANJI_READING_TEXT = "Chọn cách đọc đúng của từ được gạch chân.";
     static final String ORTHOGRAPHY_TEXT = "Chọn cách viết bằng chữ Hán của từ được gạch chân.";
     static final String CONTEXT_TEXT = ExamQuestionGenerator.BLANK + "に 入る ことばを えらんで ください。";
@@ -88,8 +91,8 @@ public class ExamImportService {
             throw new BadRequestException("Mã đề (\"de\") chỉ gồm chữ, số và dấu gạch ngang, tối đa 30 ký tự - vd. N3-05");
         }
         JlptLevel level = Levels.require(request.level());
-        if (request.vocabulary() == null && request.grammar() == null) {
-            throw new BadRequestException("Đề chưa có phần nào: cần \"tu_vung\" và/hoặc \"ngu_phap\"");
+        if (request.vocabulary() == null && request.grammar() == null && request.reading() == null) {
+            throw new BadRequestException("Đề chưa có phần nào: cần \"tu_vung\", \"ngu_phap\" và/hoặc \"doc_hieu\"");
         }
 
         ParsedTest test = new ParsedTest(code, level, LocalDateTime.now(clock));
@@ -110,39 +113,86 @@ public class ExamImportService {
             items.put(JlptQuestionType.SENTENCE_ORDER, orEmpty(part.sentenceOrder()));
             test.section(blueprint(level, ExamSection.GRAMMAR), GRAMMAR_PART, items, part.passage());
         }
+        if (request.reading() != null) {
+            ExamImportRequest.ReadingPart part = request.reading();
+            Map<JlptQuestionType, List<ExamImportRequest.Passage>> passages = new EnumMap<>(JlptQuestionType.class);
+            passages.put(JlptQuestionType.READING_SHORT, orEmpty(part.shortPassages()));
+            passages.put(JlptQuestionType.READING_MID, orEmpty(part.midPassages()));
+            passages.put(JlptQuestionType.READING_LONG, orEmpty(part.longPassages()));
+            passages.put(JlptQuestionType.INFO_SEARCH, orEmpty(part.infoSearch()));
+            test.reading(blueprint(level, ExamSection.READING), passages,
+                    blueprints.firstQuestionNumber(level, ExamSection.READING),
+                    blueprints.firstMondaiNumber(level, ExamSection.READING));
+        }
+        return save(test, dryRun);
+    }
 
+    /**
+     * Kiểm tra rồi ghi một bài đọc lẻ dạng {@code type} của phần Đọc hiểu; {@code dryRun} thì chỉ kiểm tra. Các câu hỏi
+     * đánh số 1..n. Có mã bài ("ma") thì nhập lại không tạo bài trùng; không có mã thì bài cùng nội dung đã có trong kho
+     * được bỏ qua.
+     */
+    @Transactional
+    public ExamImportResponse importPassage(JlptQuestionType type, ExamPassageImportRequest request, boolean dryRun) {
+        if (type == null || type.section() != ExamSection.READING) {
+            throw new BadRequestException("Dạng bài phải là một dạng của phần Đọc hiểu: READING_SHORT, READING_MID, "
+                    + "READING_LONG hoặc INFO_SEARCH");
+        }
+        String code = request.code() == null ? null : request.code().strip();
+        if (code != null && !code.isEmpty() && !TEST_CODE.matcher(code).matches()) {
+            throw new BadRequestException("Mã bài (\"ma\") chỉ gồm chữ, số và dấu gạch ngang, tối đa 30 ký tự");
+        }
+        JlptLevel level = Levels.require(request.level());
+        JlptBlueprintProperties.Section section = blueprint(level, ExamSection.READING);
+        if (!section.getQuestions().containsKey(type)) {
+            throw new BadRequestException("Đề " + level + " không có dạng bài " + type);
+        }
+        ParsedTest test = new ParsedTest(code == null || code.isEmpty() ? null : code, level, LocalDateTime.now(clock));
+        test.readingPassage(type, section.questionsPerPassage(type).orElse(null),
+                new ExamImportRequest.Passage(request.title(), request.content(), request.questions()), 1);
+        return save(test, dryRun);
+    }
+
+    /**
+     * Gắn từ, ngữ pháp, cảnh báo, bỏ câu và đoạn văn đã nhập ở lần trước, rồi ghi (trừ khi {@code dryRun} hoặc có lỗi).
+     * Đoạn văn đi cùng các câu hỏi của nó: đoạn đã có thì các câu của nó cũng không ghi lại.
+     */
+    private ExamImportResponse save(ParsedTest test, boolean dryRun) {
         List<String> warnings = new ArrayList<>();
         linkWords(test.questions, warnings);
-        linkGrammar(level, test.questions, warnings);
+        linkGrammar(test.level, test.questions, warnings);
         warnMissingExplanations(test.questions, warnings);
 
-        // Câu đã nhập ở lần trước được bỏ qua; đoạn văn đi cùng các câu hỏi của nó.
-        Set<String> existing = test.questions.isEmpty() ? Set.of()
-                : new HashSet<>(questionRepository.findExistingSourceRefs(test.questions.stream().map(Built::ref).toList()));
-        boolean newPassage = test.passage != null && !passageRepository.existsBySourceRef(test.passage.getSourceRef());
-        List<Built> fresh = test.questions.stream()
-                .filter(built -> !existing.contains(built.ref()))
-                .filter(built -> built.question().getBlankNo() == null || newPassage)
+        List<String> refs = test.questions.stream().map(Built::ref).filter(Objects::nonNull).toList();
+        Set<String> existing = refs.isEmpty() ? Set.of() : new HashSet<>(questionRepository.findExistingSourceRefs(refs));
+        List<ExamPassage> newPassages = test.passages.stream()
+                .filter(passage -> passage.getSourceRef() != null
+                        ? !passageRepository.existsBySourceRef(passage.getSourceRef())
+                        : !passageRepository.existsByJlptLevelAndSectionAndContent(passage.getJlptLevel(),
+                                passage.getSection(), passage.getContent()))
                 .toList();
-        warnDuplicates(level, test.questions, fresh, warnings);
+        List<Built> fresh = test.questions.stream()
+                .filter(built -> built.ref() == null || !existing.contains(built.ref()))
+                .filter(built -> built.passage() == null || newPassages.contains(built.passage()))
+                .toList();
+        warnDuplicates(test.level, test.questions, fresh, warnings);
 
+        String code = test.code;
         int alreadyImported = test.questions.size() - fresh.size();
-        int passages = newPassage ? 1 : 0;
         if (!test.errors.isEmpty() || dryRun) {
-            return new ExamImportResponse(code, dryRun, false, fresh.size(), passages, alreadyImported,
+            return new ExamImportResponse(code, dryRun, false, fresh.size(), newPassages.size(), alreadyImported,
                     test.errors, warnings);
         }
-        if (newPassage) {
-            ExamPassage stored = passageRepository.save(test.passage);
+        for (ExamPassage passage : newPassages) {
+            ExamPassage stored = passageRepository.save(passage);
             fresh.stream()
-                    .map(Built::question)
-                    .filter(question -> question.getBlankNo() != null)
-                    .forEach(question -> question.setPassageId(stored.getId()));
+                    .filter(built -> built.passage() == passage)
+                    .forEach(built -> built.question().setPassageId(stored.getId()));
         }
         questionRepository.saveAll(fresh.stream().map(Built::question).toList());
-        log.info("Nhập đề {} ({}): {} câu, {} đoạn văn, bỏ qua {} câu đã có", code, level, fresh.size(), passages,
-                alreadyImported);
-        return new ExamImportResponse(code, false, true, fresh.size(), passages, alreadyImported, test.errors,
+        log.info("Nhập đề {} ({}): {} câu, {} đoạn văn, bỏ qua {} câu đã có", code, test.level, fresh.size(),
+                newPassages.size(), alreadyImported);
+        return new ExamImportResponse(code, false, true, fresh.size(), newPassages.size(), alreadyImported, test.errors,
                 warnings);
     }
 
@@ -269,22 +319,29 @@ public class ExamImportService {
         return list == null ? List.of() : list;
     }
 
-    /** Một câu đã dựng từ file: mã câu đề gốc, nhãn để báo lỗi ("NP câu 15"), từ và mẫu ngữ pháp để gắn với kho. */
-    private record Built(String ref, String label, ExamQuestion question, WordHint word, String grammarPattern) {
+    /**
+     * Một câu đã dựng từ file: mã câu đề gốc (null với bài đọc lẻ không có mã), nhãn để báo lỗi ("NP câu 15"), từ và mẫu
+     * ngữ pháp để gắn với kho, đoạn văn chứa câu (null với câu đứng riêng).
+     */
+    private record Built(String ref, String label, ExamQuestion question, WordHint word, String grammarPattern,
+                         ExamPassage passage) {
     }
 
     /** Từ câu hỏi kiểm tra: cách viết, và cách đọc nếu biết (để chọn đúng từ khi kho có nhiều từ cùng chữ). */
     private record WordHint(String written, String reading) {
     }
 
-    /** Đề đọc từ file: các câu đã dựng (theo thứ tự trong đề), đoạn văn và các lỗi tìm thấy. */
+    /**
+     * Đề đọc từ file: các câu đã dựng (theo thứ tự trong đề), các đoạn văn và các lỗi tìm thấy. {@code code} null (bài
+     * đọc lẻ không có mã) thì câu và đoạn văn không có mã đề gốc.
+     */
     private static final class ParsedTest {
         private final String code;
         private final JlptLevel level;
         private final LocalDateTime now;
         private final List<Built> questions = new ArrayList<>();
         private final List<String> errors = new ArrayList<>();
-        private ExamPassage passage;
+        private final List<ExamPassage> passages = new ArrayList<>();
 
         ParsedTest(String code, JlptLevel level, LocalDateTime now) {
             this.code = code;
@@ -324,7 +381,7 @@ public class ExamImportService {
                     passage(part, passageItem, items, number);
                 } else {
                     for (int i = 0; i < items.size(); i++) {
-                        question(part, type, items.get(i), number + i, null);
+                        question(part, type, items.get(i), number + i, null, null);
                     }
                 }
                 number += count;
@@ -365,7 +422,7 @@ public class ExamImportService {
             ExamQuestionValidator.passageProblems(renumbered.toString(), blanks)
                     .forEach(problem -> errors.add(label + ": " + examNumbers(problem, start)));
             String title = strip(item.title());
-            passage = ExamPassage.builder()
+            ExamPassage passage = ExamPassage.builder()
                     .jlptLevel(level)
                     .section(ExamSection.GRAMMAR)
                     .title(title == null ? "Đề " + code : title.substring(0, Math.min(title.length(), MAX_TITLE_LENGTH)))
@@ -375,9 +432,82 @@ public class ExamImportService {
                     .sourceRef(code + "/" + part + "/" + start + "-" + end)
                     .createdAt(now)
                     .build();
+            passages.add(passage);
             for (int i = 0; i < items.size(); i++) {
-                question(part, JlptQuestionType.TEXT_GRAMMAR, items.get(i), start + i, i + 1);
+                question(part, JlptQuestionType.TEXT_GRAMMAR, items.get(i), start + i, i + 1, passage);
             }
+        }
+
+        /**
+         * Phần Đọc hiểu: các bài của từng 問題 theo đúng thứ tự cấu trúc đề, mỗi 問題 đủ số bài (số câu chia số câu mỗi
+         * bài); số câu đánh liên tục từ {@code firstNumber}, như đề thật (Đọc hiểu N3 từ câu 24).
+         */
+        void reading(JlptBlueprintProperties.Section blueprint, Map<JlptQuestionType, List<ExamImportRequest.Passage>>
+                passagesByType, int firstNumber, int firstMondai) {
+            passagesByType.forEach((type, items) -> {
+                if (!items.isEmpty() && !blueprint.getQuestions().containsKey(type)) {
+                    errors.add(READING_PART + ": đề " + level + " không có dạng " + type);
+                }
+            });
+            int number = firstNumber;
+            int mondai = firstMondai - 1;
+            for (Map.Entry<JlptQuestionType, Integer> entry : blueprint.getQuestions().entrySet()) {
+                mondai++;
+                JlptQuestionType type = entry.getKey();
+                Integer perPassage = blueprint.questionsPerPassage(type).orElse(null);
+                List<ExamImportRequest.Passage> items = passagesByType.getOrDefault(type, List.of());
+                int planned = perPassage == null ? 1 : entry.getValue() / perPassage;
+                if (items.size() != planned) {
+                    errors.add(READING_PART + " 問題" + mondai + " (" + type + "): cần " + planned + " bài, file có "
+                            + items.size());
+                }
+                for (ExamImportRequest.Passage item : items) {
+                    number += readingPassage(type, perPassage, item, number);
+                }
+            }
+        }
+
+        /**
+         * Một bài đọc dạng {@code type} có các câu hỏi đánh số từ {@code start}; câu hỏi lưu theo thứ tự trong bài
+         * (1..n). Trả về số câu hỏi của bài để đánh số bài sau.
+         */
+        int readingPassage(JlptQuestionType type, Integer perPassage, ExamImportRequest.Passage item, int start) {
+            if (item == null) {
+                errors.add(READING_PART + " bài từ câu " + start + ": trống");
+                return 0;
+            }
+            List<Item> items = orEmpty(item.questions());
+            int end = start + Math.max(items.size(), 1) - 1;
+            String range = start == end ? String.valueOf(start) : start + "-" + end;
+            String label = READING_PART + " bài câu " + range;
+            for (int i = 0; i < items.size(); i++) {
+                if (items.get(i) != null && !Objects.equals(items.get(i).number(), start + i)) {
+                    errors.add(label + ": câu thứ " + (i + 1) + " phải là câu " + (start + i) + ", file ghi "
+                            + items.get(i).number());
+                }
+            }
+            String content = strip(item.content());
+            List<ExamQuestionValidator.PassageQuestion> numbered = IntStream.rangeClosed(1, items.size())
+                    .mapToObj(i -> new ExamQuestionValidator.PassageQuestion(type, i))
+                    .toList();
+            ExamQuestionValidator.passageProblems(ExamSection.READING, content, numbered, perPassage)
+                    .forEach(problem -> errors.add(label + ": " + problem));
+            String title = strip(item.title());
+            ExamPassage passage = ExamPassage.builder()
+                    .jlptLevel(level)
+                    .section(ExamSection.READING)
+                    .title(title == null ? null : title.substring(0, Math.min(title.length(), MAX_TITLE_LENGTH)))
+                    .content(content == null ? "" : content)
+                    .review(new ReviewState(ExamQuestionStatus.DRAFT))
+                    .source(ExamQuestionSource.IMPORTED)
+                    .sourceRef(code == null ? null : code + "/" + READING_PART + "/" + range)
+                    .createdAt(now)
+                    .build();
+            passages.add(passage);
+            for (int i = 0; i < items.size(); i++) {
+                question(READING_PART, type, items.get(i), start + i, i + 1, passage);
+            }
+            return items.size();
         }
 
         /** Lỗi của đoạn văn ghi lại theo số câu trong đề: 【2】 của đoạn bắt đầu từ câu 19 là 【20】. */
@@ -392,8 +522,12 @@ public class ExamImportService {
             return result.toString();
         }
 
-        /** Dựng một câu theo dạng 問題 của nó; câu sai cấu trúc thì ghi lỗi và bỏ qua. */
-        private void question(String part, JlptQuestionType type, Item item, int number, Integer blankNo) {
+        /**
+         * Dựng một câu theo dạng 問題 của nó, thuộc đoạn văn {@code passage} (null với câu đứng riêng); câu sai cấu trúc
+         * thì ghi lỗi và bỏ qua.
+         */
+        private void question(String part, JlptQuestionType type, Item item, int number, Integer blankNo,
+                              ExamPassage passage) {
             String label = part + " câu " + number;
             if (item == null) {
                 errors.add(label + ": trống");
@@ -459,6 +593,12 @@ public class ExamImportService {
                     sentence = null;
                     highlight = null;
                 }
+                case READING_SHORT, READING_MID, READING_LONG, INFO_SEARCH -> {
+                    // "cau_hoi" của bài đọc là câu hỏi về bài, vd. 「この文章を書いた人が一番言いたいことは何か。」
+                    text = sentence;
+                    sentence = null;
+                    highlight = null;
+                }
                 default -> throw new IllegalStateException("Dạng câu chưa hỗ trợ nhập: " + type);
             }
             boolean validAnswer = answer != null && answer >= 1 && answer <= 4;
@@ -493,9 +633,10 @@ public class ExamImportService {
                     .blankNo(blankNo)
                     .review(new ReviewState(ExamQuestionStatus.DRAFT))
                     .source(ExamQuestionSource.IMPORTED)
-                    .sourceRef(code + "/" + part + "/" + number)
+                    .sourceRef(code == null ? null : code + "/" + part + "/" + number)
                     .build();
-            questions.add(new Built(question.getSourceRef(), label, question, word, strip(item.grammarPattern())));
+            questions.add(new Built(question.getSourceRef(), label, question, word, strip(item.grammarPattern()),
+                    passage));
         }
 
         /** Câu sắp xếp dựng từ phần trước/sau, thứ tự đúng của 4 vế và ô ★; đáp án suy ra phải khớp "dung" nếu có ghi. */

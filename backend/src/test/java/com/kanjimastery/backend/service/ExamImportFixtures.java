@@ -18,7 +18,7 @@ public final class ExamImportFixtures {
     }
 
     public static ExamImportRequest n3Test(String code) {
-        return new ExamImportRequest(code, "N3", vocabulary(), grammar(passage("【19】、【20】、【21】、【22】、【23】。")));
+        return new ExamImportRequest(code, "N3", vocabulary(), grammar(passage("【19】、【20】、【21】、【22】、【23】。")), null);
     }
 
     public static ExamImportRequest.VocabularyPart vocabulary() {
@@ -79,5 +79,26 @@ public final class ExamImportFixtures {
 
     public static List<String> options(int number) {
         return List.of("一" + number, "二" + number, "三" + number, "四" + number);
+    }
+
+    /** Phần Đọc hiểu N3 đủ bài: 4 bài ngắn (câu 24-27), 2 bài trung (28-33), 1 bài dài (34-37), tìm thông tin (38-39). */
+    public static ExamImportRequest.ReadingPart reading() {
+        return new ExamImportRequest.ReadingPart(
+                List.of(readingPassage(24, 1), readingPassage(25, 1), readingPassage(26, 1), readingPassage(27, 1)),
+                List.of(readingPassage(28, 3), readingPassage(31, 3)),
+                List.of(readingPassage(34, 4)),
+                List.of(new ExamImportRequest.Passage("料金のお知らせ", "| コース | 料金 |\n| 初級 | 3,000円 |",
+                        items(38, 39, ExamImportFixtures::readingQuestion))));
+    }
+
+    /** Bài đọc có {@code count} câu hỏi đánh số từ {@code from}, có một phần gạch chân. */
+    public static ExamImportRequest.Passage readingPassage(int from, int count) {
+        return new ExamImportRequest.Passage(null, "第" + from + "の文章。〔下線〕それ〔/下線〕は大切だ。",
+                items(from, from + count - 1, ExamImportFixtures::readingQuestion));
+    }
+
+    /** Câu hỏi về bài đọc: "cau_hoi" là câu hỏi, đáp án là lựa chọn 2. */
+    public static Item readingQuestion(int number) {
+        return item(number, "問" + number + "：筆者の考えに合うものはどれか。", null, null, options(number), 2, null, null);
     }
 }

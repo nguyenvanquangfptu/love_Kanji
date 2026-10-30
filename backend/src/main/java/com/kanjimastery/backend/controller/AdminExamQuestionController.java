@@ -7,6 +7,7 @@ import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
 import com.kanjimastery.backend.dto.BulkApproveRequest;
 import com.kanjimastery.backend.dto.ExamImportRequest;
 import com.kanjimastery.backend.dto.ExamImportResponse;
+import com.kanjimastery.backend.dto.ExamPassageImportRequest;
 import com.kanjimastery.backend.dto.ExamQuestionStatusRequest;
 import com.kanjimastery.backend.dto.QuestionBankStatsResponse;
 import com.kanjimastery.backend.dto.QuestionDraftRequest;
@@ -126,12 +127,24 @@ public class AdminExamQuestionController {
     }
 
     @Operation(summary = "Nhập một đề tự soạn",
-            description = "Một đề (phần Từ vựng và/hoặc Ngữ pháp) dạng JSON. Mặc định dryRun=true: chỉ kiểm tra và trả "
+            description = "Một đề (phần Từ vựng, Ngữ pháp và/hoặc Đọc hiểu) dạng JSON. Mặc định dryRun=true: chỉ kiểm "
+                    + "tra và trả "
                     + "báo cáo (lỗi, cảnh báo, số câu sẽ nhập). dryRun=false mới ghi - có lỗi thì không ghi gì. Câu "
                     + "vào kho ở trạng thái DRAFT; câu đã nhập ở lần trước (cùng mã đề và số câu) được bỏ qua.")
     @PostMapping("/import")
     public ResponseEntity<ExamImportResponse> importTest(@RequestBody ExamImportRequest request,
                                                          @RequestParam(defaultValue = "true") boolean dryRun) {
         return ResponseEntity.ok(importService.importTest(request, dryRun));
+    }
+
+    @Operation(summary = "Nhập một bài đọc lẻ",
+            description = "Một bài của phần Đọc hiểu dạng JSON; type là dạng bài (READING_SHORT, READING_MID, "
+                    + "READING_LONG, INFO_SEARCH), số câu hỏi phải đúng số câu mỗi bài của dạng đó. dryRun như khi nhập "
+                    + "đề. Có mã bài (\"ma\") thì nhập lại không tạo bài trùng.")
+    @PostMapping("/import/reading")
+    public ResponseEntity<ExamImportResponse> importReadingPassage(@RequestBody ExamPassageImportRequest request,
+                                                                   @RequestParam JlptQuestionType type,
+                                                                   @RequestParam(defaultValue = "true") boolean dryRun) {
+        return ResponseEntity.ok(importService.importPassage(type, request, dryRun));
     }
 }
