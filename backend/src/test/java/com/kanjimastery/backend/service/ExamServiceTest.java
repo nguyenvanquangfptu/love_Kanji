@@ -273,6 +273,7 @@ class ExamServiceTest {
     @Test
     void saveAnswer_whileTimeRemains_shouldStoreTheOptionInUpperCase() {
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attemptStartedSecondsAgo(600)));
+        when(examSessionStore.getQuestionIds(ATTEMPT_ID)).thenReturn(List.of(4L, 5L, 6L));
 
         examService.saveAnswer(USER_ID, ATTEMPT_ID, saveRequest(5L, "b"));
 
@@ -282,6 +283,7 @@ class ExamServiceTest {
     @Test
     void saveAnswer_justAfterTheDeadline_shouldStillBeAccepted_toAllowForNetworkDelay() {
         when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attemptStartedSecondsAgo(1500 + 2)));
+        when(examSessionStore.getQuestionIds(ATTEMPT_ID)).thenReturn(List.of(4L, 5L, 6L));
 
         examService.saveAnswer(USER_ID, ATTEMPT_ID, saveRequest(5L, "C"));
 
@@ -295,6 +297,16 @@ class ExamServiceTest {
                 attemptStartedSecondsAgo(1500 + ExamService.LATE_ANSWER_GRACE_SECONDS + 30)));
 
         assertThatThrownBy(() -> examService.saveAnswer(USER_ID, ATTEMPT_ID, saveRequest(5L, "A")))
+                .isInstanceOf(BadRequestException.class);
+        verify(examSessionStore, never()).saveAnswer(any(), any(), any(), anyInt());
+    }
+
+    @Test
+    void saveAnswer_forAQuestionOutsideTheAttempt_shouldBeRejected_withoutTouchingTheSession() {
+        when(attemptRepository.findById(ATTEMPT_ID)).thenReturn(Optional.of(attemptStartedSecondsAgo(600)));
+        when(examSessionStore.getQuestionIds(ATTEMPT_ID)).thenReturn(List.of(4L, 5L, 6L));
+
+        assertThatThrownBy(() -> examService.saveAnswer(USER_ID, ATTEMPT_ID, saveRequest(999L, "A")))
                 .isInstanceOf(BadRequestException.class);
         verify(examSessionStore, never()).saveAnswer(any(), any(), any(), anyInt());
     }
