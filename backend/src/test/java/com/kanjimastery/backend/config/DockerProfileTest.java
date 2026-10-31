@@ -45,6 +45,17 @@ class DockerProfileTest {
     }
 
     @Test
+    void registration_shouldBeOffOnServers_byDefault_butOnForDev() {
+        assumeTrue(System.getenv("REGISTRATION_ENABLED") == null, "máy đang đặt sẵn REGISTRATION_ENABLED");
+
+        try (ConfigurableApplicationContext docker = start("--spring.profiles.active=docker");
+             ConfigurableApplicationContext dev = start("--spring.profiles.active=dev")) {
+            assertThat(docker.getEnvironment().getProperty("app.auth.registration-enabled", Boolean.class)).isFalse();
+            assertThat(dev.getEnvironment().getProperty("app.auth.registration-enabled", Boolean.class)).isTrue();
+        }
+    }
+
+    @Test
     void devProfile_shouldKeepTheApiDocs() {
         try (ConfigurableApplicationContext context = start("--spring.profiles.active=dev")) {
             // Not set: springdoc's own default, which is on.

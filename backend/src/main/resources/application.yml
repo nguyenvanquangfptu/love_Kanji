@@ -51,8 +51,9 @@ app:
     access-token-expiration-ms: 900000       # 15 phút
     refresh-token-expiration-ms: 604800000   # 7 ngày
   auth:
-    # Đặt false khi đưa app lên mạng để người lạ không tự tạo tài khoản được.
-    registration-enabled: ${REGISTRATION_ENABLED:true}
+    # Mặc định tắt: máy chủ nào quên đặt biến thì người lạ cũng không tự tạo tài khoản được.
+    # Đặt REGISTRATION_ENABLED=true trong .env để mở trang đăng ký. Profile dev (máy cá nhân) mặc định bật.
+    registration-enabled: ${REGISTRATION_ENABLED:false}
   rate-limit:
     login:              # theo IP
       limit: 5
@@ -148,6 +149,8 @@ spring:
 app:
   jwt:
     secret: ${JWT_SECRET:dev-only-change-this-super-secret-key-min-32-bytes-long!!}
+  auth:
+    registration-enabled: ${REGISTRATION_ENABLED:true}
 # Máy dev: ngoài màn hình còn ghi ra backend/logs/backend.log (UTF-8) để tìm lại log cũ khi debug.
 # File đầy 10 MB thì xoay sang file mới, giữ tối đa 7 ngày và 100 MB. Docker vẫn chỉ log ra stdout (docker logs).
 logging:

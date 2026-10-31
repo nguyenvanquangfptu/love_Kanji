@@ -38,8 +38,8 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final LoginAttemptService loginAttemptService;
 
-    /** Tắt khi đưa app lên mạng để người lạ không tự tạo tài khoản (biến môi trường REGISTRATION_ENABLED). */
-    @Value("${app.auth.registration-enabled:true}")
+    /** Mặc định tắt để người lạ không tự tạo tài khoản; bật bằng biến môi trường REGISTRATION_ENABLED=true. */
+    @Value("${app.auth.registration-enabled:false}")
     private boolean registrationEnabled;
 
     public AuthResponse register(RegisterRequest request) {
