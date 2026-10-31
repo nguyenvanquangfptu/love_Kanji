@@ -26,8 +26,17 @@ public class RefreshTokenService {
         redisTemplate.opsForSet().add(activeSetKey(userId), jti);
     }
 
-    public boolean isValid(Long userId, String jti) {
-        return Boolean.TRUE.equals(redisTemplate.hasKey(detailKey(userId, jti)));
+    /**
+     * Kiểm tra và thu hồi token trong cùng một lệnh DEL của Redis: hai request refresh song song cùng một token thì
+     * chỉ một request nhận được {@code true}. Nếu tách thành "kiểm tra rồi mới xoá", cả hai cùng qua bước kiểm tra,
+     * người lấy trộm token cũng nhận được cặp token mới và việc phát hiện dùng lại token bị bỏ lỡ.
+     *
+     * @return true nếu token còn hiệu lực và vừa bị thu hồi bởi chính lần gọi này
+     */
+    public boolean consume(Long userId, String jti) {
+        boolean existed = Boolean.TRUE.equals(redisTemplate.delete(detailKey(userId, jti)));
+        redisTemplate.opsForSet().remove(activeSetKey(userId), jti);
+        return existed;
     }
 
     public void revoke(Long userId, String jti) {

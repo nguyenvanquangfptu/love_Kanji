@@ -10,3 +10,6 @@ spring:
 app:
   jwt:
     secret: test-only-signing-key-at-least-32-bytes-long
+  auth:
+    # Test tạo người học qua luồng đăng ký thật.
+    registration-enabled: true

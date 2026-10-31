@@ -168,6 +168,10 @@ public class ExamService {
         if (LocalDateTime.now(clock).isAfter(closesAt)) {
             throw new BadRequestException("Đã hết giờ làm bài, không lưu thêm đáp án được");
         }
+        // Chấm điểm chỉ xét câu của lượt thi, nhưng nếu không chặn ở đây thì gửi questionId tuỳ ý vẫn làm Hash Redis phình ra.
+        if (!examSessionStore.getQuestionIds(attemptId).contains(request.getQuestionId())) {
+            throw new BadRequestException("Câu hỏi không thuộc lượt thi này: " + request.getQuestionId());
+        }
         String option = request.getSelectedOption() != null ? request.getSelectedOption().toUpperCase() : null;
         examSessionStore.saveAnswer(attemptId, request.getQuestionId(), option, durationSeconds);
     }

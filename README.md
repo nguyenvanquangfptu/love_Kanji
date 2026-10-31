@@ -356,7 +356,8 @@ Lệnh thứ 4 xoá cache từ vựng cũ trong Redis. Chuyển sang máy mới:
 
 - **IP người dùng do nginx xác định.** nginx ghi đè header `X-Forwarded-For`, Spring (`server.forward-headers-strategy: native`) chỉ tin header này khi request đến từ mạng nội bộ, và backend chỉ mở cổng trên `127.0.0.1`. Vì vậy client không thể tự đặt IP giả để vượt giới hạn đăng nhập.
 - **Câu ví dụ được lưu lại.** Mỗi lần tạo trắc nghiệm, bộ câu hỏi luôn mới, nhưng câu ví dụ đã lưu trong database thì được dùng lại. Gemini chỉ được gọi cho từ chưa có câu.
-- **Khi đưa app lên mạng:** đặt `REGISTRATION_ENABLED=false` trong `.env` để người lạ không tự tạo tài khoản được.
+- **Tự đăng ký mặc định tắt** (`REGISTRATION_ENABLED=false`) để người lạ không tự tạo tài khoản được; quản trị viên cấp tài khoản ở trang admin. Đặt `REGISTRATION_ENABLED=true` trong `.env` để mở trang đăng ký. Chạy backend bằng `./mvnw spring-boot:run` (profile `dev`) thì mặc định bật.
+- **Đăng ký trùng tên hay trùng email đều báo cùng một câu**, để người ngoài không dò được email nào đã có tài khoản.
 
 ---
 

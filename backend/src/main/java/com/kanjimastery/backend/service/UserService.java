@@ -38,8 +38,15 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
 
+    /**
+     * Tự đăng ký: trùng tên hay trùng email đều báo cùng một câu, không nói trường nào - nếu báo riêng thì người ngoài
+     * gõ thử từng email là biết email nào đã có tài khoản.
+     */
     @Transactional
     public User register(RegisterRequest request) {
+        if (userRepository.existsByUsername(request.getUsername()) || userRepository.existsByEmail(request.getEmail())) {
+            throw new BadRequestException("Tên đăng nhập hoặc email đã được sử dụng");
+        }
         return userRepository.save(newLearner(request.getUsername(), request.getEmail(), request.getPassword()));
     }
 
@@ -49,6 +56,13 @@ public class UserService {
      */
     @Transactional
     public CreatedUserResponse createAccount(CreateUserRequest request) {
+        // Quản trị viên được biết chính xác trường nào bị trùng để sửa lại.
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new BadRequestException("Tên đăng nhập đã tồn tại");
+        }
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new BadRequestException("Email đã được sử dụng");
+        }
         String temporaryPassword = temporaryPassword();
         User user = newLearner(request.getUsername(), request.getEmail(), temporaryPassword);
         user.setMustChangePassword(true);
@@ -82,14 +96,8 @@ public class UserService {
         return userRepository.save(user);
     }
 
-    /** Người học mới (ROLE_USER) - tên đăng nhập và email chưa ai dùng. */
+    /** Người học mới (ROLE_USER); nơi gọi đã kiểm tra tên đăng nhập và email chưa ai dùng. */
     private User newLearner(String username, String email, String password) {
-        if (userRepository.existsByUsername(username)) {
-            throw new BadRequestException("Tên đăng nhập đã tồn tại");
-        }
-        if (userRepository.existsByEmail(email)) {
-            throw new BadRequestException("Email đã được sử dụng");
-        }
         return User.builder()
                 .username(username)
                 .email(email)

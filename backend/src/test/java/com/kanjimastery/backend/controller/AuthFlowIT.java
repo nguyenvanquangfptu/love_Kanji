@@ -5,7 +5,9 @@ import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.dto.AuthResponse;
 import com.kanjimastery.backend.dto.CreateUserRequest;
 import com.kanjimastery.backend.dto.LoginRequest;
+import com.kanjimastery.backend.dto.RefreshTokenRequest;
 import com.kanjimastery.backend.dto.RegisterRequest;
+import com.kanjimastery.backend.exception.UnauthorizedException;
 import com.kanjimastery.backend.repository.UserRepository;
 import com.kanjimastery.backend.service.AuthService;
 import com.kanjimastery.backend.service.UserService;
@@ -21,6 +23,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.HttpHeaders.AUTHORIZATION;
@@ -77,6 +84,38 @@ class AuthFlowIT extends AbstractIntegrationTest {
 
         // Still a valid session: the access token was refused as the wrong type, not treated as a stolen refresh token.
         refresh(tokens.getRefreshToken()).andExpect(status().isOk());
+    }
+
+    @Test
+    void oneRefreshToken_sentByManyRequestsAtOnce_shouldRefreshOnlyOnce() throws Exception {
+        AuthResponse tokens = newLearner();
+        int callers = 8;
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService pool = Executors.newFixedThreadPool(callers);
+        try {
+            List<Future<Boolean>> results = new ArrayList<>();
+            for (int i = 0; i < callers; i++) {
+                results.add(pool.submit(() -> {
+                    start.await();
+                    try {
+                        authService.refresh(refreshRequest(tokens.getRefreshToken()));
+                        return true;
+                    } catch (UnauthorizedException ex) {
+                        return false;
+                    }
+                }));
+            }
+            start.countDown();
+
+            int refreshed = 0;
+            for (Future<Boolean> result : results) {
+                refreshed += result.get(10, TimeUnit.SECONDS) ? 1 : 0;
+            }
+            // Các request còn lại bị coi là dùng lại token nên mọi phiên đều bị thu hồi - kể cả cặp token vừa phát.
+            assertThat(refreshed).isEqualTo(1);
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     @Test
@@ -162,6 +201,12 @@ class AuthFlowIT extends AbstractIntegrationTest {
         request.setEmail(username + "@example.com");
         request.setPassword(PASSWORD);
         return authService.register(request);
+    }
+
+    private static RefreshTokenRequest refreshRequest(String token) {
+        RefreshTokenRequest request = new RefreshTokenRequest();
+        request.setRefreshToken(token);
+        return request;
     }
 
     private ResultActions callApi(String bearerToken) throws Exception {

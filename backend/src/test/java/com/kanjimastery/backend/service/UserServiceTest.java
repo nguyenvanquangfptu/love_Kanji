@@ -68,25 +68,28 @@ class UserServiceTest {
         verify(userRepository).save(any(User.class));
     }
 
+    // Trùng tên hay trùng email đều cùng một câu: người ngoài không dò được email nào đã có tài khoản.
+    private static final String TAKEN_ON_REGISTER = "Tên đăng nhập hoặc email đã được sử dụng";
+
     @Test
-    void register_shouldThrow_whenUsernameAlreadyExists() {
+    void register_shouldThrow_whenUsernameAlreadyExists_withoutSayingWhichFieldIsTaken() {
         when(userRepository.existsByUsername("taro")).thenReturn(true);
 
         assertThatThrownBy(() -> userService.register(registerRequest))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Tên đăng nhập");
+                .hasMessage(TAKEN_ON_REGISTER);
 
         verify(userRepository, never()).save(any());
     }
 
     @Test
-    void register_shouldThrow_whenEmailAlreadyExists() {
+    void register_shouldThrow_whenEmailAlreadyExists_withTheSameMessageAsATakenUsername() {
         when(userRepository.existsByUsername("taro")).thenReturn(false);
         when(userRepository.existsByEmail("taro@example.com")).thenReturn(true);
 
         assertThatThrownBy(() -> userService.register(registerRequest))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Email");
+                .hasMessage(TAKEN_ON_REGISTER);
 
         verify(userRepository, never()).save(any());
     }
@@ -156,7 +159,18 @@ class UserServiceTest {
 
         assertThatThrownBy(() -> userService.createAccount(createRequest("taro", "other@example.com")))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("Tên đăng nhập");
+                .hasMessage("Tên đăng nhập đã tồn tại");
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void createAccount_shouldTellTheAdmin_whenTheEmailIsTaken() {
+        when(userRepository.existsByUsername("hanako")).thenReturn(false);
+        when(userRepository.existsByEmail("taro@example.com")).thenReturn(true);
+
+        assertThatThrownBy(() -> userService.createAccount(createRequest("hanako", "taro@example.com")))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("Email đã được sử dụng");
         verify(userRepository, never()).save(any());
     }
 

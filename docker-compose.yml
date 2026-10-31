@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:15-alpine
+    # Ghim đúng bản đang chạy: tag trôi (15-alpine) có thể đổi bản mỗi lần pull mà không ai hay.
+    # Nâng bản thì sửa ở đây (và db-backup/Dockerfile) rồi backup trước khi chạy lại.
+    image: postgres:15.19-alpine
     container_name: kanji_postgres
     restart: unless-stopped
     environment:
@@ -17,7 +19,7 @@ services:
       - kanji_net
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.11-alpine
     container_name: kanji_redis
     restart: unless-stopped
     ports:
@@ -48,8 +50,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:?Cần đặt JWT_SECRET - xem .env.example}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_DAILY_LIMIT: ${GEMINI_DAILY_LIMIT:-100}
-      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-false}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:
       - postgres
       - redis
