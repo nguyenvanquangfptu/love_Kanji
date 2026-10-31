@@ -34,6 +34,17 @@ class DockerProfileTest {
     }
 
     @Test
+    void dockerProfile_shouldLogAtInfo_byDefault_butDevShouldKeepDebug() {
+        assumeTrue(System.getenv("LOG_LEVEL") == null, "máy đang đặt sẵn LOG_LEVEL");
+
+        try (ConfigurableApplicationContext docker = start("--spring.profiles.active=docker");
+             ConfigurableApplicationContext dev = start("--spring.profiles.active=dev")) {
+            assertThat(docker.getEnvironment().getProperty("logging.level.com.kanjimastery.backend")).isEqualTo("INFO");
+            assertThat(dev.getEnvironment().getProperty("logging.level.com.kanjimastery.backend")).isEqualTo("DEBUG");
+        }
+    }
+
+    @Test
     void devProfile_shouldKeepTheApiDocs() {
         try (ConfigurableApplicationContext context = start("--spring.profiles.active=dev")) {
             // Not set: springdoc's own default, which is on.

@@ -134,6 +134,10 @@ springdoc:
     enabled: ${API_DOCS_ENABLED:false}
   swagger-ui:
     enabled: ${API_DOCS_ENABLED:false}
+# Máy chủ chỉ ghi INFO trở lên: log DEBUG dài, dễ chứa dữ liệu người học. Cần soi lỗi thì đặt LOG_LEVEL=DEBUG trong .env.
+logging:
+  level:
+    com.kanjimastery.backend: ${LOG_LEVEL:INFO}
 
 ---
 # Local development only: `./mvnw spring-boot:run` turns this profile on (see spring-boot.run.profiles in pom.xml).
