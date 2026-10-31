@@ -10,7 +10,8 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Runtime - chỉ Nginx Alpine phục vụ static build, không có Node/source
-FROM nginx:alpine
+# Ghim bản nginx: tag trôi (alpine) có thể đổi bản mỗi lần build mà không ai hay.
+FROM nginx:1.31.6-alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 # Outside conf.d on purpose: everything in conf.d is loaded at http level, this file is included per location.
