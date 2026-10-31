@@ -82,13 +82,12 @@ public class AuthService {
         Long userId = jwtService.extractUserId(refreshToken);
         String jti = jwtService.extractJti(refreshToken);
 
-        if (!refreshTokenService.isValid(userId, jti)) {
+        // Kiểm tra và thu hồi cùng lúc (xem RefreshTokenService.consume): request đến sau với cùng token bị coi là dùng lại.
+        if (!refreshTokenService.consume(userId, jti)) {
             log.warn("Refresh token đã dùng rồi bị gửi lại (có thể bị lộ token) - thu hồi mọi phiên của userId={}", userId);
             refreshTokenService.revokeAll(userId);
             throw new UnauthorizedException("Refresh token đã được sử dụng hoặc không còn hiệu lực. Vui lòng đăng nhập lại.");
         }
-
-        refreshTokenService.revoke(userId, jti);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UnauthorizedException("Người dùng không tồn tại"));

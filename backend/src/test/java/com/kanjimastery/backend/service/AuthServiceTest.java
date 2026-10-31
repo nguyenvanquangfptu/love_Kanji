@@ -25,6 +25,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.Duration;
 import java.util.Date;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -119,6 +120,30 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.refresh(refreshRequest("access-token")))
                 .isInstanceOf(UnauthorizedException.class);
         verifyNoInteractions(refreshTokenService);
+    }
+
+    @Test
+    void refresh_shouldIssueNewTokens_whenThisCallConsumesTheRefreshToken() {
+        User user = User.builder().id(7L).username("taro").build();
+        stubRefreshToken("refresh-token", 7L, "jti-1");
+        when(refreshTokenService.consume(7L, "jti-1")).thenReturn(true);
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user));
+        stubTokens(user);
+
+        assertThat(authService.refresh(refreshRequest("refresh-token")).getAccessToken()).isEqualTo("access-token");
+        verify(refreshTokenService, never()).revokeAll(any());
+    }
+
+    @Test
+    void refresh_shouldEndEverySession_whenTheTokenWasAlreadyConsumed() {
+        // Cũng là trường hợp hai request song song: request đến sau không còn gì để thu hồi.
+        stubRefreshToken("refresh-token", 7L, "jti-1");
+        when(refreshTokenService.consume(7L, "jti-1")).thenReturn(false);
+
+        assertThatThrownBy(() -> authService.refresh(refreshRequest("refresh-token")))
+                .isInstanceOf(UnauthorizedException.class);
+        verify(refreshTokenService).revokeAll(7L);
+        verify(refreshTokenService, never()).store(any(), any());
     }
 
     @Test
@@ -242,6 +267,12 @@ class AuthServiceTest {
         RefreshTokenRequest request = new RefreshTokenRequest();
         request.setRefreshToken(token);
         return request;
+    }
+
+    private void stubRefreshToken(String token, Long userId, String jti) {
+        when(jwtService.isTokenValid(token, JwtService.TokenType.REFRESH)).thenReturn(true);
+        when(jwtService.extractUserId(token)).thenReturn(userId);
+        when(jwtService.extractJti(token)).thenReturn(jti);
     }
 
     private void stubTokens(User user) {
