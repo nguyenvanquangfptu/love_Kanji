@@ -29,7 +29,7 @@ const MODES: { value: Mode; title: string; detail: string; icon: typeof FileText
   {
     value: 'jlpt',
     title: 'Đề JLPT',
-    detail: 'Từ vựng + Ngữ pháp theo cấu trúc đề thật, mỗi phần có giờ riêng.',
+    detail: 'Từ vựng, Ngữ pháp (N3 thêm Đọc hiểu) theo cấu trúc đề thật, mỗi phần có giờ riêng.',
     icon: FileText,
   },
   {
