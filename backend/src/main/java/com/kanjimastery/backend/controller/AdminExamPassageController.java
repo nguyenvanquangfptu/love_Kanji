@@ -4,10 +4,12 @@ import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.dto.AdminExamPassageResponse;
+import com.kanjimastery.backend.dto.BulkApproveRequest;
 import com.kanjimastery.backend.dto.ExamPassageRequest;
 import com.kanjimastery.backend.dto.ExamQuestionStatusRequest;
 import com.kanjimastery.backend.dto.PassageDraftRequest;
 import com.kanjimastery.backend.service.ExamPassageReviewService;
+import com.kanjimastery.backend.service.ExamQuestionReviewService;
 import com.kanjimastery.backend.service.PassageDraftService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -55,6 +57,15 @@ public class AdminExamPassageController {
     public ResponseEntity<AdminExamPassageResponse> changeStatus(@PathVariable Long id,
                                                                  @Valid @RequestBody ExamQuestionStatusRequest request) {
         return ResponseEntity.ok(passageReviewService.changeStatus(id, request.getStatus(), request.getNote()));
+    }
+
+    @Operation(summary = "Duyệt nhiều đoạn văn một lượt",
+            description = "Tối đa 100 đoạn. Chỉ duyệt đoạn đang chờ duyệt, không có cảnh báo (ở đoạn hay câu hỏi của đoạn) "
+                    + "và hợp lệ, cùng mọi câu hỏi của đoạn; đoạn khác giữ nguyên và được trả về kèm lý do.")
+    @PostMapping("/approve")
+    public ResponseEntity<ExamQuestionReviewService.BulkApproval> approveAll(
+            @Valid @RequestBody BulkApproveRequest request) {
+        return ResponseEntity.ok(passageReviewService.approveAll(request.getIds()));
     }
 
     @Operation(summary = "Nhờ AI viết nháp một đoạn văn",

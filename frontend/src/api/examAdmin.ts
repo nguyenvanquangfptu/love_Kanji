@@ -102,4 +102,8 @@ export const examAdminApi = {
   /** Duyệt / loại / rút cả đoạn văn cùng mọi câu hỏi của nó. */
   changePassageStatus: (id: number, status: ExamQuestionStatus, note?: string) =>
     apiClient.post<AdminExamPassage>(`/admin/exam-passages/${id}/status`, { status, note }).then((r) => r.data),
+
+  /** Duyệt một lượt các đoạn đã đọc trên trang; chỉ đoạn chờ duyệt, không cảnh báo, hợp lệ mới được duyệt. */
+  approveAllPassages: (ids: number[]) =>
+    apiClient.post<BulkApprovalResult>('/admin/exam-passages/approve', { ids }).then((r) => r.data),
 }

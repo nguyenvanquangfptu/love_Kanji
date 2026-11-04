@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronLeft, ChevronRight, Pencil, RotateCcw, Sparkles, Undo2, X } from 'lucide-react'
+import { Check, CheckCheck, ChevronLeft, ChevronRight, Pencil, RotateCcw, Sparkles, Undo2, X } from 'lucide-react'
 import { examAdminApi } from '@/api/examAdmin'
 import { extractErrorMessage } from '@/api/client'
 import type {
@@ -66,6 +66,7 @@ export function PassageReviewList({
   const [editingPassage, setEditingPassage] = useState<AdminExamPassage | null>(null)
   const [editingQuestion, setEditingQuestion] = useState<AdminExamQuestion | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
+  const [confirmingBulk, setConfirmingBulk] = useState(false)
 
   const filter = { level, section, type, status, page, size: PAGE_SIZE }
   const passagesQuery = useQuery({
@@ -103,6 +104,15 @@ export function PassageReviewList({
     mutationFn: (id: number) => examAdminApi.dismissReports(id),
     onSuccess: refresh,
   })
+  const bulkMutation = useMutation({
+    mutationFn: (ids: number[]) => examAdminApi.approveAllPassages(ids),
+    onSuccess: () => {
+      setConfirmingBulk(false)
+      // Đoạn đã duyệt rời khỏi danh sách chờ duyệt: quay về trang đầu.
+      setPage(0)
+      refresh()
+    },
+  })
   const questionMutation = useMutation({
     mutationFn: (vars: { id: number; payload: AdminExamQuestionRequest }) => examAdminApi.update(vars.id, vars.payload),
     onSuccess: () => {
@@ -115,6 +125,11 @@ export function PassageReviewList({
   if (passagesQuery.isLoading) return <PageSpinner label="Đang tải đoạn văn..." />
   if (passagesQuery.isError || !passagesQuery.data) return <Alert>{extractErrorMessage(passagesQuery.error)}</Alert>
   const data = passagesQuery.data
+  // Đoạn có cảnh báo (ở đoạn hay ở câu hỏi) cần xem và duyệt riêng.
+  const approvable = data.content.filter(
+    (passage) => passage.status === 'DRAFT' && !passage.flag && passage.questions.every((question) => !question.flag),
+  )
+  const unit = reading ? 'bài' : 'đoạn'
 
   function openDialog(open: () => void) {
     setEditError(null)
@@ -148,13 +163,29 @@ export function PassageReviewList({
         </Card>
       )}
       {statusMutation.isError && <Alert>{extractErrorMessage(statusMutation.error)}</Alert>}
+      {bulkMutation.data && (
+        <p className="rounded-2xl bg-secondary-soft px-4 py-3 text-sm font-bold text-secondary-dark">
+          Đã duyệt {bulkMutation.data.approved} {unit}.
+          {bulkMutation.data.skipped.length > 0 &&
+            ` Bỏ qua ${bulkMutation.data.skipped.length} ${unit}: ${bulkMutation.data.skipped
+              .map((skipped) => `#${skipped.id} ${skipped.reason}`)
+              .join('; ')}.`}
+        </p>
+      )}
       {data.content.length === 0 ? (
         <Card className="p-6 text-center font-semibold text-muted-foreground">Không có đoạn văn nào khớp bộ lọc.</Card>
       ) : (
         <>
-          <p className="text-sm font-bold text-muted-foreground">
-            {data.totalElements} {reading ? 'bài đọc' : 'đoạn văn'}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-bold text-muted-foreground">
+              {data.totalElements} {reading ? 'bài đọc' : 'đoạn văn'}
+            </p>
+            {approvable.length > 0 && (
+              <Button size="sm" variant="outline" onClick={() => setConfirmingBulk(true)}>
+                <CheckCheck className="h-4 w-4" /> Duyệt {approvable.length} {unit} không có cảnh báo trên trang
+              </Button>
+            )}
+          </div>
           {data.content.map((passage) => {
             const badge = STATUS_BADGE[passage.status]
             const busy = statusMutation.isPending
@@ -315,6 +346,28 @@ export function PassageReviewList({
         </>
       )}
 
+      <Modal
+        open={confirmingBulk}
+        onClose={() => setConfirmingBulk(false)}
+        title={`Duyệt ${approvable.length} ${unit}?`}
+        description={`Chỉ duyệt khi đã đọc từng ${unit} trên trang cùng mọi câu hỏi: đáp án đúng, chỉ một đáp án đúng, nội dung đúng cấp độ. ${reading ? 'Bài' : 'Đoạn'} có cảnh báo không nằm trong lượt này.`}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setConfirmingBulk(false)}>
+              Huỷ
+            </Button>
+            <Button
+              disabled={bulkMutation.isPending}
+              onClick={() => bulkMutation.mutate(approvable.map((passage) => passage.id))}
+            >
+              <CheckCheck className="h-4 w-4" />{' '}
+              {bulkMutation.isPending ? 'Đang duyệt...' : `Duyệt ${approvable.length} ${unit}`}
+            </Button>
+          </>
+        }
+      >
+        {bulkMutation.isError && <Alert>{extractErrorMessage(bulkMutation.error)}</Alert>}
+      </Modal>
       <ReviewNoteDialog
         key={`note-${dialogKey}`}
         action={pending?.status ?? null}

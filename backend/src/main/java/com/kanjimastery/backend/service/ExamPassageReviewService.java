@@ -29,9 +29,12 @@ import org.springframework.util.StringUtils;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -110,25 +113,76 @@ public class ExamPassageReviewService {
         ExamPassage passage = passage(id);
         List<ExamQuestion> questions = questionsOf(List.of(id)).getOrDefault(id, List.of());
         if (ExamQuestionStatus.APPROVED.equals(status)) {
-            List<String> problems = new ArrayList<>(passageProblems(passage, passage.getContent(), questions));
-            String label = ExamSection.READING.equals(passage.getSection()) ? "Câu " : "【";
-            String end = ExamSection.READING.equals(passage.getSection()) ? ":" : "】";
-            for (ExamQuestion question : questions) {
-                ExamQuestionValidator.problems(question.getQuestionType(), question.getQuestionText(),
-                                question.getSentence(), question.getHighlight(), List.of(question.getOptionA(),
-                                        question.getOptionB(), question.getOptionC(), question.getOptionD()),
-                                question.getCorrectOption())
-                        .forEach(problem -> problems.add(label + question.getBlankNo() + end + " " + problem));
-            }
+            List<String> problems = approvalProblems(passage, questions);
             if (!problems.isEmpty()) {
                 throw new BadRequestException("Chưa duyệt được, đoạn văn cần sửa: " + String.join("; ", problems));
             }
         }
         LocalDateTime now = LocalDateTime.now(clock);
-        passage.getReview().decide(status, now);
+        decide(passage, questions, status, now);
         if (StringUtils.hasText(note)) {
             passage.getReview().replaceNote(note.strip());
         }
+        return toResponse(passage, questions);
+    }
+
+    /**
+     * Duyệt một lượt các đoạn người duyệt đã đọc trên trang. Chỉ duyệt đoạn đang chờ duyệt, không có cảnh báo (ở đoạn
+     * hay ở câu hỏi của đoạn - cần xem và duyệt riêng) và hợp lệ như khi duyệt từng đoạn; đoạn khác giữ nguyên, kèm lý do.
+     */
+    @Transactional
+    public ExamQuestionReviewService.BulkApproval approveAll(Collection<Long> ids) {
+        Map<Long, ExamPassage> found = passageRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(ExamPassage::getId, Function.identity()));
+        Map<Long, List<ExamQuestion>> questions = questionsOf(List.copyOf(found.keySet()));
+        List<ExamQuestionReviewService.BulkApproval.Skipped> skipped = new ArrayList<>();
+        int approved = 0;
+        LocalDateTime now = LocalDateTime.now(clock);
+        for (Long id : new LinkedHashSet<>(ids)) {
+            ExamPassage passage = found.get(id);
+            List<ExamQuestion> ofPassage = questions.getOrDefault(id, List.of());
+            String reason = passage == null ? "không tìm thấy" : whyNotApprovable(passage, ofPassage);
+            if (reason != null) {
+                skipped.add(new ExamQuestionReviewService.BulkApproval.Skipped(id, reason));
+                continue;
+            }
+            decide(passage, ofPassage, ExamQuestionStatus.APPROVED, now);
+            approved++;
+        }
+        return new ExamQuestionReviewService.BulkApproval(approved, skipped);
+    }
+
+    /** Lý do không duyệt cùng lượt được; null nếu duyệt được. */
+    private String whyNotApprovable(ExamPassage passage, List<ExamQuestion> questions) {
+        if (!ExamQuestionStatus.DRAFT.equals(passage.getStatus())) {
+            return "không ở trạng thái chờ duyệt";
+        }
+        if (passage.getFlag() != null || questions.stream().anyMatch(question -> question.getFlag() != null)) {
+            return "có cảnh báo - cần xem và duyệt riêng";
+        }
+        List<String> problems = approvalProblems(passage, questions);
+        return problems.isEmpty() ? null : "đoạn văn cần sửa: " + String.join("; ", problems);
+    }
+
+    /** Lỗi khiến chưa duyệt được: đoạn văn và mọi câu hỏi của nó phải hợp lệ. */
+    private List<String> approvalProblems(ExamPassage passage, List<ExamQuestion> questions) {
+        List<String> problems = new ArrayList<>(passageProblems(passage, passage.getContent(), questions));
+        String label = ExamSection.READING.equals(passage.getSection()) ? "Câu " : "【";
+        String end = ExamSection.READING.equals(passage.getSection()) ? ":" : "】";
+        for (ExamQuestion question : questions) {
+            ExamQuestionValidator.problems(question.getQuestionType(), question.getQuestionText(),
+                            question.getSentence(), question.getHighlight(), List.of(question.getOptionA(),
+                                    question.getOptionB(), question.getOptionC(), question.getOptionD()),
+                            question.getCorrectOption())
+                    .forEach(problem -> problems.add(label + question.getBlankNo() + end + " " + problem));
+        }
+        return problems;
+    }
+
+    /** Đổi trạng thái cả đoạn cùng mọi câu hỏi của nó. */
+    private void decide(ExamPassage passage, List<ExamQuestion> questions, ExamQuestionStatus status,
+                        LocalDateTime now) {
+        passage.getReview().decide(status, now);
         for (ExamQuestion question : questions) {
             question.getReview().decide(status, now);
         }
@@ -137,7 +191,6 @@ public class ExamPassageReviewService {
             reportRepository.closeOpen(questions.stream().map(ExamQuestion::getId).toList(),
                     QuestionReportStatus.RESOLVED, now);
         }
-        return toResponse(passage, questions);
     }
 
     private ExamPassage passage(Long id) {
