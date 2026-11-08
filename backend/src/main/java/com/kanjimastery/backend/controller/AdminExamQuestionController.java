@@ -4,6 +4,7 @@ import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.dto.AdminExamQuestionRequest;
 import com.kanjimastery.backend.dto.AdminExamQuestionResponse;
+import com.kanjimastery.backend.dto.BulkApproveMatchingRequest;
 import com.kanjimastery.backend.dto.BulkApproveRequest;
 import com.kanjimastery.backend.dto.ExamImportRequest;
 import com.kanjimastery.backend.dto.ExamImportResponse;
@@ -81,6 +82,19 @@ public class AdminExamQuestionController {
     public ResponseEntity<ExamQuestionReviewService.BulkApproval> approveAll(
             @Valid @RequestBody BulkApproveRequest request) {
         return ResponseEntity.ok(reviewService.approveAll(request.getIds()));
+    }
+
+    @Operation(summary = "Duyệt mọi câu chờ duyệt khớp bộ lọc",
+            description = "Không giới hạn theo trang. Bắt buộc có cấp độ; lọc thêm theo dạng câu, điểm ngữ pháp, mã đề. "
+                    + "Cùng điều kiện như duyệt nhiều câu một lượt: câu có cảnh báo, thuộc đoạn văn hoặc sai cấu trúc giữ "
+                    + "nguyên (trả về tối đa " + ExamQuestionReviewService.BulkApproval.MAX_SKIPPED_SHOWN
+                    + " câu đầu kèm lý do).")
+    @PostMapping("/approve-all")
+    public ResponseEntity<ExamQuestionReviewService.BulkApproval> approveAllMatching(
+            @Valid @RequestBody BulkApproveMatchingRequest request) {
+        return ResponseEntity.ok(reviewService.approveAllMatching(new ExamQuestionReviewService.Filter(
+                request.getLevel(), request.getType(), ExamQuestionStatus.DRAFT, false, request.getGrammarPointId(),
+                false, request.getTest())));
     }
 
     @Operation(summary = "Bỏ qua báo lỗi của một câu",

@@ -72,6 +72,8 @@ class AdminExamPassageControllerIT extends AbstractIntegrationTest {
                 .content("{\"level\": \"N4\"}")).andExpect(status().isForbidden());
         mockMvc.perform(post("/api/v1/admin/exam-passages/approve").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"ids\": [" + passage.getId() + "]}")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/admin/exam-passages/approve-all").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"level\": \"N4\"}")).andExpect(status().isForbidden());
     }
 
     @Test
@@ -113,10 +115,57 @@ class AdminExamPassageControllerIT extends AbstractIntegrationTest {
         }
     }
 
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void approveAll_shouldApproveEveryMatchingDraftPassage_notOnlyOnePage() throws Exception {
+        ExamPassage broken = savePassage("きのうは雨でした。出かけませんでした。", null, null);
+        ExamPassage flagged = savePassage("あしたは晴れます。【1】、出かけます。", ExamQuestionFlag.AMBIGUOUS, null);
+        // Đoạn của một đề tự soạn: chỉ lọc đề đó thì đoạn setUp() (không có mã đề) không bị đụng tới.
+        ExamPassage ofTest = savePassage("あしたは晴れます。【1】、出かけます。", null, "ZZ-IT/NP/19-19");
+        try {
+            mockMvc.perform(post("/api/v1/admin/exam-passages/approve-all").contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isBadRequest());
+
+            mockMvc.perform(get("/api/v1/admin/exam-passages").param("level", "N4").param("test", "ZZ-IT"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.totalElements").value(1))
+                    .andExpect(jsonPath("$.content[0].id").value(ofTest.getId()));
+
+            mockMvc.perform(post("/api/v1/admin/exam-passages/approve-all").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"level\": \"N4\", \"section\": \"GRAMMAR\", \"test\": \"ZZ-IT\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.approved").value(1))
+                    .andExpect(jsonPath("$.skippedTotal").value(0));
+            assertThat(passageRepository.findById(passage.getId()).orElseThrow().getStatus())
+                    .isEqualTo(ExamQuestionStatus.DRAFT);
+
+            mockMvc.perform(post("/api/v1/admin/exam-passages/approve-all").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"level\": \"N4\", \"section\": \"GRAMMAR\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.approved").value(1))
+                    .andExpect(jsonPath("$.skippedTotal").value(2))
+                    .andExpect(jsonPath("$.skipped[0].id").value(broken.getId()))
+                    .andExpect(jsonPath("$.skipped[1].id").value(flagged.getId()));
+            assertThat(passageRepository.findById(passage.getId()).orElseThrow().getStatus())
+                    .isEqualTo(ExamQuestionStatus.APPROVED);
+            assertThat(passageRepository.findById(flagged.getId()).orElseThrow().getStatus())
+                    .isEqualTo(ExamQuestionStatus.DRAFT);
+        } finally {
+            passageRepository.deleteById(broken.getId());
+            passageRepository.deleteById(flagged.getId());
+            passageRepository.deleteById(ofTest.getId());
+        }
+    }
+
     /** Đoạn chờ duyệt có một câu hỏi ở chỗ trống 1; {@code questionFlag} khác null thì câu hỏi bị gắn cờ. */
     private ExamPassage savePassage(String content, ExamQuestionFlag questionFlag) {
+        return savePassage(content, questionFlag, null);
+    }
+
+    private ExamPassage savePassage(String content, ExamQuestionFlag questionFlag, String sourceRef) {
         ExamPassage saved = passageRepository.save(ExamPassage.builder().jlptLevel(JlptLevel.N4)
-                .section(ExamSection.GRAMMAR).content(content).build());
+                .section(ExamSection.GRAMMAR).content(content).sourceRef(sourceRef).build());
         questionRepository.save(ExamQuestion.builder().jlptLevel(JlptLevel.N4).questionText("【1】")
                 .optionA("だから").optionB("でも").optionC("それに").optionD("または").correctOption("A")
                 .questionType(JlptQuestionType.TEXT_GRAMMAR)
