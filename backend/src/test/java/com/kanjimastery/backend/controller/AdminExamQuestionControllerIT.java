@@ -4,6 +4,7 @@ import com.kanjimastery.backend.model.ReviewState;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.ExamQuestion;
+import com.kanjimastery.backend.model.ExamQuestionFlag;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
@@ -17,6 +18,7 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -59,9 +61,47 @@ class AdminExamQuestionControllerIT extends AbstractIntegrationTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(post("/api/v1/admin/exam-questions/approve").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"ids\": [" + draft.getId() + "]}")).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/v1/admin/exam-questions/approve-all").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"level\": \"N4\"}")).andExpect(status().isForbidden());
         mockMvc.perform(post("/api/v1/admin/exam-questions/analysis")).andExpect(status().isForbidden());
         mockMvc.perform(post("/api/v1/admin/exam-questions/{id}/reports/dismiss", draft.getId()))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void admins_shouldApproveEveryMatchingDraft_exceptFlaggedOnes_andNeedALevel() throws Exception {
+        ExamQuestion flagged = questionRepository.save(ExamQuestion.builder().jlptLevel(JlptLevel.N4)
+                .questionText("[ControllerIT] Có cảnh báo").sentence("駅（　　）行きます。").optionA("へ").optionB("を")
+                .optionC("が").optionD("の").correctOption("A").questionType(JlptQuestionType.GRAMMAR_FORM)
+                .review(new ReviewState(ExamQuestionStatus.DRAFT, ExamQuestionFlag.AMBIGUOUS, null, null)).build());
+        ExamQuestion otherLevel = questionRepository.save(ExamQuestion.builder().jlptLevel(JlptLevel.N5)
+                .questionText("[ControllerIT] Cấp khác").sentence("駅（　　）行きます。").optionA("へ").optionB("を")
+                .optionC("が").optionD("の").correctOption("A").questionType(JlptQuestionType.GRAMMAR_FORM)
+                .review(new ReviewState(ExamQuestionStatus.DRAFT)).build());
+        try {
+            mockMvc.perform(post("/api/v1/admin/exam-questions/approve-all").contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isBadRequest());
+
+            mockMvc.perform(post("/api/v1/admin/exam-questions/approve-all").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"level\": \"N4\", \"type\": \"GRAMMAR_FORM\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.approved").value(1))
+                    .andExpect(jsonPath("$.skippedTotal").value(1))
+                    .andExpect(jsonPath("$.skipped[0].id").value(flagged.getId()))
+                    .andExpect(jsonPath("$.skipped[0].reason").value(containsString("cảnh báo")));
+
+            assertThat(questionRepository.findById(draft.getId()).orElseThrow().getStatus())
+                    .isEqualTo(ExamQuestionStatus.APPROVED);
+            assertThat(questionRepository.findById(flagged.getId()).orElseThrow().getStatus())
+                    .isEqualTo(ExamQuestionStatus.DRAFT);
+            assertThat(questionRepository.findById(otherLevel.getId()).orElseThrow().getStatus())
+                    .isEqualTo(ExamQuestionStatus.DRAFT);
+        } finally {
+            questionRepository.deleteById(flagged.getId());
+            questionRepository.deleteById(otherLevel.getId());
+        }
     }
 
     @Test

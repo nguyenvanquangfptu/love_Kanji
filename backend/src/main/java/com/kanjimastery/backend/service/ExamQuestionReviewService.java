@@ -78,10 +78,18 @@ public class ExamQuestionReviewService {
     }
 
     /**
-     * @param approved số câu đã duyệt
-     * @param skipped  các câu không duyệt, kèm lý do
+     * @param approved     số câu đã duyệt
+     * @param skipped      các câu không duyệt, kèm lý do (duyệt theo bộ lọc thì chỉ giữ {@link #MAX_SKIPPED_SHOWN} câu đầu)
+     * @param skippedTotal tổng số câu không duyệt
      */
-    public record BulkApproval(int approved, List<Skipped> skipped) {
+    public record BulkApproval(int approved, List<Skipped> skipped, int skippedTotal) {
+
+        /** Số câu / đoạn không duyệt được kèm lý do tối đa khi duyệt theo bộ lọc. */
+        public static final int MAX_SKIPPED_SHOWN = 20;
+
+        public BulkApproval(int approved, List<Skipped> skipped) {
+            this(approved, skipped, skipped.size());
+        }
 
         public record Skipped(Long id, String reason) {
         }
@@ -233,6 +241,36 @@ public class ExamQuestionReviewService {
             approved++;
         }
         return new BulkApproval(approved, skipped);
+    }
+
+    /**
+     * Duyệt mọi câu chờ duyệt khớp bộ lọc (không chỉ một trang): cùng điều kiện như {@link #approveAll}, câu không đạt
+     * giữ nguyên. Bỏ qua trạng thái / cờ / báo lỗi của bộ lọc - luôn là câu chờ duyệt.
+     */
+    @Transactional
+    public BulkApproval approveAllMatching(Filter filter) {
+        if (!StringUtils.hasText(filter.level())) {
+            throw new BadRequestException("Chưa chọn cấp độ");
+        }
+        Filter pending = new Filter(filter.level(), filter.type(), ExamQuestionStatus.DRAFT, false,
+                filter.grammarPointId(), false, filter.testCode());
+        List<BulkApproval.Skipped> skipped = new ArrayList<>();
+        int skippedTotal = 0;
+        int approved = 0;
+        LocalDateTime now = LocalDateTime.now(clock);
+        for (ExamQuestion question : questionRepository.findAll(specification(pending), Sort.by("id"))) {
+            String reason = whyNotApprovable(question);
+            if (reason != null) {
+                skippedTotal++;
+                if (skipped.size() < BulkApproval.MAX_SKIPPED_SHOWN) {
+                    skipped.add(new BulkApproval.Skipped(question.getId(), reason));
+                }
+                continue;
+            }
+            question.getReview().decide(ExamQuestionStatus.APPROVED, now);
+            approved++;
+        }
+        return new BulkApproval(approved, skipped, skippedTotal);
     }
 
     /** Lý do không duyệt cùng lượt được; null nếu duyệt được. */

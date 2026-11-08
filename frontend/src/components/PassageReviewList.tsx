@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronLeft, ChevronRight, Pencil, RotateCcw, Sparkles, Undo2, X } from 'lucide-react'
+import { Check, CheckCheck, ChevronLeft, ChevronRight, Pencil, RotateCcw, Sparkles, Undo2, X } from 'lucide-react'
 import { examAdminApi } from '@/api/examAdmin'
 import { extractErrorMessage } from '@/api/client'
 import type {
@@ -11,7 +11,7 @@ import type {
   ExamSectionName,
   JlptQuestionType,
 } from '@/api/types'
-import { FLAG_LABEL, SOURCE_LABEL, STATUS_BADGE, passageDraftSummary, sourceRefLabel } from '@/lib/questionReview'
+import { FLAG_LABEL, SOURCE_LABEL, STATUS_BADGE, bulkApprovalSummary, passageDraftSummary, sourceRefLabel } from '@/lib/questionReview'
 
 /**
  * Đoạn văn nhập từ đề tự soạn (mã "N3-05/NP/19-23", bài đọc "N3-05/DH/28-30"): chỗ trống / câu n ghi theo số câu
@@ -44,70 +44,107 @@ const PAGE_SIZE = 10
 
 /**
  * Đoạn văn của một cấp độ - 文章の文法 (phần Ngữ pháp) hoặc bài đọc (phần Đọc hiểu, lọc thêm theo dạng): duyệt, loại,
- * rút cả đoạn; sửa đoạn văn hoặc từng câu hỏi của đoạn; nhờ AI viết nháp đoạn 文章の文法 mới. Trang cha đổi key khi
- * đổi cấp độ hoặc bộ lọc.
+ * rút cả đoạn; sửa đoạn văn hoặc từng câu hỏi của đoạn; nhờ AI viết nháp đoạn 文章の文法 mới. Không chọn phần thi
+ * thì có cả hai loại (khi lọc theo mã đề tự soạn). Trang cha đổi key khi đổi cấp độ hoặc bộ lọc.
  */
 export function PassageReviewList({
   level,
   section,
   type,
   status,
+  test,
+  emptyExtra,
+  quietWhenEmpty = false,
 }: {
   level: string
-  section: ExamSectionName
+  section?: ExamSectionName
   type?: JlptQuestionType
   status?: ExamQuestionStatus
+  /** Chỉ đoạn của một đề tự soạn (mã đề, vd. N3-DH01). */
+  test?: string
+  /** Gợi ý hiện thêm khi không có đoạn nào (vd. chỗ khác còn đoạn chờ duyệt). */
+  emptyExtra?: ReactNode
+  /** Không có đoạn nào thì không hiện gì (vd. đề chỉ có câu lẻ, không có đoạn văn). */
+  quietWhenEmpty?: boolean
 }) {
-  const reading = section === 'READING'
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
   const [dialogKey, setDialogKey] = useState(0)
-  const [pending, setPending] = useState<{ passage: AdminExamPassage; status: 'REJECTED' | 'RETIRED' } | null>(null)
+  const [pending, setPending] = useState<{
+    passage: AdminExamPassage
+    status: 'REJECTED' | 'RETIRED'
+  } | null>(null)
   const [editingPassage, setEditingPassage] = useState<AdminExamPassage | null>(null)
   const [editingQuestion, setEditingQuestion] = useState<AdminExamQuestion | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
+  const [confirmingBulk, setConfirmingBulk] = useState(false)
+  const [confirmingAll, setConfirmingAll] = useState(false)
 
-  const filter = { level, section, type, status, page, size: PAGE_SIZE }
+  const filter = { level, section, type, status, test, page, size: PAGE_SIZE }
   const passagesQuery = useQuery({
     queryKey: ['admin', 'exam-passages', filter],
     queryFn: () => examAdminApi.passages(filter),
     placeholderData: keepPreviousData,
   })
-  const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['admin', 'exam-passages'] })
-    queryClient.invalidateQueries({ queryKey: ['admin', 'exam-questions', 'stats'] })
-  }
+  // Trả về Promise: nút duyệt chỉ nhả ra khi danh sách và bảng thống kê đã tải xong số mới.
+  const refresh = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['admin', 'exam-passages'] }),
+      queryClient.invalidateQueries({
+        queryKey: ['admin', 'exam-questions', 'stats'],
+      }),
+    ])
 
   const statusMutation = useMutation({
     mutationFn: (vars: { id: number; status: ExamQuestionStatus; note?: string }) =>
       examAdminApi.changePassageStatus(vars.id, vars.status, vars.note),
     onSuccess: () => {
       setPending(null)
-      refresh()
+      return refresh()
     },
   })
   const passageMutation = useMutation({
     mutationFn: (vars: { id: number; title: string; content: string }) =>
-      examAdminApi.updatePassage(vars.id, { title: vars.title, content: vars.content }),
+      examAdminApi.updatePassage(vars.id, {
+        title: vars.title,
+        content: vars.content,
+      }),
     onSuccess: () => {
       setEditingPassage(null)
-      refresh()
+      return refresh()
     },
     onError: (err) => setEditError(extractErrorMessage(err)),
   })
   const draftMutation = useMutation({
     mutationFn: () => examAdminApi.draftPassage(level),
-    onSuccess: refresh,
+    onSuccess: () => refresh(),
   })
   const dismissMutation = useMutation({
     mutationFn: (id: number) => examAdminApi.dismissReports(id),
-    onSuccess: refresh,
+    onSuccess: () => refresh(),
+  })
+  const bulkMutation = useMutation({
+    mutationFn: (ids: number[]) => examAdminApi.approveAllPassages(ids),
+    onSuccess: () => {
+      setConfirmingBulk(false)
+      // Đoạn đã duyệt rời khỏi danh sách chờ duyệt: quay về trang đầu.
+      setPage(0)
+      return refresh()
+    },
+  })
+  const approveAllMutation = useMutation({
+    mutationFn: () => examAdminApi.approveAllPassagesMatching({ level, section, type, test }),
+    onSuccess: () => {
+      setConfirmingAll(false)
+      setPage(0)
+      return refresh()
+    },
   })
   const questionMutation = useMutation({
     mutationFn: (vars: { id: number; payload: AdminExamQuestionRequest }) => examAdminApi.update(vars.id, vars.payload),
     onSuccess: () => {
       setEditingQuestion(null)
-      refresh()
+      return refresh()
     },
     onError: (err) => setEditError(extractErrorMessage(err)),
   })
@@ -115,6 +152,14 @@ export function PassageReviewList({
   if (passagesQuery.isLoading) return <PageSpinner label="Đang tải đoạn văn..." />
   if (passagesQuery.isError || !passagesQuery.data) return <Alert>{extractErrorMessage(passagesQuery.error)}</Alert>
   const data = passagesQuery.data
+  // Đoạn có cảnh báo (ở đoạn hay ở câu hỏi) cần xem và duyệt riêng.
+  const approvable = data.content.filter(
+    (passage) => passage.status === 'DRAFT' && !passage.flag && passage.questions.every((question) => !question.flag),
+  )
+  const unit = section === 'READING' ? 'bài' : section === 'GRAMMAR' ? 'đoạn' : 'đoạn / bài'
+  // Duyệt tất cả chỉ ở danh sách chờ duyệt; đoạn không đạt (cảnh báo, sai cấu trúc) vẫn giữ nguyên.
+  const canApproveAll = status === 'DRAFT' && data.totalElements > 0
+  const lastResult = approveAllMutation.data ?? bulkMutation.data
 
   function openDialog(open: () => void) {
     setEditError(null)
@@ -125,14 +170,13 @@ export function PassageReviewList({
   return (
     <div className="flex flex-col gap-4">
       {/* AI chỉ viết nháp đoạn 文章の文法; bài đọc nhập từ file (Nhập đề tự soạn). */}
-      {!reading && (
+      {section === 'GRAMMAR' && (
         <Card className="flex flex-col gap-3 p-4">
           <div className="flex flex-wrap items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="font-black">Nhờ AI viết nháp đoạn văn</p>
               <p className="text-sm font-semibold text-muted-foreground">
-                Một đoạn văn mới cho đề {level}, đủ số chỗ trống như đề thật. Tốn 2 lượt Gemini: viết nháp và giải lại
-                để kiểm tra.
+                Một đoạn văn mới cho đề {level}, đủ số chỗ trống như đề thật. Tốn 2 lượt Gemini: viết nháp và giải lại để kiểm tra.
               </p>
             </div>
             <Button disabled={draftMutation.isPending} onClick={() => draftMutation.mutate()}>
@@ -148,17 +192,42 @@ export function PassageReviewList({
         </Card>
       )}
       {statusMutation.isError && <Alert>{extractErrorMessage(statusMutation.error)}</Alert>}
+      {lastResult && (
+        <p className="rounded-2xl bg-secondary-soft px-4 py-3 text-sm font-bold text-secondary-dark">
+          {bulkApprovalSummary(lastResult, unit)}
+        </p>
+      )}
       {data.content.length === 0 ? (
-        <Card className="p-6 text-center font-semibold text-muted-foreground">Không có đoạn văn nào khớp bộ lọc.</Card>
+        quietWhenEmpty ? null : (
+          <Card className="flex flex-col items-center gap-3 p-6 text-center font-semibold text-muted-foreground">
+            Không có đoạn văn nào khớp bộ lọc.
+            {emptyExtra}
+          </Card>
+        )
       ) : (
         <>
-          <p className="text-sm font-bold text-muted-foreground">
-            {data.totalElements} {reading ? 'bài đọc' : 'đoạn văn'}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-bold text-muted-foreground">
+              {data.totalElements} {section === 'READING' ? 'bài đọc' : section === 'GRAMMAR' ? 'đoạn văn' : 'đoạn văn / bài đọc'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {approvable.length > 0 && (
+                <Button size="sm" variant="outline" onClick={() => setConfirmingBulk(true)}>
+                  <CheckCheck className="h-4 w-4" /> Duyệt {approvable.length} {unit} không có cảnh báo trên trang
+                </Button>
+              )}
+              {canApproveAll && (
+                <Button size="sm" variant="outline" onClick={() => setConfirmingAll(true)}>
+                  <CheckCheck className="h-4 w-4" /> Duyệt tất cả {data.totalElements} {unit} chờ duyệt
+                </Button>
+              )}
+            </div>
+          </div>
           {data.content.map((passage) => {
             const badge = STATUS_BADGE[passage.status]
             const busy = statusMutation.isPending
             const labelOf = firstQuestionLabel(passage.sourceRef)
+            const reading = passage.section === 'READING'
             const passageType = passage.questions[0]?.questionType
             return (
               <Card key={passage.id} className={cn('p-4 sm:p-5', passage.flag && 'border-orange')}>
@@ -239,9 +308,7 @@ export function PassageReviewList({
                       {question.explanation && (
                         <p className="mt-2 text-sm font-semibold text-secondary-dark">{question.explanation}</p>
                       )}
-                      {question.reviewNote && (
-                        <p className="mt-1 text-sm font-semibold text-orange-dark">{question.reviewNote}</p>
-                      )}
+                      {question.reviewNote && <p className="mt-1 text-sm font-semibold text-orange-dark">{question.reviewNote}</p>}
                       <QuestionReports
                         reports={question.reports}
                         busy={dismissMutation.isPending}
@@ -258,7 +325,12 @@ export function PassageReviewList({
                       <Button
                         size="sm"
                         disabled={busy}
-                        onClick={() => statusMutation.mutate({ id: passage.id, status: 'APPROVED' })}
+                        onClick={() =>
+                          statusMutation.mutate({
+                            id: passage.id,
+                            status: 'APPROVED',
+                          })
+                        }
                       >
                         <Check className="h-4 w-4" /> {reading ? 'Duyệt cả bài' : 'Duyệt cả đoạn'}
                       </Button>
@@ -287,7 +359,12 @@ export function PassageReviewList({
                       size="sm"
                       variant="outline"
                       disabled={busy}
-                      onClick={() => statusMutation.mutate({ id: passage.id, status: 'DRAFT' })}
+                      onClick={() =>
+                        statusMutation.mutate({
+                          id: passage.id,
+                          status: 'DRAFT',
+                        })
+                      }
                     >
                       <RotateCcw className="h-4 w-4" /> Đưa về chờ duyệt
                     </Button>
@@ -315,23 +392,65 @@ export function PassageReviewList({
         </>
       )}
 
+      <Modal
+        open={confirmingAll}
+        onClose={() => setConfirmingAll(false)}
+        title={`Duyệt tất cả ${data.totalElements} ${unit} chờ duyệt?`}
+        description={`Duyệt mọi ${unit} chờ duyệt khớp bộ lọc, kể cả ở các trang khác - chỉ nên làm khi đã đọc kỹ. Đoạn / bài có cảnh báo hoặc chưa hợp lệ sẽ được giữ lại, không duyệt.`}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setConfirmingAll(false)}>
+              Huỷ
+            </Button>
+            <Button disabled={approveAllMutation.isPending} onClick={() => approveAllMutation.mutate()}>
+              <CheckCheck className="h-4 w-4" />{' '}
+              {approveAllMutation.isPending ? 'Đang duyệt...' : `Duyệt tất cả ${data.totalElements} ${unit}`}
+            </Button>
+          </>
+        }
+      >
+        {approveAllMutation.isError && <Alert>{extractErrorMessage(approveAllMutation.error)}</Alert>}
+      </Modal>
+      <Modal
+        open={confirmingBulk}
+        onClose={() => setConfirmingBulk(false)}
+        title={`Duyệt ${approvable.length} ${unit}?`}
+        description={`Chỉ duyệt khi đã đọc từng ${unit} trên trang cùng mọi câu hỏi: đáp án đúng, chỉ một đáp án đúng, nội dung đúng cấp độ. Đoạn / bài có cảnh báo không nằm trong lượt này.`}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setConfirmingBulk(false)}>
+              Huỷ
+            </Button>
+            <Button disabled={bulkMutation.isPending} onClick={() => bulkMutation.mutate(approvable.map((passage) => passage.id))}>
+              <CheckCheck className="h-4 w-4" /> {bulkMutation.isPending ? 'Đang duyệt...' : `Duyệt ${approvable.length} ${unit}`}
+            </Button>
+          </>
+        }
+      >
+        {bulkMutation.isError && <Alert>{extractErrorMessage(bulkMutation.error)}</Alert>}
+      </Modal>
       <ReviewNoteDialog
         key={`note-${dialogKey}`}
         action={pending?.status ?? null}
-        subject={reading ? 'bài đọc' : 'đoạn văn'}
+        subject={pending?.passage.section === 'READING' ? 'bài đọc' : 'đoạn văn'}
         busy={statusMutation.isPending}
-        onConfirm={(note) => pending && statusMutation.mutate({ id: pending.passage.id, status: pending.status, note })}
+        onConfirm={(note) =>
+          pending &&
+          statusMutation.mutate({
+            id: pending.passage.id,
+            status: pending.status,
+            note,
+          })
+        }
         onCancel={() => setPending(null)}
       />
       <PassageEditDialog
         key={`passage-${dialogKey}`}
-        reading={reading}
+        reading={editingPassage?.section === 'READING'}
         passage={editingPassage}
         submitting={passageMutation.isPending}
         errorMessage={editError}
-        onSubmit={(title, content) =>
-          editingPassage && passageMutation.mutate({ id: editingPassage.id, title, content })
-        }
+        onSubmit={(title, content) => editingPassage && passageMutation.mutate({ id: editingPassage.id, title, content })}
         onCancel={() => setEditingPassage(null)}
       />
       <QuestionEditDialog
@@ -393,22 +512,11 @@ function PassageEditDialog({
         {errorMessage && <Alert>{errorMessage}</Alert>}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="passage-title">Tiêu đề</Label>
-          <Input
-            id="passage-title"
-            className="font-jp"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            maxLength={200}
-          />
+          <Input id="passage-title" className="font-jp" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="passage-content">Nội dung</Label>
-          <Textarea
-            id="passage-content"
-            className="min-h-60 font-jp"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-          />
+          <Textarea id="passage-content" className="min-h-60 font-jp" value={content} onChange={(e) => setContent(e.target.value)} />
         </div>
       </div>
     </Modal>

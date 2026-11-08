@@ -4,10 +4,13 @@ import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.dto.AdminExamPassageResponse;
+import com.kanjimastery.backend.dto.BulkApproveMatchingRequest;
+import com.kanjimastery.backend.dto.BulkApproveRequest;
 import com.kanjimastery.backend.dto.ExamPassageRequest;
 import com.kanjimastery.backend.dto.ExamQuestionStatusRequest;
 import com.kanjimastery.backend.dto.PassageDraftRequest;
 import com.kanjimastery.backend.service.ExamPassageReviewService;
+import com.kanjimastery.backend.service.ExamQuestionReviewService;
 import com.kanjimastery.backend.service.PassageDraftService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,9 +39,10 @@ public class AdminExamPassageController {
                                                                  @RequestParam(required = false) ExamSection section,
                                                                  @RequestParam(required = false) JlptQuestionType type,
                                                                  @RequestParam(required = false) ExamQuestionStatus status,
+                                                                 @RequestParam(required = false) String test,
                                                                  @RequestParam(defaultValue = "0") int page,
                                                                  @RequestParam(defaultValue = "10") int size) {
-        return ResponseEntity.ok(passageReviewService.search(level, section, type, status, page,
+        return ResponseEntity.ok(passageReviewService.search(level, section, type, status, test, page,
                 Math.min(Math.max(size, 1), 50)));
     }
 
@@ -55,6 +59,26 @@ public class AdminExamPassageController {
     public ResponseEntity<AdminExamPassageResponse> changeStatus(@PathVariable Long id,
                                                                  @Valid @RequestBody ExamQuestionStatusRequest request) {
         return ResponseEntity.ok(passageReviewService.changeStatus(id, request.getStatus(), request.getNote()));
+    }
+
+    @Operation(summary = "Duyệt nhiều đoạn văn một lượt",
+            description = "Tối đa 100 đoạn. Chỉ duyệt đoạn đang chờ duyệt, không có cảnh báo (ở đoạn hay câu hỏi của đoạn) "
+                    + "và hợp lệ, cùng mọi câu hỏi của đoạn; đoạn khác giữ nguyên và được trả về kèm lý do.")
+    @PostMapping("/approve")
+    public ResponseEntity<ExamQuestionReviewService.BulkApproval> approveAll(
+            @Valid @RequestBody BulkApproveRequest request) {
+        return ResponseEntity.ok(passageReviewService.approveAll(request.getIds()));
+    }
+
+    @Operation(summary = "Duyệt mọi đoạn văn chờ duyệt khớp bộ lọc",
+            description = "Không giới hạn theo trang. Bắt buộc có cấp độ; lọc thêm theo phần thi, dạng câu, mã đề. Cùng điều "
+                    + "kiện như duyệt nhiều đoạn một lượt: đoạn có cảnh báo hoặc không hợp lệ giữ nguyên (trả về tối đa "
+                    + ExamQuestionReviewService.BulkApproval.MAX_SKIPPED_SHOWN + " đoạn đầu kèm lý do).")
+    @PostMapping("/approve-all")
+    public ResponseEntity<ExamQuestionReviewService.BulkApproval> approveAllMatching(
+            @Valid @RequestBody BulkApproveMatchingRequest request) {
+        return ResponseEntity.ok(passageReviewService.approveAllMatching(request.getLevel(), request.getSection(),
+                request.getType(), request.getTest()));
     }
 
     @Operation(summary = "Nhờ AI viết nháp một đoạn văn",
