@@ -1,4 +1,5 @@
 import type {
+  BulkApprovalResult,
   ExamQuestionFlag,
   ExamQuestionStatus,
   PassageDraftResult,
@@ -7,10 +8,7 @@ import type {
 } from '@/api/types'
 
 /** Nhãn trạng thái duyệt của câu thi / đoạn văn. */
-export const STATUS_BADGE: Record<
-  ExamQuestionStatus,
-  { label: string; variant: 'orange' | 'success' | 'destructive' | 'outline' }
-> = {
+export const STATUS_BADGE: Record<ExamQuestionStatus, { label: string; variant: 'orange' | 'success' | 'destructive' | 'outline' }> = {
   DRAFT: { label: 'Chờ duyệt', variant: 'orange' },
   APPROVED: { label: 'Đã duyệt', variant: 'success' },
   REJECTED: { label: 'Đã loại', variant: 'destructive' },
@@ -68,4 +66,16 @@ export function passageDraftSummary(result: PassageDraftResult): string {
   return `Đoạn #${result.passageId} (${result.questions} chỗ trống) vào hàng chờ duyệt${
     result.flag ? ` - ⚠ ${FLAG_LABEL[result.flag]}` : ''
   }.`
+}
+
+/** Dòng kết quả sau khi duyệt một lượt: số đã duyệt, số bỏ qua kèm lý do (chỉ vài mục đầu nếu nhiều). */
+export function bulkApprovalSummary(result: BulkApprovalResult, unit: string): string {
+  const total = result.skippedTotal ?? result.skipped.length
+  let text = `Đã duyệt ${result.approved} ${unit}.`
+  if (total > 0) {
+    const shown = result.skipped.map((skipped) => `#${skipped.id} ${skipped.reason}`).join('; ')
+    const more = total - result.skipped.length
+    text += ` Bỏ qua ${total} ${unit}: ${shown}${more > 0 ? `; và ${more} ${unit} khác` : ''}.`
+  }
+  return text
 }

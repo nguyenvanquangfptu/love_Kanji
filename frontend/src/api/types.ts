@@ -776,7 +776,10 @@ export interface QuestionBankStats {
 /** Kết quả duyệt một lượt nhiều câu: số câu đã duyệt, và các câu bỏ qua kèm lý do. */
 export interface BulkApprovalResult {
   approved: number
+  /** Các câu / đoạn không duyệt kèm lý do (duyệt theo bộ lọc thì chỉ vài mục đầu). */
   skipped: { id: number; reason: string }[]
+  /** Tổng số không duyệt được; có thể nhiều hơn {@code skipped}. */
+  skippedTotal: number
 }
 
 /** Kết quả một lần nhờ AI viết nháp: số câu vào hàng chờ duyệt (trong đó có cảnh báo), bị loại, không đọc được. */

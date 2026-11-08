@@ -27,7 +27,7 @@ import {
 } from '@/api/types'
 import { LEVEL_META } from '@/lib/levels'
 import { QUESTION_TYPE_META, QUESTION_TYPE_SECTION, SECTION_META, usesPassage } from '@/lib/jlpt'
-import { FLAG_LABEL, SOURCE_LABEL, STATUS_BADGE, sourceRefLabel } from '@/lib/questionReview'
+import { FLAG_LABEL, SOURCE_LABEL, STATUS_BADGE, bulkApprovalSummary, sourceRefLabel } from '@/lib/questionReview'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Alert } from '@/components/ui/alert'
@@ -98,6 +98,7 @@ export function AdminQuestionsPage() {
   const [pendingNote, setPendingNote] = useState<PendingNote | null>(null)
   const [noteKey, setNoteKey] = useState(0)
   const [confirmingBulk, setConfirmingBulk] = useState(false)
+  const [confirmingAll, setConfirmingAll] = useState(false)
 
   function update(changes: Record<string, string | undefined>) {
     const next = new URLSearchParams(params)
@@ -126,7 +127,11 @@ export function AdminQuestionsPage() {
     placeholderData: keepPreviousData,
     enabled: passageSection === null,
   })
-  const statsQuery = useQuery({ queryKey: ['admin', 'exam-questions', 'stats'], queryFn: examAdminApi.stats })
+  const statsQuery = useQuery({
+    queryKey: ['admin', 'exam-questions', 'stats'],
+    queryFn: examAdminApi.stats,
+  })
+  // Trả về Promise: nút duyệt chỉ nhả ra khi danh sách và bảng thống kê đã tải xong số mới.
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['admin', 'exam-questions'] })
 
   const statusMutation = useMutation({
@@ -134,7 +139,7 @@ export function AdminQuestionsPage() {
       examAdminApi.changeStatus(vars.id, vars.status, vars.note),
     onSuccess: () => {
       setPendingNote(null)
-      refresh()
+      return refresh()
     },
   })
   const analysisMutation = useMutation({
@@ -151,14 +156,22 @@ export function AdminQuestionsPage() {
       setConfirmingBulk(false)
       // Câu đã duyệt rời khỏi danh sách chờ duyệt: quay về trang đầu.
       update({})
-      refresh()
+      return refresh()
+    },
+  })
+  const approveAllMutation = useMutation({
+    mutationFn: () => examAdminApi.approveAllMatching({ level, type, test, grammarPointId }),
+    onSuccess: () => {
+      setConfirmingAll(false)
+      update({})
+      return refresh()
     },
   })
   const editMutation = useMutation({
     mutationFn: (vars: { id: number; payload: AdminExamQuestionRequest }) => examAdminApi.update(vars.id, vars.payload),
     onSuccess: () => {
       setEditing(null)
-      refresh()
+      return refresh()
     },
     onError: (err) => setEditError(extractErrorMessage(err)),
   })
@@ -166,13 +179,31 @@ export function AdminQuestionsPage() {
   const levelStats = statsQuery.data?.find((stats) => stats.jlptLevel === level)
   // Chỉ nhờ AI viết dạng câu có trong đề của cấp độ (đề N5 không có 用法).
   const canDraftVocabulary =
-    type !== undefined &&
-    VOCABULARY_DRAFT_TYPES.includes(type) &&
-    (levelStats?.types.some((row) => row.type === type) ?? false)
+    type !== undefined && VOCABULARY_DRAFT_TYPES.includes(type) && (levelStats?.types.some((row) => row.type === type) ?? false)
   const data = questionsQuery.data
   // Duyệt cả trang: chỉ câu chờ duyệt không có cảnh báo (câu có cảnh báo cần xem riêng).
   const approvable = data?.content.filter((question) => question.status === 'DRAFT' && !question.flag) ?? []
   const grammarLabel = data?.content.flatMap((q) => q.grammarPoints).find((g) => g.id === grammarPointId)?.pattern
+  const lastBulk = approveAllMutation.data ?? bulkMutation.data
+  // Dạng khác của cấp độ còn câu chờ duyệt: gợi ý khi danh sách đang xem hết câu chờ (vd. 文章の文法 duyệt theo đoạn).
+  const pendingElsewhere =
+    status === 'DRAFT' && !test ? (levelStats?.types.filter((row) => row.draft > 0 && row.type !== type) ?? []) : []
+  const elsewhereHint =
+    pendingElsewhere.length > 0 ? (
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <span className="text-sm">Còn chờ duyệt ở:</span>
+        {pendingElsewhere.map((row) => (
+          <button
+            key={row.type}
+            type="button"
+            className="rounded-xl border-2 border-border px-3 py-1 text-sm font-extrabold text-foreground hover:bg-muted"
+            onClick={() => update({ type: row.type, section: undefined })}
+          >
+            <span className="font-jp">{QUESTION_TYPE_META[row.type].jp}</span> ({row.draft})
+          </button>
+        ))}
+      </div>
+    ) : null
 
   return (
     <div>
@@ -186,7 +217,14 @@ export function AdminQuestionsPage() {
             type="button"
             role="tab"
             aria-selected={level === lv}
-            onClick={() => update({ level: lv, type: undefined, grammarPointId: undefined, test: undefined })}
+            onClick={() =>
+              update({
+                level: lv,
+                type: undefined,
+                grammarPointId: undefined,
+                test: undefined,
+              })
+            }
             className={cn(
               'rounded-2xl border-2 border-b-4 py-2 text-lg font-black transition-all active:translate-y-[2px] active:border-b-2',
               level === lv ? LEVEL_META[lv].style.solid : 'border-border bg-card hover:bg-muted',
@@ -232,22 +270,39 @@ export function AdminQuestionsPage() {
               {levelStats.types.map((row) => (
                 <tr key={row.type} className="border-t-2 border-border">
                   <td className="py-1.5">
-                    <button
-                      type="button"
-                      className="text-left font-bold hover:underline"
-                      onClick={() => update({ type: row.type })}
-                    >
+                    <button type="button" className="text-left font-bold hover:underline" onClick={() => update({ type: row.type })}>
                       <span className="font-jp">{QUESTION_TYPE_META[row.type].jp}</span>
                       <span className="text-muted-foreground"> · {SECTION_META[row.section].vi}</span>
                     </button>
                   </td>
                   <td className="py-1.5 text-right tabular-nums">{row.perExam}</td>
                   <td className="py-1.5 text-right font-bold tabular-nums">{row.approved}</td>
-                  <td className="py-1.5 text-right tabular-nums">{row.draft}</td>
+                  <td className="py-1.5 text-right tabular-nums">
+                    {row.draft > 0 ? (
+                      <button
+                        type="button"
+                        className="font-bold text-orange-dark hover:underline"
+                        title="Xem các câu chờ duyệt của dạng này"
+                        onClick={() =>
+                          update({
+                            type: row.type,
+                            section: undefined,
+                            status: 'DRAFT',
+                            test: undefined,
+                            grammarPointId: undefined,
+                            flagged: undefined,
+                            reported: undefined,
+                          })
+                        }
+                      >
+                        {row.draft}
+                      </button>
+                    ) : (
+                      row.draft
+                    )}
+                  </td>
                   <td className="py-1.5 text-right tabular-nums">{row.rejected}</td>
-                  <td
-                    className={cn('py-1.5 text-right font-black tabular-nums', row.exams === 0 && 'text-orange-dark')}
-                  >
+                  <td className={cn('py-1.5 text-right font-black tabular-nums', row.exams === 0 && 'text-orange-dark')}>
                     {row.exams} đề
                   </td>
                 </tr>
@@ -316,7 +371,10 @@ export function AdminQuestionsPage() {
           onChange={(e) =>
             e.target.value === 'READING'
               ? update({ type: undefined, section: 'READING' })
-              : update({ type: e.target.value || undefined, section: undefined })
+              : update({
+                  type: e.target.value || undefined,
+                  section: undefined,
+                })
           }
           aria-label="Dạng câu"
         >
@@ -374,42 +432,51 @@ export function AdminQuestionsPage() {
       </div>
 
       {statusMutation.isError && <Alert className="mb-4">{extractErrorMessage(statusMutation.error)}</Alert>}
-      {bulkMutation.data && (
+      {lastBulk && (
         <p className="mb-4 rounded-2xl bg-secondary-soft px-4 py-3 text-sm font-bold text-secondary-dark">
-          Đã duyệt {bulkMutation.data.approved} câu.
-          {bulkMutation.data.skipped.length > 0 &&
-            ` Bỏ qua ${bulkMutation.data.skipped.length} câu: ${bulkMutation.data.skipped
-              .map((skipped) => `#${skipped.id} ${skipped.reason}`)
-              .join('; ')}.`}
+          {bulkApprovalSummary(lastBulk, 'câu')}
         </p>
       )}
-      {canDraftVocabulary && type && (
-        <VocabularyDraftPanel key={`${level}-${type}`} level={level} type={type} onDrafted={refresh} />
-      )}
+      {canDraftVocabulary && type && <VocabularyDraftPanel key={`${level}-${type}`} level={level} type={type} onDrafted={refresh} />}
 
       {passageSection ? (
         <PassageReviewList
-          key={`${level}-${passageSection}-${type ?? ''}`}
+          key={`${level}-${passageSection}-${type ?? ''}-${test ?? ''}`}
           level={level}
           section={passageSection}
           type={type}
           status={status || undefined}
+          test={test}
+          emptyExtra={elsewhereHint}
         />
       ) : questionsQuery.isLoading ? (
         <PageSpinner label="Đang tải câu hỏi..." />
       ) : questionsQuery.isError || !data ? (
         <Alert>{extractErrorMessage(questionsQuery.error)}</Alert>
       ) : data.content.length === 0 ? (
-        <Card className="p-6 text-center font-semibold text-muted-foreground">Không có câu nào khớp bộ lọc.</Card>
+        // Lọc theo mã đề: đoạn văn / bài đọc của đề hiện ở danh sách bên dưới, không cần báo "không có" ở đây.
+        test ? null : (
+          <Card className="flex flex-col items-center gap-3 p-6 text-center font-semibold text-muted-foreground">
+            Không có câu nào khớp bộ lọc.
+            {elsewhereHint}
+          </Card>
+        )
       ) : (
         <>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm font-bold text-muted-foreground">{data.totalElements} câu</p>
-            {approvable.length > 0 && (
-              <Button size="sm" variant="outline" onClick={() => setConfirmingBulk(true)}>
-                <CheckCheck className="h-4 w-4" /> Duyệt {approvable.length} câu không có cảnh báo trên trang
-              </Button>
-            )}
+            <div className="flex flex-wrap gap-2">
+              {approvable.length > 0 && (
+                <Button size="sm" variant="outline" onClick={() => setConfirmingBulk(true)}>
+                  <CheckCheck className="h-4 w-4" /> Duyệt {approvable.length} câu không có cảnh báo trên trang
+                </Button>
+              )}
+              {status === 'DRAFT' && (
+                <Button size="sm" variant="outline" onClick={() => setConfirmingAll(true)}>
+                  <CheckCheck className="h-4 w-4" /> Duyệt tất cả {data.totalElements} câu chờ duyệt
+                </Button>
+              )}
+            </div>
           </div>
           <div className="flex flex-col gap-4">
             {data.content.map((question) => (
@@ -449,6 +516,40 @@ export function AdminQuestionsPage() {
         </>
       )}
 
+      {/* Đề tự soạn có cả đoạn văn / bài đọc: duyệt cùng một chỗ với câu lẻ của đề. */}
+      {!passageSection && test && (
+        <div className="mt-4">
+          <PassageReviewList
+            key={`${level}-test-${test}`}
+            level={level}
+            type={type}
+            status={status || undefined}
+            test={test}
+            quietWhenEmpty
+          />
+        </div>
+      )}
+
+      <Modal
+        open={confirmingAll}
+        onClose={() => setConfirmingAll(false)}
+        title={`Duyệt tất cả ${data?.totalElements ?? 0} câu chờ duyệt?`}
+        description="Duyệt mọi câu chờ duyệt khớp bộ lọc, kể cả ở các trang khác - chỉ nên làm khi đã đọc kỹ. Câu có cảnh báo hoặc sai cấu trúc sẽ được giữ lại, không duyệt."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setConfirmingAll(false)}>
+              Huỷ
+            </Button>
+            <Button disabled={approveAllMutation.isPending} onClick={() => approveAllMutation.mutate()}>
+              <CheckCheck className="h-4 w-4" />{' '}
+              {approveAllMutation.isPending ? 'Đang duyệt...' : `Duyệt tất cả ${data?.totalElements ?? 0} câu`}
+            </Button>
+          </>
+        }
+      >
+        {approveAllMutation.isError && <Alert>{extractErrorMessage(approveAllMutation.error)}</Alert>}
+      </Modal>
+
       <Modal
         open={confirmingBulk}
         onClose={() => setConfirmingBulk(false)}
@@ -459,10 +560,7 @@ export function AdminQuestionsPage() {
             <Button variant="outline" onClick={() => setConfirmingBulk(false)}>
               Huỷ
             </Button>
-            <Button
-              disabled={bulkMutation.isPending}
-              onClick={() => bulkMutation.mutate(approvable.map((question) => question.id))}
-            >
+            <Button disabled={bulkMutation.isPending} onClick={() => bulkMutation.mutate(approvable.map((question) => question.id))}>
               <CheckCheck className="h-4 w-4" /> {bulkMutation.isPending ? 'Đang duyệt...' : `Duyệt ${approvable.length} câu`}
             </Button>
           </>
@@ -486,7 +584,12 @@ export function AdminQuestionsPage() {
         subject="câu hỏi"
         busy={statusMutation.isPending}
         onConfirm={(note) =>
-          pendingNote && statusMutation.mutate({ id: pendingNote.question.id, status: pendingNote.status, note })
+          pendingNote &&
+          statusMutation.mutate({
+            id: pendingNote.question.id,
+            status: pendingNote.status,
+            note,
+          })
         }
         onCancel={() => setPendingNote(null)}
       />
