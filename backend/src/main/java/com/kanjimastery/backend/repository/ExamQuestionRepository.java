@@ -197,13 +197,37 @@ public interface ExamQuestionRepository
     @Query("SELECT q.sourceRef FROM ExamQuestion q WHERE q.sourceRef IN :refs")
     List<String> findExistingSourceRefs(@Param("refs") Collection<String> refs);
 
-    /** Câu (cột sentence) trong {@code sentences} đã có ở cấp độ đó và chưa bị loại - để báo câu trùng nội dung. */
-    @Query("""
-            SELECT q.sentence FROM ExamQuestion q
-            WHERE q.jlptLevel = :level AND q.sentence IN :sentences
-              AND q.review.status <> com.kanjimastery.backend.model.ExamQuestionStatus.REJECTED
-            """)
-    List<String> findExistingSentences(@Param("level") JlptLevel level, @Param("sentences") Collection<String> sentences);
+    /** Phần chữ của một câu trong kho, đủ để so độ giống với câu đang nhập. */
+    interface QuestionText {
+        Long getId();
+
+        String getSourceRef();
+
+        JlptQuestionType getType();
+
+        String getSentence();
+
+        /** Câu sắp xếp: giải thích (có dòng "Câu đúng: ..."); câu điền chỗ trống và câu 用法: lựa chọn đúng. */
+        String getDetail();
+    }
+
+    /**
+     * Phần chữ của các câu đứng riêng (không thuộc đoạn văn) ở một cấp độ, chưa bị loại - để báo câu đang nhập gần giống
+     * câu đã có. Chỉ đọc các cột cần, không nạp cả câu.
+     */
+    @Query(value = """
+            SELECT id AS "id", source_ref AS "sourceRef", question_type AS "type", sentence AS "sentence",
+                   CASE
+                       WHEN question_type = 'SENTENCE_ORDER' THEN explanation
+                       WHEN question_type IN ('CONTEXT', 'GRAMMAR_FORM', 'USAGE') THEN
+                           CASE correct_option WHEN 'A' THEN option_a WHEN 'B' THEN option_b
+                                               WHEN 'C' THEN option_c WHEN 'D' THEN option_d END
+                   END AS "detail"
+            FROM exam_questions
+            WHERE jlpt_level = :level AND passage_id IS NULL AND status <> 'REJECTED'
+              AND (sentence IS NOT NULL OR question_type IN ('SENTENCE_ORDER', 'USAGE'))
+            """, nativeQuery = true)
+    List<QuestionText> findTextsToCompare(@Param("level") String level);
 
     private List<ExamQuestion> withGrammarPoints(List<ExamQuestion> questions) {
         if (!questions.isEmpty()) {

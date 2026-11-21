@@ -73,4 +73,26 @@ public interface ExamPassageRepository extends JpaRepository<ExamPassage, Long>,
     boolean existsBySourceRef(String sourceRef);
 
     boolean existsByJlptLevelAndSectionAndContent(JlptLevel jlptLevel, ExamSection section, String content);
+
+    /** Nội dung của một đoạn văn trong kho, đủ để so độ giống với đoạn đang nhập. */
+    interface PassageText {
+        Long getId();
+
+        String getSourceRef();
+
+        String getTitle();
+
+        String getContent();
+    }
+
+    /**
+     * Nội dung các đoạn văn (cả 文章の文法 lẫn bài đọc) ở một cấp độ, chưa bị loại - để báo đoạn đang nhập gần giống
+     * đoạn đã có.
+     */
+    @Query(value = """
+            SELECT id AS "id", source_ref AS "sourceRef", title AS "title", content AS "content"
+            FROM exam_passages
+            WHERE jlpt_level = :level AND status <> 'REJECTED'
+            """, nativeQuery = true)
+    List<PassageText> findTextsToCompare(@Param("level") String level);
 }

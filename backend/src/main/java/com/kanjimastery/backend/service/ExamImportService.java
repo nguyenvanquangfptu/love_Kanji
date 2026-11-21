@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -73,6 +74,19 @@ public class ExamImportService {
     private static final int MAX_TITLE_LENGTH = 200;
     /** Số câu nêu tên trong cảnh báo câu chưa có giải thích. */
     private static final int MISSING_EXPLANATION_EXAMPLES = 5;
+    /**
+     * Độ giống ({@link TextSimilarity}) từ đó báo câu / đoạn văn gần trùng. Dò trên kho N3 (11/2026): mọi cặp câu từ 0,6
+     * trở lên đều là câu chép lại có đổi vài chữ (「国によって、食事の習慣が異なる / 違う」 0,67; 「子どものころは、この川で
+     * よく泳いだものです / ものだ」 0,59 - đảo trật tự từ làm điểm tụt nhanh). Bài đọc dài nên hai bài khác nhau vẫn chung
+     * nhiều cặp ký tự (です, ている...), nhưng trong kho chưa có cặp nào quá 0,4.
+     */
+    static final double SIMILAR_QUESTION = 0.6;
+    static final double SIMILAR_PASSAGE = 0.5;
+    /** Số ký tự trích từ câu / đoạn văn trong kho trong cảnh báo. */
+    private static final int QUOTE_LENGTH = 40;
+    /** Câu đúng của câu sắp xếp trong giải thích, xem {@code ParsedTest.order} và {@code QuestionDraftService}. */
+    private static final Pattern ORDER_ANSWER = Pattern.compile("Câu đúng: (.+?) \\(");
+    private static final Pattern WHITESPACE = Pattern.compile("\\s+");
 
     private final ExamQuestionRepository questionRepository;
     private final ExamPassageRepository passageRepository;
@@ -166,6 +180,7 @@ public class ExamImportService {
         List<String> refs = test.questions.stream().map(Built::ref).filter(Objects::nonNull).toList();
         Set<String> existing = refs.isEmpty() ? Set.of() : new HashSet<>(questionRepository.findExistingSourceRefs(refs));
         List<ExamPassage> newPassages = test.passages.stream()
+                .map(BuiltPassage::passage)
                 .filter(passage -> passage.getSourceRef() != null
                         ? !passageRepository.existsBySourceRef(passage.getSourceRef())
                         : !passageRepository.existsByJlptLevelAndSectionAndContent(passage.getJlptLevel(),
@@ -175,7 +190,8 @@ public class ExamImportService {
                 .filter(built -> built.ref() == null || !existing.contains(built.ref()))
                 .filter(built -> built.passage() == null || newPassages.contains(built.passage()))
                 .toList();
-        warnDuplicates(test.level, test.questions, fresh, warnings);
+        warnSimilarQuestions(test.level, test.questions, fresh, warnings);
+        warnSimilarPassages(test.level, test.passages, newPassages, warnings);
 
         String code = test.code;
         int alreadyImported = test.questions.size() - fresh.size();
@@ -292,23 +308,137 @@ public class ExamImportService {
                 + " thấy giải thích");
     }
 
-    /** Câu trùng nội dung trong cùng đề, hoặc với câu đã có trong kho (không tính câu của chính đề này đã nhập trước). */
-    private void warnDuplicates(JlptLevel level, List<Built> all, List<Built> fresh, List<String> warnings) {
-        Set<String> seen = new HashSet<>();
+    /**
+     * Câu gần giống ({@link TextSimilarity}) một câu đứng trước nó trong cùng đề, hoặc - với câu mới - một câu đã có
+     * trong kho cùng cấp độ, chưa bị loại. Câu của chính đề này đã nhập trước không tính là câu trong kho: nó cũng có
+     * trong đề nên đã được so ở bước trước. Chỉ cảnh báo, không chặn: có khi cố ý dùng lại câu để hỏi chữ khác.
+     */
+    private void warnSimilarQuestions(JlptLevel level, List<Built> all, List<Built> fresh, List<String> warnings) {
+        List<Compared> inTest = new ArrayList<>();
+        List<Compared> unchecked = new ArrayList<>();
         for (Built built : all) {
-            String sentence = built.question().getSentence();
-            if (sentence != null && !seen.add(sentence)) {
-                warnings.add(built.label() + ": câu giống hệt một câu khác trong đề");
+            ExamQuestion question = built.question();
+            JlptQuestionType type = question.getQuestionType();
+            String detail = JlptQuestionType.SENTENCE_ORDER.equals(type)
+                    ? question.getExplanation()
+                    : question.optionText(question.getCorrectOption());
+            Compared compared = Compared.of(built.label(), comparedText(type, question.getSentence(), detail));
+            if (compared != null) {
+                inTest.add(compared);
+                if (fresh.contains(built)) {
+                    unchecked.add(compared);
+                }
             }
         }
-        List<String> sentences = fresh.stream().map(built -> built.question().getSentence()).filter(Objects::nonNull).toList();
-        if (sentences.isEmpty()) {
+        Set<String> testRefs = all.stream().map(Built::ref).filter(Objects::nonNull).collect(Collectors.toSet());
+        warnSimilar(inTest, unchecked, SIMILAR_QUESTION, "câu", () -> questionRepository
+                .findTextsToCompare(level.name()).stream()
+                .filter(row -> !testRefs.contains(row.getSourceRef()))
+                .map(row -> Compared.of(storedName(row.getSourceRef(), row.getId()),
+                        comparedText(row.getType(), row.getSentence(), row.getDetail())))
+                .filter(Objects::nonNull)
+                .toList(), warnings);
+    }
+
+    /** Đoạn văn / bài đọc gần giống một đoạn khác, như {@link #warnSimilarQuestions}; so với đoạn của mọi phần thi. */
+    private void warnSimilarPassages(JlptLevel level, List<BuiltPassage> all, List<ExamPassage> newPassages,
+                                     List<String> warnings) {
+        List<Compared> inTest = new ArrayList<>();
+        List<Compared> unchecked = new ArrayList<>();
+        for (BuiltPassage built : all) {
+            Compared compared = Compared.of(built.label(), built.passage().getContent());
+            if (compared != null) {
+                inTest.add(compared);
+                if (newPassages.contains(built.passage())) {
+                    unchecked.add(compared);
+                }
+            }
+        }
+        Set<String> testRefs = all.stream()
+                .map(built -> built.passage().getSourceRef())
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        warnSimilar(inTest, unchecked, SIMILAR_PASSAGE, "đoạn văn", () -> passageRepository
+                .findTextsToCompare(level.name()).stream()
+                .filter(row -> !testRefs.contains(row.getSourceRef()))
+                .map(row -> Compared.of(storedName(row.getSourceRef(), row.getId()), row.getContent()))
+                .filter(Objects::nonNull)
+                .toList(), warnings);
+    }
+
+    /**
+     * Báo mỗi nội dung của đề gần giống một nội dung đứng trước nó trong đề, và mỗi nội dung mới ({@code unchecked}) gần
+     * giống một nội dung trong kho ({@code stored}, chỉ nạp khi có nội dung mới). Mỗi lần so chỉ báo nội dung giống nhất.
+     */
+    private static void warnSimilar(List<Compared> inTest, List<Compared> unchecked, double threshold, String kind,
+                                    Supplier<List<Compared>> stored, List<String> warnings) {
+        List<Compared> earlier = new ArrayList<>();
+        for (Compared compared : inTest) {
+            closest(compared, earlier, threshold).ifPresent(match -> warnings.add(compared.name() + ": gần giống "
+                    + match.other().name() + " trong cùng đề (" + percent(match.score()) + ")"));
+            earlier.add(compared);
+        }
+        if (unchecked.isEmpty()) {
             return;
         }
-        Set<String> inBank = new HashSet<>(questionRepository.findExistingSentences(level, sentences));
-        fresh.stream()
-                .filter(built -> inBank.contains(built.question().getSentence()))
-                .forEach(built -> warnings.add(built.label() + ": câu giống một câu đã có trong kho"));
+        List<Compared> bank = stored.get();
+        for (Compared compared : unchecked) {
+            closest(compared, bank, threshold).ifPresent(match -> warnings.add(compared.name() + ": gần giống " + kind
+                    + " đã có trong kho (" + percent(match.score()) + ", " + match.other().name() + "): 「"
+                    + quote(match.other().text()) + "」"));
+        }
+    }
+
+    /** Nội dung giống {@code target} nhất trong {@code others}, nếu độ giống đạt {@code threshold}. */
+    private static Optional<Match> closest(Compared target, List<Compared> others, double threshold) {
+        Match best = null;
+        for (Compared other : others) {
+            double score = target.fingerprint().similarity(other.fingerprint());
+            if (score >= threshold && (best == null || score > best.score())) {
+                best = new Match(other, score);
+            }
+        }
+        return Optional.ofNullable(best);
+    }
+
+    /**
+     * Phần của câu đem so độ giống - luôn là câu đầy đủ, vì câu viết lại từ câu cũ thường được hỏi ở dạng khác; null =
+     * không so. Câu điền chỗ trống so bằng câu đã điền lựa chọn đúng ({@code detail}); câu sắp xếp so bằng câu đúng
+     * trong giải thích ({@code detail}) vì cột sentence chỉ là khung có ô trống; câu 用法 so bằng lựa chọn đúng vì 4 lựa
+     * chọn là 4 câu. Câu của đoạn văn (文章の文法, Đọc hiểu) không so từng câu mà so cả đoạn văn.
+     */
+    static String comparedText(JlptQuestionType type, String sentence, String detail) {
+        if (type == null) {
+            return sentence;
+        }
+        return switch (type) {
+            case CONTEXT, GRAMMAR_FORM -> sentence == null || detail == null
+                    ? sentence
+                    : sentence.replace(ExamQuestionGenerator.BLANK, detail);
+            case SENTENCE_ORDER -> {
+                Matcher answer = ORDER_ANSWER.matcher(detail == null ? "" : detail);
+                yield answer.find() ? answer.group(1) : sentence;
+            }
+            case USAGE -> detail;
+            case TEXT_GRAMMAR, READING_SHORT, READING_MID, READING_LONG, INFO_SEARCH -> null;
+            default -> sentence;
+        };
+    }
+
+    /** Tên của câu / đoạn văn trong kho trong cảnh báo: mã đề gốc (nếu có) và id, vd. "N3-21/NP/4 #10377". */
+    private static String storedName(String sourceRef, Long id) {
+        return (sourceRef == null ? "" : sourceRef + " ") + "#" + id;
+    }
+
+    /** Làm tròn xuống: 99,6% chưa phải như nhau hẳn nên không ghi 100%. */
+    private static String percent(double score) {
+        return (int) Math.floor(score * 100 + 1e-9) + "%";
+    }
+
+    private static String quote(String text) {
+        String line = WHITESPACE.matcher(text).replaceAll(" ").strip();
+        return line.codePointCount(0, line.length()) <= QUOTE_LENGTH ? line
+                : line.substring(0, line.offsetByCodePoints(0, QUOTE_LENGTH)) + "…";
     }
 
     private static String stem(String written) {
@@ -331,6 +461,26 @@ public class ExamImportService {
     private record WordHint(String written, String reading) {
     }
 
+    /** Một đoạn văn đã dựng từ file, kèm nhãn để báo ("NP đoạn văn", "DH bài câu 28-30"). */
+    private record BuiltPassage(String label, ExamPassage passage) {
+    }
+
+    /**
+     * Một nội dung đem so độ giống: tên để báo (nhãn trong đề như "NP câu 4", hoặc mã và id trong kho) và chữ gốc để
+     * trích.
+     */
+    private record Compared(String name, String text, TextSimilarity.Fingerprint fingerprint) {
+
+        /** Null nếu không có gì để so. */
+        static Compared of(String name, String text) {
+            TextSimilarity.Fingerprint fingerprint = TextSimilarity.Fingerprint.of(text);
+            return fingerprint.isEmpty() ? null : new Compared(name, text, fingerprint);
+        }
+    }
+
+    private record Match(Compared other, double score) {
+    }
+
     /**
      * Đề đọc từ file: các câu đã dựng (theo thứ tự trong đề), các đoạn văn và các lỗi tìm thấy. {@code code} null (bài
      * đọc lẻ không có mã) thì câu và đoạn văn không có mã đề gốc.
@@ -341,7 +491,7 @@ public class ExamImportService {
         private final LocalDateTime now;
         private final List<Built> questions = new ArrayList<>();
         private final List<String> errors = new ArrayList<>();
-        private final List<ExamPassage> passages = new ArrayList<>();
+        private final List<BuiltPassage> passages = new ArrayList<>();
 
         ParsedTest(String code, JlptLevel level, LocalDateTime now) {
             this.code = code;
@@ -432,7 +582,7 @@ public class ExamImportService {
                     .sourceRef(code + "/" + part + "/" + start + "-" + end)
                     .createdAt(now)
                     .build();
-            passages.add(passage);
+            passages.add(new BuiltPassage(label, passage));
             for (int i = 0; i < items.size(); i++) {
                 question(part, JlptQuestionType.TEXT_GRAMMAR, items.get(i), start + i, i + 1, passage);
             }
@@ -503,7 +653,7 @@ public class ExamImportService {
                     .sourceRef(code == null ? null : code + "/" + READING_PART + "/" + range)
                     .createdAt(now)
                     .build();
-            passages.add(passage);
+            passages.add(new BuiltPassage(label, passage));
             for (int i = 0; i < items.size(); i++) {
                 question(READING_PART, type, items.get(i), start + i, i + 1, passage);
             }

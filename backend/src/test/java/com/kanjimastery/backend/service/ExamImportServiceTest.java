@@ -229,6 +229,174 @@ class ExamImportServiceTest {
         assertThat(report.alreadyImported()).isEqualTo(58);
         assertThat(savedQuestions()).isEmpty();
         verify(passageRepository, never()).save(any());
+        // Không còn câu / đoạn văn mới thì không cần nạp kho để so.
+        verify(questionRepository, never()).findTextsToCompare(any());
+        verify(passageRepository, never()).findTextsToCompare(any());
+    }
+
+    @Test
+    void questionsCloseToTheBank_shouldBeWarnedAbout_withTheClosestOne_butStillImported() {
+        ExamImportRequest test = n3Test("N3-05");
+        test.grammar().grammarForm().set(3, item(4, "台風のため、運動会は来週に（  ）された。", null, null,
+                List.of("延期", "中止", "出発", "到着"), 1, null, null));
+        when(questionRepository.findTextsToCompare("N3")).thenReturn(List.of(
+                new StoredQuestion(10377L, "N3-21/TV/31", JlptQuestionType.KANJI_READING, "雨のため、運動会は来週に延期された。",
+                        null),
+                new StoredQuestion(8480L, null, JlptQuestionType.PARAPHRASE, "運動会は雨のため中止になった。", null),
+                new StoredQuestion(4368L, null, JlptQuestionType.CONTEXT, "会議で新しいアイデアを（　　）する。", "提案")));
+
+        ExamImportResponse report = service.importTest(test, false);
+
+        // Câu điền chỗ trống so bằng câu đã điền lựa chọn đúng: 「台風のため、運動会は来週に延期された。」
+        assertThat(report.warnings()).filteredOn(warning -> warning.contains("đã có trong kho")).containsExactly(
+                "NP câu 4: gần giống câu đã có trong kho (82%, N3-21/TV/31 #10377): 「雨のため、運動会は来週に延期された。」");
+        assertThat(report.imported()).as("chỉ cảnh báo, vẫn nhập").isTrue();
+        assertThat(savedQuestions()).hasSize(58);
+    }
+
+    @Test
+    void sentenceOrderAndUsageQuestions_shouldBeComparedByTheirFullSentence() {
+        ExamImportRequest test = n3Test("N3-05");
+        test.grammar().sentenceOrder().set(0, new Item(14, null, null, null, "先週の日曜日は、", "。",
+                List.of("友だちと", "公園で", "サッカーを", "した"), null, List.of(1, 2, 3, 4), 3, null, null, null));
+        test.vocabulary().usage().set(0, new Item(31, null, null, "まわり", null, null,
+                List.of("彼は毎朝、公園のまわりを走っている。", "まわりの時間に起きた。", "道をまわりに歩いた。", "まわりな人だ。"),
+                1, null, null, null, null, null));
+        when(questionRepository.findTextsToCompare("N3")).thenReturn(List.of(
+                // Câu sắp xếp do AI soạn: "Câu đúng" đứng sau giải thích; cột sentence chỉ là khung có ô trống.
+                new StoredQuestion(501L, null, JlptQuestionType.SENTENCE_ORDER, "先週の日曜日は、 ＿＿＿ ＿＿＿ ＿★＿ ＿＿＿ 。",
+                        "Kể chuyện tuần trước. Câu đúng: 先週の日曜日は、友だちと公園でサッカーをした。 (友だちと → 公園で →"
+                                + " サッカーを → した). Vế ở vị trí ★ là 「サッカーを」."),
+                new StoredQuestion(502L, "N3-30/TV/33", JlptQuestionType.USAGE, null, "彼は毎朝、公園のまわりを走っている。")));
+
+        ExamImportResponse report = service.importTest(test, true);
+
+        assertThat(report.warnings()).filteredOn(warning -> warning.contains("đã có trong kho")).containsExactly(
+                "TV câu 31: gần giống câu đã có trong kho (100%, N3-30/TV/33 #502): 「彼は毎朝、公園のまわりを走っている。」",
+                "NP câu 14: gần giống câu đã có trong kho (100%, #501): 「先週の日曜日は、友だちと公園でサッカーをした。」");
+    }
+
+    @Test
+    void comparedText_shouldBeTheFullSentenceOfEachType() {
+        assertThat(ExamImportService.comparedText(JlptQuestionType.CONTEXT, "駅で（　　）を拾った。", "財布"))
+                .isEqualTo("駅で財布を拾った。");
+        assertThat(ExamImportService.comparedText(JlptQuestionType.GRAMMAR_FORM, "雨（　　）、中止だ。", "なので"))
+                .isEqualTo("雨なので、中止だ。");
+        assertThat(ExamImportService.comparedText(JlptQuestionType.SENTENCE_ORDER, "今日は ＿＿＿ ＿★＿ 。",
+                "Câu đúng: 今日は二四。 (二 → 四). Vế ở vị trí ★ là 「四」.")).isEqualTo("今日は二四。");
+        assertThat(ExamImportService.comparedText(JlptQuestionType.SENTENCE_ORDER, "今日は ＿＿＿ ＿★＿ 。", "Không rõ."))
+                .as("không có câu đúng trong giải thích thì so bằng khung câu").isEqualTo("今日は ＿＿＿ ＿★＿ 。");
+        assertThat(ExamImportService.comparedText(JlptQuestionType.USAGE, null, "彼は毎朝走っている。"))
+                .isEqualTo("彼は毎朝走っている。");
+        assertThat(ExamImportService.comparedText(JlptQuestionType.KANJI_READING, "毎朝走っている。", null))
+                .isEqualTo("毎朝走っている。");
+        assertThat(ExamImportService.comparedText(null, "câu mẫu cũ", null)).isEqualTo("câu mẫu cũ");
+        assertThat(ExamImportService.comparedText(JlptQuestionType.TEXT_GRAMMAR, null, "四")).isNull();
+        assertThat(ExamImportService.comparedText(JlptQuestionType.READING_SHORT, null, "四")).isNull();
+    }
+
+    @Test
+    void nearDuplicatesInsideOneTest_shouldBeWarnedAbout_onTheLaterQuestion() {
+        ExamImportRequest test = n3Test("N3-05");
+        test.vocabulary().kanjiReading().set(0, item(1, "台風のため、運動会は来週に延期された。", "延期", null, options(1), 1,
+                null, null));
+        test.vocabulary().paraphrase().set(0, item(26, "雨のため、運動会は来週に延期された。", "延期", null,
+                List.of("遅く", "早く", "中止", "変更"), 1, null, null));
+
+        ExamImportResponse report = service.importTest(test, true);
+
+        assertThat(report.warnings()).filteredOn(warning -> warning.startsWith("TV") && warning.contains("gần giống"))
+                .containsExactly("TV câu 26: gần giống TV câu 1 trong cùng đề (82%)");
+    }
+
+    @Test
+    void questionsOfThisTestImportedBefore_shouldNotBeComparedAsTheBank() {
+        ExamImportRequest test = n3Test("N3-05");
+        Item sameSentence = item(4, "台風のため、運動会は来週に（  ）された。", null, null, List.of("延期", "中止", "出発", "到着"),
+                1, null, null);
+        test.grammar().grammarForm().set(3, sameSentence);
+        test.grammar().grammarForm().set(8, new Item(9, sameSentence.sentence(), null, null, null, null,
+                sameSentence.options(), 1, null, null, null, null, null));
+        // Câu 9 đã nhập lần trước nên có trong kho; câu 4 mới. Hai câu đã được so với nhau trong đề, không báo lần nữa.
+        when(questionRepository.findExistingSourceRefs(anyCollection())).thenReturn(List.of("N3-05/NP/9"));
+        when(questionRepository.findTextsToCompare("N3")).thenReturn(List.of(new StoredQuestion(9001L, "N3-05/NP/9",
+                JlptQuestionType.GRAMMAR_FORM, "台風のため、運動会は来週に（　　）された。", "延期")));
+
+        ExamImportResponse report = service.importTest(test, true);
+
+        assertThat(report.warnings()).contains("NP câu 9: gần giống NP câu 4 trong cùng đề (100%)")
+                .noneMatch(warning -> warning.contains("đã có trong kho"));
+    }
+
+    @Test
+    void passagesCloseToTheBank_shouldBeWarnedAbout_quotingTheStoredOne() {
+        ExamPassageImportRequest request = new ExamPassageImportRequest("N3", "DH-trung-02", null,
+                "私の町の駅前には、古い商店街がある。〔下線〕最近は〔/下線〕若い人たちが新しい店を開くようになった。",
+                List.of(readingQuestion(1), readingQuestion(2), readingQuestion(3)));
+        when(passageRepository.findTextsToCompare("N3")).thenReturn(List.of(new StoredPassage(59L, "N3-DH05/DH/28-30",
+                "私の町の駅前には、小さな商店街がある。\n〔下線〕最近は〔/下線〕若い人たちが新しい店を開くようになった。")));
+
+        ExamImportResponse report = service.importPassage(JlptQuestionType.READING_MID, request, true);
+
+        assertThat(report.warnings()).filteredOn(warning -> warning.contains("gần giống")).singleElement().asString()
+                .startsWith("DH bài câu 1-3: gần giống đoạn văn đã có trong kho (")
+                .contains("N3-DH05/DH/28-30 #59")
+                // Trích 40 ký tự đầu, xuống dòng thành dấu cách.
+                .endsWith("「私の町の駅前には、小さな商店街がある。 〔下線〕最近は〔/下線〕若い人たちが新し…」");
+    }
+
+    /** Một câu trong kho như truy vấn {@code findTextsToCompare} trả về. */
+    private record StoredQuestion(Long id, String sourceRef, JlptQuestionType type, String sentence, String detail)
+            implements ExamQuestionRepository.QuestionText {
+
+        @Override
+        public Long getId() {
+            return id;
+        }
+
+        @Override
+        public String getSourceRef() {
+            return sourceRef;
+        }
+
+        @Override
+        public JlptQuestionType getType() {
+            return type;
+        }
+
+        @Override
+        public String getSentence() {
+            return sentence;
+        }
+
+        @Override
+        public String getDetail() {
+            return detail;
+        }
+    }
+
+    /** Một đoạn văn trong kho như truy vấn {@code findTextsToCompare} trả về. */
+    private record StoredPassage(Long id, String sourceRef, String content) implements ExamPassageRepository.PassageText {
+
+        @Override
+        public Long getId() {
+            return id;
+        }
+
+        @Override
+        public String getSourceRef() {
+            return sourceRef;
+        }
+
+        @Override
+        public String getTitle() {
+            return null;
+        }
+
+        @Override
+        public String getContent() {
+            return content;
+        }
     }
 
     @Test
