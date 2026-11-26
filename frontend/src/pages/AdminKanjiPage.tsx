@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileQuestion,
+  FileUp,
   Layers,
   Pencil,
   Plus,
@@ -32,6 +33,7 @@ import { KanjiFormDialog } from '@/components/KanjiFormDialog'
 import { TagManagerDialog } from '@/components/TagManagerDialog'
 import { CharacterRebuildDialog } from '@/components/CharacterRebuildDialog'
 import { VocabularyQualityDialog } from '@/components/VocabularyQualityDialog'
+import { VocabularyImportDialog } from '@/components/VocabularyImportDialog'
 import { PageHeader } from '@/components/PageHeader'
 import { AdminNav } from '@/components/AdminNav'
 import { LevelTabs, type LevelKey } from '@/components/LevelTabs'
@@ -56,6 +58,7 @@ export function AdminKanjiPage() {
   const [tagManagerOpen, setTagManagerOpen] = useState(false)
   const [characterRebuildOpen, setCharacterRebuildOpen] = useState(false)
   const [qualityOpen, setQualityOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   const { data: tags, isLoading: tagsLoading } = useQuery({ queryKey: ['tags'], queryFn: tagApi.list })
 
@@ -177,6 +180,9 @@ export function AdminKanjiPage() {
               <Button variant="outline" size="sm" onClick={() => setCharacterRebuildOpen(true)}>
                 <Scissors className="h-4 w-4" /> Hán Việt từng chữ
               </Button>
+              <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
+                <FileUp className="h-4 w-4" /> Nhập từ vựng
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setQualityOpen(true)}>
                 <ShieldCheck className="h-4 w-4" /> Kiểm tra kho từ
               </Button>
@@ -250,6 +256,8 @@ export function AdminKanjiPage() {
         <TagManagerDialog open={tagManagerOpen} onClose={() => setTagManagerOpen(false)} />
         <CharacterRebuildDialog open={characterRebuildOpen} onClose={() => setCharacterRebuildOpen(false)} />
         <VocabularyQualityDialog open={qualityOpen} onClose={() => setQualityOpen(false)} />
+        {/* Đổi key mỗi lần mở để danh sách file bắt đầu trống. */}
+        <VocabularyImportDialog key={String(importOpen)} open={importOpen} onClose={() => setImportOpen(false)} />
       </div>
     )
   }

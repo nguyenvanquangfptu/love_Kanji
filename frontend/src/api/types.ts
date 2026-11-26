@@ -511,6 +511,21 @@ export interface StrokeFixResult {
   changed: number
 }
 
+/** Kết quả nhập một bài từ vựng; có lỗi thì không ghi gì. */
+export interface VocabularyImportResult {
+  lesson: string
+  dryRun: boolean
+  imported: boolean
+  /** Số từ mới thêm vào kho (hoặc sẽ thêm). */
+  created: number
+  /** Số từ đã có trong kho được gắn thêm vào bài. */
+  linked: number
+  /** Số từ đã nằm trong bài từ trước, bỏ qua. */
+  alreadyInLesson: number
+  errors: string[]
+  warnings: string[]
+}
+
 /** Một đoạn của câu tiếng Nhật đã chia để hiện furigana; ghép `text` các đoạn theo thứ tự ra lại đúng câu. */
 export interface RubySegment {
   text: string

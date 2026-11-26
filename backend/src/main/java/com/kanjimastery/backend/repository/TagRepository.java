@@ -12,6 +12,8 @@ public interface TagRepository extends JpaRepository<Tag, Long> {
 
     boolean existsByName(String name);
 
+    Optional<Tag> findByName(String name);
+
     /** Mỗi phần tử: [tagId (Long), số Kanji gắn tag đó (Long)] - tag không có Kanji nào sẽ không xuất hiện. */
     @Query("SELECT t.id, COUNT(k.id) FROM Kanji k JOIN k.tags t GROUP BY t.id")
     List<Object[]> countKanjiPerTag();

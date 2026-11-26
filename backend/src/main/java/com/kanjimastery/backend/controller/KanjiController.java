@@ -3,6 +3,8 @@ package com.kanjimastery.backend.controller;
 import com.kanjimastery.backend.dto.KanjiRequest;
 import com.kanjimastery.backend.dto.KanjiResponse;
 import com.kanjimastery.backend.dto.MnemonicResponse;
+import com.kanjimastery.backend.dto.VocabularyImportRequest;
+import com.kanjimastery.backend.dto.VocabularyImportResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -17,6 +19,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import com.kanjimastery.backend.service.KanjiService;
 import com.kanjimastery.backend.service.MnemonicService;
+import com.kanjimastery.backend.service.VocabularyImportService;
 
 @RestController
 @RequestMapping("/api/v1/kanji")
@@ -26,6 +29,7 @@ public class KanjiController {
 
     private final KanjiService kanjiService;
     private final MnemonicService mnemonicService;
+    private final VocabularyImportService vocabularyImportService;
 
     @GetMapping
     public ResponseEntity<Page<KanjiResponse>> search(
@@ -69,5 +73,15 @@ public class KanjiController {
     @PostMapping("/{id}/mnemonic")
     public ResponseEntity<MnemonicResponse> mnemonic(Authentication authentication, @PathVariable Long id) {
         return ResponseEntity.ok(mnemonicService.getOrGenerate(authentication.getName(), id));
+    }
+
+    @Operation(summary = "Nhập từ vựng của một bài từ file JSON (chỉ ADMIN)",
+            description = "Mặc định chỉ kiểm tra (dryRun=true) và trả số từ mới, số từ gắn thêm, lỗi và cảnh báo; "
+                    + "dryRun=false mới ghi. Có lỗi thì không ghi gì; nhập lại cùng file không tạo trùng.")
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/import")
+    public ResponseEntity<VocabularyImportResponse> importLesson(@RequestBody VocabularyImportRequest request,
+                                                                 @RequestParam(defaultValue = "true") boolean dryRun) {
+        return ResponseEntity.ok(vocabularyImportService.importLesson(request, dryRun));
     }
 }

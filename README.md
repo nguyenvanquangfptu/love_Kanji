@@ -266,7 +266,7 @@ Tài liệu API đầy đủ, tương tác được (có nút **Authorize** đ�
 | Exam | `POST /api/v1/exams/start` `PUT .../answers` `GET .../session` `POST .../submit` `GET .../review` · `POST /questions/generate` (ADMIN) | Thi thử, auto-save, resume, nộp bài, xem lại kèm điểm theo kỹ năng và từ cần ôn; sinh câu thi từ kho từ vựng |
 | Leaderboard | `GET /api/v1/exams/leaderboard` `/my-rank` | Bảng xếp hạng real-time (Redis ZSET) |
 | Đề JLPT | `GET /api/v1/exams/jlpt/levels` `POST /sittings` `POST /sittings/{id}/next` `GET /sittings/{id}` `GET /weak-grammar` `/grammar-practice` `/leaderboard` `/leaderboard/me` · `POST /api/v1/exams/questions/{id}/reports` | Cấu trúc đề, buổi thi nhiều phần, điểm ngữ pháp hay sai và câu luyện lại, bảng xếp hạng đề JLPT, báo lỗi câu hỏi |
-| Quản trị (ADMIN) | `/api/v1/admin/exam-questions` (lọc, sửa, `/{id}/status`, `/approve`, `/stats`, `/drafts`, `/vocabulary-drafts`, `/analysis`, `/{id}/reports/dismiss`) · `/api/v1/admin/exam-passages` (+ `/drafts`) · `/api/v1/admin/grammar-points` (+ `/import` `/export` CSV) | Duyệt câu và đoạn văn, nhờ AI viết nháp, phân tích câu hỏi, quản lý điểm ngữ pháp |
+| Quản trị (ADMIN) | `/api/v1/admin/exam-questions` (lọc, sửa, `/{id}/status`, `/approve`, `/stats`, `/drafts`, `/vocabulary-drafts`, `/analysis`, `/{id}/reports/dismiss`) · `/api/v1/admin/exam-passages` (+ `/drafts`) · `/api/v1/admin/grammar-points` (+ `/import` `/export` CSV) · `POST /api/v1/kanji/import` · `/api/v1/admin/characters` (`/rebuild`, `/quality`, `/stroke-counts/fix`, `/words/{id}/han-viet`) | Duyệt câu và đoạn văn, nhờ AI viết nháp, phân tích câu hỏi, quản lý điểm ngữ pháp; nhập từ vựng theo bài từ JSON, kiểm tra và sửa số nét, Hán Việt của kho từ |
 
 ---
 

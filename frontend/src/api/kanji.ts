@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { KanjiRequest, KanjiResponse, MnemonicResponse, Page } from './types'
+import type { KanjiRequest, KanjiResponse, MnemonicResponse, Page, VocabularyImportResult } from './types'
 
 export const kanjiApi = {
   search: (params: { level?: string; keyword?: string; tagId?: number; page?: number; size?: number }) =>
@@ -16,4 +16,8 @@ export const kanjiApi = {
 
   /** Mẹo nhớ có sẵn, hoặc nhờ AI sinh (lưu lại dùng chung cho mọi người). */
   getMnemonic: (id: number) => apiClient.post<MnemonicResponse>(`/kanji/${id}/mnemonic`).then((r) => r.data),
+
+  /** Nhập từ vựng của một bài từ file JSON (chỉ quản trị); dryRun chỉ kiểm tra, chưa ghi gì. */
+  importLesson: (lesson: unknown, dryRun: boolean) =>
+    apiClient.post<VocabularyImportResult>('/kanji/import', lesson, { params: { dryRun } }).then((r) => r.data),
 }
