@@ -10,6 +10,7 @@ import type {
   JlptQuestionType,
   Page,
   PassageDraftResult,
+  PendingSummary,
   QuestionBankStats,
   QuestionDraftResult,
 } from './types'
@@ -58,6 +59,16 @@ export const examAdminApi = {
 
   /** Duyệt một lượt các câu đã đọc trên trang; chỉ câu chờ duyệt, không cảnh báo, đúng cấu trúc mới được duyệt. */
   approveAll: (ids: number[]) => apiClient.post<BulkApprovalResult>('/admin/exam-questions/approve', { ids }).then((r) => r.data),
+
+  /** Câu chờ duyệt khớp bộ lọc, đếm theo nguồn và mã đề - để biết "duyệt tất cả" sẽ duyệt những gì. */
+  pendingSummary: (filter: ApproveAllFilter) =>
+    apiClient.get<PendingSummary>('/admin/exam-questions/pending-summary', { params: filter }).then((r) => r.data),
+
+  /** Mẫu ngẫu nhiên các câu chờ duyệt (percent%, 10-50 câu) để duyệt mẫu trước khi duyệt cả lô. */
+  sample: (filter: ApproveAllFilter, percent = 10) =>
+    apiClient
+      .get<AdminExamQuestion[]>('/admin/exam-questions/sample', { params: { ...filter, percent } })
+      .then((r) => r.data),
 
   /** Duyệt mọi câu chờ duyệt khớp bộ lọc (không chỉ một trang); câu có cảnh báo / sai cấu trúc giữ nguyên. */
   approveAllMatching: (filter: ApproveAllFilter) =>

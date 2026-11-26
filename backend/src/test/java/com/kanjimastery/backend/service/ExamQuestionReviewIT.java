@@ -11,6 +11,7 @@ import com.kanjimastery.backend.model.ExamPassage;
 import com.kanjimastery.backend.model.ExamSection;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionFlag;
+import com.kanjimastery.backend.model.ExamQuestionSource;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.GrammarPoint;
 import com.kanjimastery.backend.model.JlptQuestionType;
@@ -22,12 +23,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.entry;
 
 /** Duyệt câu thi trên PostgreSQL thật: câu nháp không vào đề cho tới khi được duyệt; loại phải có lý do. */
 class ExamQuestionReviewIT extends AbstractIntegrationTest {
@@ -137,6 +142,34 @@ class ExamQuestionReviewIT extends AbstractIntegrationTest {
         } finally {
             questionRepository.deleteAllById(List.of(clean.getId(), approved.getId(), broken.getId()));
             passageRepository.deleteById(passage.getId());
+        }
+    }
+
+    @Test
+    void pendingDrafts_shouldBeCountedBySourceAndTest_andSampledAtRandom() {
+        List<ExamQuestion> saved = new ArrayList<>();
+        for (int i = 1; i <= 12; i++) {
+            saved.add(questionRepository.save(grammarQuestion("を", "が").source(ExamQuestionSource.IMPORTED)
+                    .sourceRef("IT-SAMPLE/NP/" + i).build()));
+        }
+        saved.add(questionRepository.save(grammarQuestion("を", "が").source(ExamQuestionSource.IMPORTED)
+                .sourceRef("IT-SAMPLE/NP/13").review(new ReviewState(ExamQuestionStatus.APPROVED)).build()));
+        Set<Long> drafts = saved.subList(0, 12).stream().map(ExamQuestion::getId).collect(Collectors.toSet());
+        ExamQuestionReviewService.Filter test = new ExamQuestionReviewService.Filter("N5", null, null, false, null, false,
+                "IT-SAMPLE");
+        try {
+            ExamQuestionReviewService.PendingSummary summary = reviewService.pendingSummary(test);
+            assertThat(summary.total()).as("câu đã duyệt không tính").isEqualTo(12);
+            assertThat(summary.bySource()).containsExactly(entry(ExamQuestionSource.IMPORTED, 12L));
+            assertThat(summary.byTest()).containsExactly(new ExamQuestionReviewService.PendingSummary.TestCount("IT-SAMPLE", 12));
+
+            // 10% của 12 câu là 2, nhưng một lượt duyệt mẫu có ít nhất 10 câu.
+            List<AdminExamQuestionResponse> sample = reviewService.sample(test, 10, new Random(7));
+            assertThat(sample).hasSize(10).extracting(AdminExamQuestionResponse::getId).doesNotHaveDuplicates()
+                    .allMatch(drafts::contains);
+            assertThat(reviewService.sample(test, 100, new Random(7))).hasSize(12);
+        } finally {
+            questionRepository.deleteAll(saved);
         }
     }
 

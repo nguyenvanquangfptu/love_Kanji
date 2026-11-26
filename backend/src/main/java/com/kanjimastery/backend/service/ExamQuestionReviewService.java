@@ -11,6 +11,7 @@ import com.kanjimastery.backend.exception.ResourceNotFoundException;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionFlag;
 import com.kanjimastery.backend.model.ExamQuestionReport;
+import com.kanjimastery.backend.model.ExamQuestionSource;
 import com.kanjimastery.backend.model.ExamQuestionStatus;
 import com.kanjimastery.backend.model.GrammarPoint;
 import com.kanjimastery.backend.model.Kanji;
@@ -37,11 +38,15 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Random;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -53,6 +58,10 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class ExamQuestionReviewService {
+
+    /** Số câu tối thiểu và tối đa của một lượt duyệt mẫu. */
+    static final int MIN_SAMPLE = 10;
+    static final int MAX_SAMPLE = 50;
 
     private final ExamQuestionRepository questionRepository;
     private final KanjiRepository kanjiRepository;
@@ -249,11 +258,7 @@ public class ExamQuestionReviewService {
      */
     @Transactional
     public BulkApproval approveAllMatching(Filter filter) {
-        if (!StringUtils.hasText(filter.level())) {
-            throw new BadRequestException("Chưa chọn cấp độ");
-        }
-        Filter pending = new Filter(filter.level(), filter.type(), ExamQuestionStatus.DRAFT, false,
-                filter.grammarPointId(), false, filter.testCode());
+        Filter pending = pending(filter);
         List<BulkApproval.Skipped> skipped = new ArrayList<>();
         int skippedTotal = 0;
         int approved = 0;
@@ -271,6 +276,67 @@ public class ExamQuestionReviewService {
             approved++;
         }
         return new BulkApproval(approved, skipped, skippedTotal);
+    }
+
+    /**
+     * Các câu chờ duyệt khớp bộ lọc (như {@link #approveAllMatching}), đếm theo nguồn và theo mã đề: để người duyệt biết
+     * "Duyệt tất cả" sẽ duyệt những gì, nhất là câu do AI soạn hay nhập từ file chưa ai đọc.
+     *
+     * @param byTest mã đề có nhiều câu chờ duyệt nhất trước, tối đa {@link #MAX_TESTS_SHOWN} đề
+     */
+    public record PendingSummary(long total, Map<ExamQuestionSource, Long> bySource, List<TestCount> byTest) {
+
+        public static final int MAX_TESTS_SHOWN = 20;
+
+        public record TestCount(String test, long count) {
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public PendingSummary pendingSummary(Filter filter) {
+        List<ExamQuestion> questions = questionRepository.findAll(specification(pending(filter)));
+        Map<ExamQuestionSource, Long> bySource = new EnumMap<>(ExamQuestionSource.class);
+        Map<String, Long> byTest = new HashMap<>();
+        for (ExamQuestion question : questions) {
+            bySource.merge(question.getSource(), 1L, Long::sum);
+            String ref = question.getSourceRef();
+            if (ref != null && ref.contains("/")) {
+                byTest.merge(ref.substring(0, ref.indexOf('/')), 1L, Long::sum);
+            }
+        }
+        List<PendingSummary.TestCount> tests = byTest.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
+                .limit(PendingSummary.MAX_TESTS_SHOWN)
+                .map(entry -> new PendingSummary.TestCount(entry.getKey(), entry.getValue()))
+                .toList();
+        return new PendingSummary(questions.size(), bySource, tests);
+    }
+
+    /**
+     * Mẫu ngẫu nhiên {@code percent}% các câu chờ duyệt khớp bộ lọc (ít nhất {@link #MIN_SAMPLE}, nhiều nhất
+     * {@link #MAX_SAMPLE} câu): duyệt hết mẫu mà không có câu nào hỏng thì mới nên duyệt phần còn lại một lượt.
+     */
+    @Transactional(readOnly = true)
+    public List<AdminExamQuestionResponse> sample(Filter filter, int percent, Random random) {
+        List<Long> ids = new ArrayList<>(questionRepository.findAll(specification(pending(filter))).stream()
+                .map(ExamQuestion::getId).toList());
+        int wanted = (int) Math.ceil(ids.size() * Math.min(Math.max(percent, 1), 100) / 100.0);
+        int size = Math.min(ids.size(), Math.min(MAX_SAMPLE, Math.max(MIN_SAMPLE, wanted)));
+        Collections.shuffle(ids, random);
+        List<Long> chosen = ids.subList(0, size);
+        Map<Long, ExamQuestion> byId = chosen.isEmpty() ? Map.of()
+                : questionRepository.findAllWithLinksByIdIn(chosen).stream()
+                        .collect(Collectors.toMap(ExamQuestion::getId, Function.identity()));
+        return toResponses(chosen.stream().map(byId::get).filter(Objects::nonNull).toList());
+    }
+
+    /** Bộ lọc chỉ lấy câu chờ duyệt; bắt buộc có cấp độ, như duyệt tất cả. */
+    private static Filter pending(Filter filter) {
+        if (!StringUtils.hasText(filter.level())) {
+            throw new BadRequestException("Chưa chọn cấp độ");
+        }
+        return new Filter(filter.level(), filter.type(), ExamQuestionStatus.DRAFT, false, filter.grammarPointId(), false,
+                filter.testCode());
     }
 
     /** Lý do không duyệt cùng lượt được; null nếu duyệt được. */

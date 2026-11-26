@@ -104,6 +104,8 @@ export function ExamImportPanel({
   }
 
   const readyCount = files.filter(ready).length
+  // Chọn file chỉ chạy thử: nhắc rõ là chưa ghi gì, kẻo tưởng đã nhập rồi.
+  const checkedOnly = busy === null && readyCount > 0
 
   return (
     <Card className="mb-4 flex flex-col gap-3 p-4">
@@ -153,6 +155,13 @@ export function ExamImportPanel({
           {busy === 'checking' ? 'Đang chạy thử...' : readingType ? 'Chọn file bài đọc' : 'Chọn file đề'}
         </Button>
       </div>
+
+      {checkedOnly && (
+        <Alert className="border-orange/40 bg-orange-soft text-orange-dark">
+          Mới chạy thử, chưa ghi gì vào kho. Bấm "Nhập {readyCount} {readingType ? 'bài đọc' : 'đề'} không có lỗi" ở
+          cuối danh sách để ghi.
+        </Alert>
+      )}
 
       {files.map((file, index) => (
         <ImportFileReport

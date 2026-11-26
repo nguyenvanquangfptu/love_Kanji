@@ -11,6 +11,7 @@ import {
   Pencil,
   RotateCcw,
   ShieldCheck,
+  Shuffle,
   Undo2,
   X,
 } from 'lucide-react'
@@ -24,6 +25,7 @@ import {
   type ExamSectionName,
   type JlptLevel,
   type JlptQuestionType,
+  type PendingSummary,
 } from '@/api/types'
 import { LEVEL_META } from '@/lib/levels'
 import { QUESTION_TYPE_META, QUESTION_TYPE_SECTION, SECTION_META, usesPassage } from '@/lib/jlpt'
@@ -58,6 +60,10 @@ const OPTIONS = ['A', 'B', 'C', 'D'] as const
 /** Dạng câu từ vựng nhờ AI viết nháp được theo từ trong bài. */
 const VOCABULARY_DRAFT_TYPES: JlptQuestionType[] = ['PARAPHRASE', 'USAGE']
 const PAGE_SIZE = 20
+/** Lô chờ duyệt lớn hơn chừng này câu thì gợi ý duyệt mẫu trước khi duyệt tất cả. */
+const SAMPLE_WORTH_IT = 20
+/** Nguồn câu chưa chắc đã có người đọc: nhắc duyệt mẫu trước khi duyệt tất cả. */
+const UNREAD_SOURCES = ['AI', 'IMPORTED']
 /** Một đề tự soạn có tới 58 câu (N3): lọc theo đề thì cả đề trên một trang, duyệt cả trang là duyệt cả đề. */
 const TEST_PAGE_SIZE = 60
 
@@ -99,6 +105,9 @@ export function AdminQuestionsPage() {
   const [noteKey, setNoteKey] = useState(0)
   const [confirmingBulk, setConfirmingBulk] = useState(false)
   const [confirmingAll, setConfirmingAll] = useState(false)
+  // Duyệt mẫu: null = không; số = lượt lấy mẫu (đổi số để lấy mẫu mới). Kết quả từng câu mẫu: đạt / không đạt.
+  const [sampleRound, setSampleRound] = useState<number | null>(null)
+  const [sampleOutcome, setSampleOutcome] = useState<Record<number, 'ok' | 'bad'>>({})
 
   function update(changes: Record<string, string | undefined>) {
     const next = new URLSearchParams(params)
@@ -163,10 +172,36 @@ export function AdminQuestionsPage() {
     mutationFn: () => examAdminApi.approveAllMatching({ level, type, test, grammarPointId }),
     onSuccess: () => {
       setConfirmingAll(false)
+      setSampleRound(null)
       update({})
       return refresh()
     },
   })
+  // Chỉ tải khi mở hộp "Duyệt tất cả": lượt duyệt gồm bao nhiêu câu nhập đề, AI viết, tự sinh...
+  const summaryQuery = useQuery({
+    queryKey: ['admin', 'exam-questions', 'pending-summary', level, type, test, grammarPointId],
+    queryFn: () => examAdminApi.pendingSummary({ level, type, test, grammarPointId }),
+    enabled: confirmingAll,
+  })
+  // Mẫu giữ nguyên trong cả lượt (không làm mới khi danh sách tải lại sau mỗi lần duyệt).
+  const sampleQuery = useQuery({
+    queryKey: ['admin', 'exam-sample', level, type, test, grammarPointId, sampleRound],
+    queryFn: () => examAdminApi.sample({ level, type, test, grammarPointId }),
+    enabled: sampleRound !== null,
+    staleTime: Infinity,
+  })
+  const sample = sampleQuery.data ?? []
+  const sampleBad = sample.filter((question) => sampleOutcome[question.id] === 'bad').length
+  const sampleDone = sample.length > 0 && sample.every((question) => sampleOutcome[question.id])
+
+  function startSample() {
+    setSampleOutcome({})
+    setSampleRound(Date.now())
+  }
+
+  function judgeSample(id: number, outcome: 'ok' | 'bad') {
+    setSampleOutcome((current) => ({ ...current, [id]: outcome }))
+  }
   const editMutation = useMutation({
     mutationFn: (vars: { id: number; payload: AdminExamQuestionRequest }) => examAdminApi.update(vars.id, vars.payload),
     onSuccess: () => {
@@ -471,6 +506,11 @@ export function AdminQuestionsPage() {
                   <CheckCheck className="h-4 w-4" /> Duyệt {approvable.length} câu không có cảnh báo trên trang
                 </Button>
               )}
+              {status === 'DRAFT' && sampleRound === null && data.totalElements > SAMPLE_WORTH_IT && (
+                <Button size="sm" variant="outline" onClick={startSample}>
+                  <Shuffle className="h-4 w-4" /> Duyệt mẫu
+                </Button>
+              )}
               {status === 'DRAFT' && (
                 <Button size="sm" variant="outline" onClick={() => setConfirmingAll(true)}>
                   <CheckCheck className="h-4 w-4" /> Duyệt tất cả {data.totalElements} câu chờ duyệt
@@ -478,29 +518,74 @@ export function AdminQuestionsPage() {
               )}
             </div>
           </div>
+          {sampleRound !== null && (
+            <Card className="mb-4 flex flex-col gap-3 border-secondary p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-black">
+                  Duyệt mẫu: {sample.length} câu ngẫu nhiên trong {data.totalElements} câu chờ duyệt · đã xem{' '}
+                  {Object.keys(sampleOutcome).length}/{sample.length}
+                </p>
+                <Button size="sm" variant="outline" onClick={() => setSampleRound(null)}>
+                  Thoát duyệt mẫu
+                </Button>
+              </div>
+              <p className="text-sm font-semibold text-muted-foreground">
+                Đọc từng câu: đúng thì bấm Duyệt; sai thì Loại (ghi lý do). Mẫu không có câu nào hỏng thì mới nên duyệt phần
+                còn lại một lượt.
+              </p>
+              {sampleQuery.isError && <Alert>{extractErrorMessage(sampleQuery.error)}</Alert>}
+              {sampleBad > 0 ? (
+                <Alert>
+                  {sampleBad} câu trong mẫu không đạt - lô này nên duyệt từng câu thay vì duyệt tất cả. Thoát duyệt mẫu để
+                  xem cả danh sách.
+                </Alert>
+              ) : (
+                sampleDone && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-bold text-primary-dark">Mẫu đạt hết.</span>
+                    <Button size="sm" onClick={() => setConfirmingAll(true)}>
+                      <CheckCheck className="h-4 w-4" /> Duyệt {data.totalElements} câu còn lại
+                    </Button>
+                  </div>
+                )
+              )}
+            </Card>
+          )}
           <div className="flex flex-col gap-4">
-            {data.content.map((question) => (
-              <QuestionReviewCard
-                key={question.id}
-                question={question}
-                busy={statusMutation.isPending}
-                onApprove={() => statusMutation.mutate({ id: question.id, status: 'APPROVED' })}
-                onBackToDraft={() => statusMutation.mutate({ id: question.id, status: 'DRAFT' })}
-                onNote={(nextStatus) => {
-                  setNoteKey((key) => key + 1)
-                  setPendingNote({ question, status: nextStatus })
-                }}
-                onEdit={() => {
-                  setEditError(null)
-                  setEditKey((key) => key + 1)
-                  setEditing(question)
-                }}
-                onDismissReports={() => dismissMutation.mutate(question.id)}
-                dismissing={dismissMutation.isPending}
-              />
-            ))}
+            {(sampleRound !== null ? sample : data.content).map((question) => {
+              const outcome = sampleRound !== null ? sampleOutcome[question.id] : undefined
+              const shown: AdminExamQuestion =
+                outcome === 'ok' ? { ...question, status: 'APPROVED' } : outcome === 'bad' ? { ...question, status: 'REJECTED' } : question
+              return (
+                <QuestionReviewCard
+                  key={question.id}
+                  question={shown}
+                  busy={statusMutation.isPending}
+                  onApprove={() =>
+                    statusMutation.mutate(
+                      { id: question.id, status: 'APPROVED' },
+                      { onSuccess: () => sampleRound !== null && judgeSample(question.id, 'ok') },
+                    )
+                  }
+                  onBackToDraft={() => statusMutation.mutate({ id: question.id, status: 'DRAFT' })}
+                  onNote={(nextStatus) => {
+                    // Loại / rút một câu mẫu: mẫu không đạt (ghi lý do vẫn qua hộp ghi chú như thường).
+                    if (sampleRound !== null) judgeSample(question.id, 'bad')
+                    setNoteKey((key) => key + 1)
+                    setPendingNote({ question, status: nextStatus })
+                  }}
+                  onEdit={() => {
+                    setEditError(null)
+                    setEditKey((key) => key + 1)
+                    setEditing(question)
+                  }}
+                  onDismissReports={() => dismissMutation.mutate(question.id)}
+                  dismissing={dismissMutation.isPending}
+                />
+              )
+            })}
           </div>
-          {data.totalPages > 1 && (
+          {sampleRound === null && data.totalPages > 1 && (
             <div className="mt-4 flex items-center justify-center gap-3">
               <Button variant="outline" size="sm" disabled={data.first} onClick={() => update({ page: String(page - 1) })}>
                 <ChevronLeft className="h-4 w-4" /> Trước
@@ -547,6 +632,8 @@ export function AdminQuestionsPage() {
           </>
         }
       >
+        {summaryQuery.data && <PendingSummaryView summary={summaryQuery.data} sampled={sampleDone && sampleBad === 0} />}
+        {summaryQuery.isError && <Alert>{extractErrorMessage(summaryQuery.error)}</Alert>}
         {approveAllMutation.isError && <Alert>{extractErrorMessage(approveAllMutation.error)}</Alert>}
       </Modal>
 
@@ -593,6 +680,34 @@ export function AdminQuestionsPage() {
         }
         onCancel={() => setPendingNote(null)}
       />
+    </div>
+  )
+}
+
+/** Lượt "duyệt tất cả" gồm những câu nào: theo nguồn và theo mã đề; nhắc duyệt mẫu nếu có câu chưa chắc đã ai đọc. */
+function PendingSummaryView({ summary, sampled }: { summary: PendingSummary; sampled: boolean }) {
+  const unread = UNREAD_SOURCES.reduce((total, source) => total + (summary.bySource[source] ?? 0), 0)
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <p className="font-bold">
+        {Object.entries(summary.bySource)
+          .map(([source, count]) => `${SOURCE_LABEL[source] ?? source}: ${count}`)
+          .join(' · ')}
+      </p>
+      {summary.byTest.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {summary.byTest.map((row) => (
+            <Badge key={row.test} variant="outline">
+              {row.test}: {row.count}
+            </Badge>
+          ))}
+        </div>
+      )}
+      {unread > 0 && !sampled && (
+        <Alert>
+          {unread} câu do AI viết hoặc nhập từ file đề có thể chưa ai đọc. Nên bấm "Duyệt mẫu" để đọc thử một phần trước.
+        </Alert>
+      )}
     </div>
   )
 }

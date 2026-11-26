@@ -754,6 +754,13 @@ export type ExamQuestionFlag = 'AMBIGUOUS' | 'WRONG_ANSWER' | 'ABOVE_LEVEL' | 'R
 export type QuestionReportReason = 'WRONG_ANSWER' | 'AMBIGUOUS' | 'UNCLEAR' | 'OTHER'
 
 /** Một câu thi trên trang duyệt (có đáp án đúng). */
+/** Câu chờ duyệt khớp bộ lọc của "duyệt tất cả", đếm theo nguồn (IMPORTED, AI...) và mã đề (nhiều câu nhất trước). */
+export interface PendingSummary {
+  total: number
+  bySource: Partial<Record<string, number>>
+  byTest: { test: string; count: number }[]
+}
+
 export interface AdminExamQuestion {
   id: number
   jlptLevel: string

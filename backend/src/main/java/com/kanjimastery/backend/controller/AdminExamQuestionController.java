@@ -27,6 +27,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 @RestController
 @RequestMapping("/api/v1/admin/exam-questions")
@@ -82,6 +83,36 @@ public class AdminExamQuestionController {
     public ResponseEntity<ExamQuestionReviewService.BulkApproval> approveAll(
             @Valid @RequestBody BulkApproveRequest request) {
         return ResponseEntity.ok(reviewService.approveAll(request.getIds()));
+    }
+
+    @Operation(summary = "Đếm câu chờ duyệt khớp bộ lọc theo nguồn và mã đề",
+            description = "Cùng bộ lọc với duyệt tất cả: cho biết lượt duyệt sẽ gồm bao nhiêu câu nhập đề, AI, tự sinh...")
+    @GetMapping("/pending-summary")
+    public ResponseEntity<ExamQuestionReviewService.PendingSummary> pendingSummary(
+            @RequestParam String level,
+            @RequestParam(required = false) JlptQuestionType type,
+            @RequestParam(required = false) Long grammarPointId,
+            @RequestParam(required = false) String test) {
+        return ResponseEntity.ok(reviewService.pendingSummary(pendingFilter(level, type, grammarPointId, test)));
+    }
+
+    @Operation(summary = "Mẫu ngẫu nhiên các câu chờ duyệt để duyệt mẫu",
+            description = "percent% số câu chờ duyệt khớp bộ lọc, ít nhất 10 và nhiều nhất 50 câu, thứ tự ngẫu nhiên.")
+    @GetMapping("/sample")
+    public ResponseEntity<List<AdminExamQuestionResponse>> sample(
+            @RequestParam String level,
+            @RequestParam(required = false) JlptQuestionType type,
+            @RequestParam(required = false) Long grammarPointId,
+            @RequestParam(required = false) String test,
+            @RequestParam(defaultValue = "10") int percent) {
+        return ResponseEntity.ok(reviewService.sample(pendingFilter(level, type, grammarPointId, test), percent,
+                ThreadLocalRandom.current()));
+    }
+
+    private static ExamQuestionReviewService.Filter pendingFilter(String level, JlptQuestionType type, Long grammarPointId,
+                                                                  String test) {
+        return new ExamQuestionReviewService.Filter(level, type, ExamQuestionStatus.DRAFT, false, grammarPointId, false,
+                test);
     }
 
     @Operation(summary = "Duyệt mọi câu chờ duyệt khớp bộ lọc",
