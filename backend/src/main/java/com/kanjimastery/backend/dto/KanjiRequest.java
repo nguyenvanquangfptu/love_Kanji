@@ -2,7 +2,6 @@ package com.kanjimastery.backend.dto;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -23,7 +22,7 @@ public class KanjiRequest {
     @Size(max = 100, message = "reading tối đa 100 ký tự")
     private String reading;
 
-    @NotNull(message = "strokeCount không được để trống")
+    /** Chỉ cần khi từ có chữ Hán chưa có trong bảng số nét; còn lại số nét được tính tự động và giá trị này bị bỏ qua. */
     @Min(value = 0, message = "strokeCount phải >= 0")
     private Integer strokeCount;
 

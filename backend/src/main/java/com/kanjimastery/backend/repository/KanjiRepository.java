@@ -146,4 +146,29 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
             ORDER BY k.id, INDEX(c)
             """)
     List<CharacterPart> findCharacterPartsOf(@Param("wordIds") Collection<Long> wordIds);
+
+    /** Một chữ Hán thành phần của một từ, kèm cách viết của từ - để báo các chữ được ghi nhiều âm Hán Việt. */
+    interface CharacterReading {
+        String getCharacter();
+
+        String getHanViet();
+
+        Long getWordId();
+
+        String getWord();
+
+        String getWordHanViet();
+    }
+
+    /** Các chữ Hán được ghi nhiều hơn một âm Hán Việt (込 VÀO / NHẬP...) và các từ dùng từng âm. */
+    @Query(value = """
+            SELECT wc.character AS "character", wc.han_viet AS "hanViet", k.id AS "wordId", k.character AS "word",
+                   k.han_viet AS "wordHanViet"
+            FROM word_characters wc
+            JOIN kanji k ON k.id = wc.word_id
+            WHERE wc.character IN (SELECT character FROM word_characters GROUP BY character
+                                   HAVING COUNT(DISTINCT han_viet) > 1)
+            ORDER BY wc.character, wc.han_viet, k.id
+            """, nativeQuery = true)
+    List<CharacterReading> findCharactersWithSeveralHanViet();
 }

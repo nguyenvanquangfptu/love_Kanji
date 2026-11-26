@@ -23,6 +23,7 @@ import com.kanjimastery.backend.repository.TagRepository;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 @Service
@@ -31,6 +32,7 @@ public class KanjiService {
 
     private final KanjiRepository kanjiRepository;
     private final TagRepository tagRepository;
+    private final StrokeCounter strokeCounter;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -104,7 +106,7 @@ public class KanjiService {
         // Không tách được (số âm khác số chữ Hán...) thì bỏ các chữ cũ, để không hiện âm của cách viết trước.
         kanji.replaceCharacterParts(HanVietSplitter.split(kanji.getCharacter(), kanji.getHanViet()).parts());
         kanji.setReading(StringUtils.hasText(request.getReading()) ? request.getReading().trim() : null);
-        kanji.setStrokeCount(request.getStrokeCount());
+        kanji.setStrokeCount(strokeCount(kanji.getCharacter(), request.getStrokeCount()));
         kanji.setJlptLevel(Levels.require(request.getJlptLevel()));
         kanji.setMeaning(request.getMeaning());
         kanji.setExampleSentence(StringUtils.hasText(request.getExampleSentence()) ? request.getExampleSentence().trim() : null);
@@ -114,6 +116,41 @@ public class KanjiService {
         } else {
             kanji.setTags(new HashSet<>());
         }
+    }
+
+    /**
+     * Số nét tính từ bảng số nét từng chữ ({@link StrokeCounter}); số nhập tay chỉ dùng khi từ có chữ chưa có trong bảng.
+     */
+    private int strokeCount(String word, Integer entered) {
+        StrokeCounter.Count count = strokeCounter.count(word);
+        if (count.known()) {
+            return count.total();
+        }
+        if (entered == null) {
+            throw new BadRequestException("Chưa có số nét của chữ " + String.join(", ", count.unknown())
+                    + " - hãy nhập số nét của cả từ");
+        }
+        return entered;
+    }
+
+    /**
+     * Sửa riêng âm Hán Việt của một từ (từ báo cáo chất lượng kho từ) và tách lại từng chữ. Không tách được (số âm khác số
+     * chữ Hán...) thì báo lỗi, không ghi.
+     */
+    @CacheEvict(value = "kanji", key = "#id")
+    @Transactional
+    public KanjiResponse updateHanViet(Long id, String hanViet) {
+        Kanji kanji = kanjiRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Kanji với id: " + id));
+        String normalized = hanViet == null ? "" : hanViet.strip().replaceAll("\\s+", " ").toUpperCase(Locale.ROOT);
+        HanVietSplitter.Split split = HanVietSplitter.split(kanji.getCharacter(), normalized);
+        if (split.problem() != null && split.problem() != HanVietSplitter.Problem.NO_KANJI) {
+            throw new BadRequestException("Âm Hán Việt 「" + normalized + "」 không tách được theo từng chữ của "
+                    + kanji.getCharacter() + " (" + split.problem() + ")");
+        }
+        kanji.setHanViet(normalized);
+        kanji.replaceCharacterParts(split.parts());
+        return toResponseWithTags(kanjiRepository.save(kanji));
     }
 
     /** Chỉ gọi bên trong @Transactional - kanji.getTags() là quan hệ LAZY. */

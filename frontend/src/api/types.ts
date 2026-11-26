@@ -99,7 +99,8 @@ export interface KanjiRequest {
   character: string
   hanViet: string
   reading: string
-  strokeCount: number
+  /** Để trống: server tự tính theo bảng số nét từng chữ; chỉ cần khi từ có chữ chưa có số nét. */
+  strokeCount: number | null
   jlptLevel: string
   meaning: string
   exampleSentence: string
@@ -484,6 +485,30 @@ export interface CharacterRebuildReport {
   changed: number
   /** Từ có chữ Hán mà không tách được: cần sửa cột Hán Việt. */
   skipped: { id: number; character: string; hanViet: string; reason: 'NO_HAN_VIET' | 'COUNT_MISMATCH' | 'NOT_A_SYLLABLE' }[]
+}
+
+/** Một từ trong báo cáo chất lượng kho từ. */
+export interface QualityWordRef {
+  id: number
+  character: string
+  hanViet: string
+}
+
+/** Các chỗ cần sửa trong kho từ vựng (chỉ quản trị). */
+export interface VocabularyQualityReport {
+  words: number
+  /** Từ có số nét khác tổng số nét các chữ (bảng số nét). */
+  strokeMismatches: { id: number; character: string; stored: number; computed: number }[]
+  /** Chữ Hán chưa có số nét: từ chứa chúng không tự tính được. */
+  unknownCharacters: string[]
+  /** Chữ Hán được ghi nhiều âm Hán Việt; âm ít từ dùng nhất đứng đầu. */
+  hanVietConflicts: { character: string; variants: { hanViet: string; words: QualityWordRef[] }[] }[]
+  missingHanViet: QualityWordRef[]
+}
+
+export interface StrokeFixResult {
+  dryRun: boolean
+  changed: number
 }
 
 /** Một đoạn của câu tiếng Nhật đã chia để hiện furigana; ghép `text` các đoạn theo thứ tự ra lại đúng câu. */

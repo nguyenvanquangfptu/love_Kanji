@@ -23,6 +23,7 @@ Backend Spring Boot cho nền tảng học Kanji cá nhân hóa (lịch ôn Supe
 - [Chạy dự án để phát triển (dev mode)](#chạy-dự-án-để-phát-triển-dev-mode)
 - [Testing](#testing)
 - [Cấu trúc thư mục](#cấu-trúc-thư-mục)
+- [Nguồn dữ liệu](#nguồn-dữ-liệu)
 
 ---
 
@@ -239,6 +240,7 @@ Các bảng chính (PostgreSQL, quản lý bằng Flyway — xem [`db/migration`
 | `user_learning_profiles` | Mục tiêu học: cấp độ, ngày thi, số phút mỗi ngày, thuật toán lịch ôn, tỉ lệ nhớ mong muốn |
 | `user_fsrs_parameters` | Tham số FSRS tối ưu riêng từng người (JSONB, kèm phiên bản FSRS) |
 | `exam_questions` | Ngân hàng câu hỏi JLPT: dạng câu (問題), kỹ năng, nguồn (soạn tay / sinh từ kho từ vựng / AI), trạng thái duyệt, cờ cảnh báo, câu ví dụ và phần gạch chân, đoạn văn và chỗ trống |
+| `kanji_strokes` | Số nét của từng chữ Hán (nguồn KANJIDIC2, xem [Nguồn dữ liệu](#nguồn-dữ-liệu)) - số nét của từ được tính từ bảng này |
 | `exam_question_kanji` | Từ vựng mỗi câu thi kiểm tra |
 | `grammar_points` · `exam_question_grammar` | Điểm ngữ pháp N5-N3 theo bài, và điểm ngữ pháp mỗi câu thi kiểm tra |
 | `exam_passages` | Đoạn văn 文章の文法 với chỗ trống 【1】【2】..., duyệt cả đoạn |
@@ -441,3 +443,7 @@ Kanji_App/
         ├── pages/       # Login, Register, Flashcard, ExamSetup/Workspace/Result
         └── components/  # FlipCard, QuestionPalette, Countdown, Leaderboard, ui/
 ```
+
+## Nguồn dữ liệu
+
+Số nét chữ Hán (bảng `kanji_strokes`, migration [`V41`](backend/src/main/resources/db/migration/V41__add_kanji_strokes.sql)) lấy từ [KANJIDIC2](https://www.edrdg.org/wiki/index.php/KANJIDIC_Project) của Electronic Dictionary Research and Development Group, dùng theo [giấy phép của EDRDG](https://www.edrdg.org/edrdg/licence.html) (Creative Commons Attribution-ShareAlike 4.0).

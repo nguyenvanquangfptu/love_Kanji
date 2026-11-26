@@ -9,6 +9,7 @@ import com.kanjimastery.backend.model.Tag;
 import com.kanjimastery.backend.model.WordCharacter;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.repository.TagRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -27,6 +28,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,11 +42,19 @@ class KanjiServiceTest {
     @Mock
     private TagRepository tagRepository;
 
+    @Mock
+    private StrokeCounter strokeCounter;
+
     @Spy
     private Clock clock = Clock.systemDefaultZone();
 
     @InjectMocks
     private KanjiService kanjiService;
+
+    @BeforeEach
+    void countStrokes() {
+        lenient().when(strokeCounter.count(any())).thenReturn(new StrokeCounter.Count(12, List.of()));
+    }
 
     private final Tag lesson29 = Tag.builder().id(29L).name("N4-29").build();
     private final Tag lesson27 = Tag.builder().id(27L).name("N4-27").build();
@@ -122,6 +132,61 @@ class KanjiServiceTest {
         kanjiService.update(2L, oneSyllable);
 
         assertThat(bank.getCharacterParts()).isEmpty();
+    }
+
+    @Test
+    void create_shouldCountStrokesFromTheTable_ignoringTheNumberEntered() {
+        when(strokeCounter.count("銀行")).thenReturn(new StrokeCounter.Count(20, List.of()));
+        ArgumentCaptor<Kanji> saved = ArgumentCaptor.forClass(Kanji.class);
+        when(kanjiRepository.save(saved.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        kanjiService.create(request("銀行", "ぎんこう"));
+
+        assertThat(saved.getValue().getStrokeCount()).as("14 + 6, không phải 12 nhập tay").isEqualTo(20);
+    }
+
+    @Test
+    void create_shouldKeepTheNumberEntered_onlyWhenACharacterHasNoStrokeCount() {
+        when(strokeCounter.count("𠮟る")).thenReturn(new StrokeCounter.Count(0, List.of("𠮟")));
+        ArgumentCaptor<Kanji> saved = ArgumentCaptor.forClass(Kanji.class);
+        when(kanjiRepository.save(saved.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        kanjiService.create(request("𠮟る", "しかる"));
+
+        assertThat(saved.getValue().getStrokeCount()).isEqualTo(12);
+
+        KanjiRequest withoutCount = request("𠮟る", "しかる");
+        withoutCount.setStrokeCount(null);
+        assertThatThrownBy(() -> kanjiService.create(withoutCount))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("𠮟");
+    }
+
+    @Test
+    void updateHanViet_shouldWriteItUppercase_andSplitItIntoTheCharacters() {
+        Kanji word = Kanji.builder().id(3L).character("落ち込む").reading("おちこむ").hanViet("LẠC NHẬP").meaning("Suy sụp")
+                .strokeCount(17).jlptLevel(JlptLevel.N2).build();
+        when(kanjiRepository.findById(3L)).thenReturn(Optional.of(word));
+        when(kanjiRepository.save(any(Kanji.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        kanjiService.updateHanViet(3L, " lạc   vào ");
+
+        assertThat(word.getHanViet()).isEqualTo("LẠC VÀO");
+        assertThat(word.getCharacterParts())
+                .containsExactly(new WordCharacter("落", "LẠC"), new WordCharacter("込", "VÀO"));
+    }
+
+    @Test
+    void updateHanViet_shouldRefuse_whenTheSyllablesDoNotMatchTheCharacters() {
+        Kanji word = Kanji.builder().id(3L).character("落ち込む").hanViet("LẠC VÀO").meaning("Suy sụp")
+                .strokeCount(17).jlptLevel(JlptLevel.N2).build();
+        when(kanjiRepository.findById(3L)).thenReturn(Optional.of(word));
+
+        assertThatThrownBy(() -> kanjiService.updateHanViet(3L, "LẠC"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("COUNT_MISMATCH");
+        assertThat(word.getHanViet()).isEqualTo("LẠC VÀO");
+        verify(kanjiRepository, never()).save(any());
     }
 
     private static KanjiRequest request(String character, String reading, Long... tagIds) {

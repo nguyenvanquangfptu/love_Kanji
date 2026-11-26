@@ -1,5 +1,12 @@
 import { apiClient } from './client'
-import type { CharacterDetail, CharacterRebuildReport, WordCharacter } from './types'
+import type {
+  CharacterDetail,
+  CharacterRebuildReport,
+  KanjiResponse,
+  StrokeFixResult,
+  VocabularyQualityReport,
+  WordCharacter,
+} from './types'
 
 /** Server nhận tối đa chừng này từ mỗi lần hỏi. */
 const MAX_WORD_IDS = 200
@@ -25,4 +32,15 @@ export const characterApi = {
   /** Tách lại Hán Việt từng chữ cho cả kho (chỉ quản trị); dryRun chỉ báo cáo. */
   rebuild: (dryRun: boolean) =>
     apiClient.post<CharacterRebuildReport>('/admin/characters/rebuild', null, { params: { dryRun } }).then((r) => r.data),
+
+  /** Báo cáo chất lượng kho từ: số nét sai, chữ có nhiều âm Hán Việt, từ thiếu Hán Việt (chỉ quản trị). */
+  quality: () => apiClient.get<VocabularyQualityReport>('/admin/characters/quality').then((r) => r.data),
+
+  /** Sửa số nét theo bảng số nét từng chữ; dryRun chỉ đếm. */
+  fixStrokeCounts: (dryRun: boolean) =>
+    apiClient.post<StrokeFixResult>('/admin/characters/stroke-counts/fix', null, { params: { dryRun } }).then((r) => r.data),
+
+  /** Sửa âm Hán Việt của một từ, tách lại từng chữ ngay. */
+  updateHanViet: (id: number, hanViet: string) =>
+    apiClient.put<KanjiResponse>(`/admin/characters/words/${id}/han-viet`, { hanViet }).then((r) => r.data),
 }

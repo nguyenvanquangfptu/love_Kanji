@@ -16,7 +16,7 @@ const emptyForm: KanjiRequest = {
   character: '',
   hanViet: '',
   reading: '',
-  strokeCount: 0,
+  strokeCount: null,
   jlptLevel: 'N5',
   meaning: '',
   exampleSentence: '',
@@ -137,13 +137,16 @@ export function KanjiFormDialog({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="strokeCount">Số nét</Label>
+            {/* Server tự tính theo bảng số nét từng chữ; chỉ cần nhập khi từ có chữ hiếm chưa có trong bảng. */}
             <Input
               id="strokeCount"
               type="number"
               min={0}
               className="w-24"
-              value={form.strokeCount}
-              onChange={(e) => field('strokeCount', Number(e.target.value))}
+              placeholder="Tự tính"
+              title="Để trống để tự tính theo số nét từng chữ"
+              value={form.strokeCount ?? ''}
+              onChange={(e) => field('strokeCount', e.target.value === '' ? null : Number(e.target.value))}
             />
           </div>
         </div>
