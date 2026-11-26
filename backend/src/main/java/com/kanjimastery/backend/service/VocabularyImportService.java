@@ -4,6 +4,7 @@ import com.kanjimastery.backend.dto.VocabularyImportRequest;
 import com.kanjimastery.backend.dto.VocabularyImportRequest.Word;
 import com.kanjimastery.backend.dto.VocabularyImportResponse;
 import com.kanjimastery.backend.exception.BadRequestException;
+import com.kanjimastery.backend.model.ExampleSentenceSource;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.Tag;
@@ -232,6 +233,7 @@ public class VocabularyImportService {
                 .hanViet(entry.hanViet)
                 .meaning(entry.meaning)
                 .exampleSentence(entry.exampleSentence)
+                .exampleSentenceSource(entry.exampleSentence == null ? null : ExampleSentenceSource.MANUAL)
                 .strokeCount(strokeCount)
                 .jlptLevel(level)
                 .tags(new HashSet<>())

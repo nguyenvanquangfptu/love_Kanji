@@ -355,9 +355,12 @@ Lệnh thứ 4 xoá cache từ vựng cũ trong Redis. Chuyển sang máy mới:
 | Request Gemini, cả hệ thống | 100 request/ngày (UTC) | `GEMINI_DAILY_LIMIT` trong `.env` |
 | Nhờ AI viết nháp câu thi / đoạn văn (quản trị) | Tối đa 8 câu hoặc 1 đoạn mỗi lần, mỗi lần 2 request (viết + giải lại) | `QuestionDraftService`, `PassageDraftService` |
 | Từ sinh câu ví dụ thất bại | Thất bại 2 lần thì bỏ qua từ đó 24 giờ | `QuizService` |
+| AI viết câu ví dụ mỗi đêm cho từ trong bài còn thiếu câu (4:45, trước khi sinh câu thi) | 20 request/đêm, mỗi request 40 từ; từ thất bại 2 lần bỏ qua 7 ngày | `SENTENCE_JOB_REQUESTS` trong `.env` (0 = tắt) |
+| Nút "Sinh câu ví dụ" ở trang quản trị từ vựng | 1 request mỗi lần bấm (endpoint nhận tối đa 5) | `AdminCharacterController` |
 
 - **IP người dùng do nginx xác định.** nginx ghi đè header `X-Forwarded-For`, Spring (`server.forward-headers-strategy: native`) chỉ tin header này khi request đến từ mạng nội bộ, và backend chỉ mở cổng trên `127.0.0.1`. Vì vậy client không thể tự đặt IP giả để vượt giới hạn đăng nhập.
 - **Câu ví dụ được lưu lại.** Mỗi lần tạo trắc nghiệm, bộ câu hỏi luôn mới, nhưng câu ví dụ đã lưu trong database thì được dùng lại. Gemini chỉ được gọi cho từ chưa có câu.
+- **Câu ví dụ do AI viết được đánh dấu** (`kanji.example_sentence_source = AI`, migration V42). Câu thi sinh tự động từ câu đó vào hàng chờ duyệt thay vì vào đề ngay; người quản trị sửa câu thì câu thành soạn tay.
 - **Tự đăng ký mặc định tắt** (`REGISTRATION_ENABLED=false`) để người lạ không tự tạo tài khoản được; quản trị viên cấp tài khoản ở trang admin. Đặt `REGISTRATION_ENABLED=true` trong `.env` để mở trang đăng ký. Chạy backend bằng `./mvnw spring-boot:run` (profile `dev`) thì mặc định bật.
 - **Đăng ký trùng tên hay trùng email đều báo cùng một câu**, để người ngoài không dò được email nào đã có tài khoản.
 

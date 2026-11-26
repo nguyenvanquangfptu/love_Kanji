@@ -4,6 +4,7 @@ import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.dto.KanjiRequest;
 import com.kanjimastery.backend.dto.KanjiResponse;
 import com.kanjimastery.backend.exception.BadRequestException;
+import com.kanjimastery.backend.model.ExampleSentenceSource;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.Tag;
 import com.kanjimastery.backend.model.WordCharacter;
@@ -187,6 +188,25 @@ class KanjiServiceTest {
                 .hasMessageContaining("COUNT_MISMATCH");
         assertThat(word.getHanViet()).isEqualTo("LẠC VÀO");
         verify(kanjiRepository, never()).save(any());
+    }
+
+    @Test
+    void update_shouldMarkAnEditedSentenceAsManual_andKeepTheSourceOfAnUnchangedOne() {
+        Kanji station = Kanji.builder().id(4L).character("駅").reading("えき").hanViet("DỊCH").meaning("Nhà ga")
+                .exampleSentence("駅まで歩きます。").exampleSentenceSource(ExampleSentenceSource.AI).strokeCount(14)
+                .jlptLevel(JlptLevel.N5).build();
+        when(kanjiRepository.findById(4L)).thenReturn(Optional.of(station));
+        when(kanjiRepository.save(any(Kanji.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        KanjiRequest sameSentence = request("駅", "えき");
+        sameSentence.setExampleSentence("駅まで歩きます。");
+
+        kanjiService.update(4L, sameSentence);
+        assertThat(station.getExampleSentenceSource()).as("câu AI chưa sửa: vẫn là AI").isEqualTo(ExampleSentenceSource.AI);
+
+        KanjiRequest edited = request("駅", "えき");
+        edited.setExampleSentence("駅で友だちを待ちます。");
+        kanjiService.update(4L, edited);
+        assertThat(station.getExampleSentenceSource()).isEqualTo(ExampleSentenceSource.MANUAL);
     }
 
     private static KanjiRequest request(String character, String reading, Long... tagIds) {

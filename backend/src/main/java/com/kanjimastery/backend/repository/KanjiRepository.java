@@ -62,8 +62,31 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
     /** Gọi từ luồng nền sau khi request quiz đã trả về, nên tự mở transaction riêng. */
     @Transactional
     @Modifying
-    @Query("UPDATE Kanji k SET k.exampleSentence = :sentence WHERE k.id = :id AND k.exampleSentence IS NULL")
+    @Query("""
+            UPDATE Kanji k SET k.exampleSentence = :sentence,
+                               k.exampleSentenceSource = com.kanjimastery.backend.model.ExampleSentenceSource.AI
+            WHERE k.id = :id AND k.exampleSentence IS NULL
+            """)
     int saveExampleSentenceIfAbsent(@Param("id") Long id, @Param("sentence") String sentence);
+
+    /**
+     * Từ trong các bài học chưa có câu ví dụ, cấp độ dễ trước (N5 → N1) - để AI viết câu dần mỗi đêm. Từ chưa gắn bài
+     * nào không cần câu (không vào quiz, không sinh câu thi).
+     */
+    @Query(value = """
+            SELECT k.* FROM kanji k
+            WHERE k.example_sentence IS NULL
+              AND EXISTS (SELECT 1 FROM kanji_tags kt WHERE kt.kanji_id = k.id)
+            ORDER BY CASE k.jlpt_level WHEN 'N5' THEN 1 WHEN 'N4' THEN 2 WHEN 'N3' THEN 3 WHEN 'N2' THEN 4 ELSE 5 END, k.id
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<Kanji> findWithoutExampleSentence(@Param("limit") int limit);
+
+    @Query(value = """
+            SELECT COUNT(*) FROM kanji k
+            WHERE k.example_sentence IS NULL AND EXISTS (SELECT 1 FROM kanji_tags kt WHERE kt.kanji_id = k.id)
+            """, nativeQuery = true)
+    long countWithoutExampleSentence();
 
     /** Chỉ lưu khi từ chưa có mẹo nhớ, để hai người cùng nhờ AI một lúc vẫn thấy chung một mẹo nhớ. */
     @Transactional

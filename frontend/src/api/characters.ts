@@ -2,6 +2,7 @@ import { apiClient } from './client'
 import type {
   CharacterDetail,
   CharacterRebuildReport,
+  ExampleSentenceResult,
   KanjiResponse,
   StrokeFixResult,
   VocabularyQualityReport,
@@ -39,6 +40,12 @@ export const characterApi = {
   /** Sửa số nét theo bảng số nét từng chữ; dryRun chỉ đếm. */
   fixStrokeCounts: (dryRun: boolean) =>
     apiClient.post<StrokeFixResult>('/admin/characters/stroke-counts/fix', null, { params: { dryRun } }).then((r) => r.data),
+
+  /** Nhờ AI viết câu ví dụ cho từ còn thiếu câu ngay (1-5 request, mỗi request 40 từ). */
+  fillExampleSentences: (requests = 1) =>
+    apiClient
+      .post<ExampleSentenceResult>('/admin/characters/example-sentences', null, { params: { requests } })
+      .then((r) => r.data),
 
   /** Sửa âm Hán Việt của một từ, tách lại từng chữ ngay. */
   updateHanViet: (id: number, hanViet: string) =>

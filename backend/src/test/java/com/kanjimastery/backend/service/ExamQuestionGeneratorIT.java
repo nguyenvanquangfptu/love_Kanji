@@ -4,6 +4,8 @@ import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.AbstractIntegrationTest;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionSource;
+import com.kanjimastery.backend.model.ExamQuestionStatus;
+import com.kanjimastery.backend.model.ExampleSentenceSource;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.Tag;
@@ -89,5 +91,35 @@ class ExamQuestionGeneratorIT extends AbstractIntegrationTest {
         });
         assertThat(saved).filteredOn(question -> JlptQuestionType.CONTEXT.equals(question.getQuestionType())).hasSize(5);
         assertThat(questionRepository.generatedQuestionWords(LEVEL.name())).hasSize(20);
+    }
+
+    /** V42: câu do AI viết (lưu qua saveExampleSentenceIfAbsent) mang nguồn AI; câu thi dựng từ câu đó chờ duyệt. */
+    @Test
+    void questionsBuiltOnAnAiSentence_shouldWaitForReview_whileTheOthersGoStraightIn() {
+        Kanji station = kanjiRepository.save(Kanji.builder().character("駅").reading("えき").meaning("Nhà ga")
+                .hanViet("").jlptLevel(JlptLevel.N5).strokeCount(14).tags(new HashSet<>(Set.of(lesson))).build());
+        wordIds.add(station.getId());
+        assertThat(kanjiRepository.findWithoutExampleSentence(1000)).extracting(Kanji::getId).contains(station.getId());
+
+        assertThat(kanjiRepository.saveExampleSentenceIfAbsent(station.getId(), "家から駅まで歩きます。")).isEqualTo(1);
+        assertThat(kanjiRepository.saveExampleSentenceIfAbsent(station.getId(), "二つ目の文。")).as("đã có câu thì giữ")
+                .isZero();
+        assertThat(kanjiRepository.findById(station.getId()).orElseThrow().getExampleSentenceSource())
+                .isEqualTo(ExampleSentenceSource.AI);
+        assertThat(kanjiRepository.findWithoutExampleSentence(1000)).extracting(Kanji::getId).doesNotContain(station.getId());
+
+        generator.generate(LEVEL.name());
+
+        List<ExamQuestion> generated = questionRepository.findAllWithWordsByIdIn(questionRepository.findAll().stream()
+                .filter(question -> LEVEL.equals(question.getJlptLevel())).map(ExamQuestion::getId).toList());
+        assertThat(generated).filteredOn(question -> question.getKanjiIds().contains(station.getId()))
+                .isNotEmpty()
+                .allSatisfy(question -> {
+                    assertThat(question.getStatus()).isEqualTo(ExamQuestionStatus.DRAFT);
+                    assertThat(question.getReviewNote()).isEqualTo(ExamQuestionGenerator.AI_SENTENCE_NOTE);
+                });
+        assertThat(generated).filteredOn(question -> !question.getKanjiIds().contains(station.getId()))
+                .isNotEmpty()
+                .allSatisfy(question -> assertThat(question.getStatus()).isEqualTo(ExamQuestionStatus.APPROVED));
     }
 }

@@ -47,9 +47,14 @@ public class Kanji {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String meaning;
 
-    /** Câu ví dụ tiếng Nhật (chứa nguyên văn {@link #character}) do AI sinh, cache lại để không gọi lại API. */
+    /** Câu ví dụ tiếng Nhật (chứa nguyên văn {@link #character}), soạn tay hoặc do AI sinh rồi lưu lại để không gọi lại API. */
     @Column(name = "example_sentence", columnDefinition = "TEXT")
     private String exampleSentence;
+
+    /** Ai viết {@link #exampleSentence}; null = câu có từ trước V42, không rõ nguồn (coi như soạn tay). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "example_sentence_source", length = 10)
+    private ExampleSentenceSource exampleSentenceSource;
 
     /** Mẹo nhớ chung do AI sinh (dựa trên âm Hán Việt / hình chữ), sinh một lần rồi dùng cho mọi người. */
     @Column(columnDefinition = "TEXT")

@@ -4,6 +4,7 @@ import com.kanjimastery.backend.dto.CharacterRebuildReport;
 import com.kanjimastery.backend.dto.HanVietRequest;
 import com.kanjimastery.backend.dto.KanjiResponse;
 import com.kanjimastery.backend.dto.VocabularyQualityReport;
+import com.kanjimastery.backend.service.ExampleSentenceService;
 import com.kanjimastery.backend.service.KanjiService;
 import com.kanjimastery.backend.service.VocabularyQualityService;
 import com.kanjimastery.backend.service.WordCharacterService;
@@ -29,9 +30,13 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Admin - Chữ Hán", description = "Tách Hán Việt từng chữ cho kho từ vựng")
 public class AdminCharacterController {
 
+    /** Số request Gemini tối đa của một lần bấm "Sinh câu ví dụ" - phần lớn hạn mức để dành cho người học. */
+    private static final int MAX_SENTENCE_REQUESTS = 5;
+
     private final WordCharacterService wordCharacterService;
     private final VocabularyQualityService vocabularyQualityService;
     private final KanjiService kanjiService;
+    private final ExampleSentenceService exampleSentenceService;
 
     @Operation(summary = "Tách lại Hán Việt từng chữ cho cả kho từ",
             description = "Chạy sau khi nhập từ vựng thẳng vào DB. Mặc định chỉ thử (dryRun=true) và trả báo cáo các từ "
@@ -54,6 +59,15 @@ public class AdminCharacterController {
     public ResponseEntity<VocabularyQualityReport.StrokeFix> fixStrokeCounts(
             @RequestParam(defaultValue = "true") boolean dryRun) {
         return ResponseEntity.ok(vocabularyQualityService.fixStrokeCounts(dryRun));
+    }
+
+    @Operation(summary = "Nhờ AI viết câu ví dụ cho từ còn thiếu câu",
+            description = "Chạy ngay một lượt nhỏ thay vì đợi job đêm: tối đa " + MAX_SENTENCE_REQUESTS + " request Gemini, "
+                    + "mỗi request 40 từ, dễ trước (N5 → N1). Câu thi sinh từ câu do AI viết sẽ chờ duyệt.")
+    @PostMapping("/example-sentences")
+    public ResponseEntity<ExampleSentenceService.Result> fillExampleSentences(
+            @RequestParam(defaultValue = "1") int requests) {
+        return ResponseEntity.ok(exampleSentenceService.fillMissing(Math.min(Math.max(requests, 1), MAX_SENTENCE_REQUESTS)));
     }
 
     @Operation(summary = "Sửa âm Hán Việt của một từ", description = "Tách lại từng chữ ngay; không tách được thì báo lỗi 400.")

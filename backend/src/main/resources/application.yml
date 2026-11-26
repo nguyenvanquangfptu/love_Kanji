@@ -103,6 +103,10 @@ app:
     # Trần số request Gemini mỗi ngày (theo giờ UTC) cho cả hệ thống. Vượt trần thì trắc nghiệm vẫn chạy,
     # chỉ không sinh câu ví dụ mới cho tới ngày hôm sau. Đặt 0 để bỏ giới hạn.
     daily-request-limit: ${GEMINI_DAILY_LIMIT:100}
+    # Mỗi đêm (trước question-generation-cron) nhờ AI viết câu ví dụ cho từ trong bài học còn thiếu câu, tối đa
+    # chừng này request (mỗi request 40 từ) - phần còn lại của daily-request-limit để dành cho người học. 0 = tắt.
+    sentence-job-cron: "0 45 4 * * *"
+    sentence-job-requests: ${SENTENCE_JOB_REQUESTS:20}
 
 springdoc:
   swagger-ui:

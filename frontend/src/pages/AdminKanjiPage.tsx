@@ -9,11 +9,13 @@ import {
   Pencil,
   Plus,
   Scissors,
-  ShieldCheck,
   Search,
+  ShieldCheck,
+  Sparkles,
   Tags as TagsIcon,
   Trash2,
 } from 'lucide-react'
+import { characterApi } from '@/api/characters'
 import { examApi } from '@/api/exam'
 import { kanjiApi } from '@/api/kanji'
 import { tagApi } from '@/api/tags'
@@ -120,6 +122,11 @@ export function AdminKanjiPage() {
 
   // Câu thi đọc/viết kiểu đề JLPT và câu hỏi nghĩa cho các từ trong bài (máy chủ cũng tự chạy mỗi sáng).
   const generateQuestions = useMutation({ mutationFn: (level: string) => examApi.generateQuestions(level) })
+  // AI viết câu ví dụ cho từ còn thiếu câu (máy chủ cũng tự chạy mỗi đêm); mỗi lần bấm dùng 1 request Gemini.
+  const fillSentences = useMutation({
+    mutationFn: () => characterApi.fillExampleSentences(1),
+    onSuccess: () => invalidateAfterChange(),
+  })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => kanjiApi.delete(id),
@@ -177,6 +184,16 @@ export function AdminKanjiPage() {
                   {generateQuestions.isPending ? 'Đang sinh câu thi...' : `Sinh câu thi ${activeGridLevel}`}
                 </Button>
               )}
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={fillSentences.isPending}
+                title="Nhờ AI viết câu ví dụ cho 40 từ còn thiếu câu (1 request Gemini)"
+                onClick={() => fillSentences.mutate()}
+              >
+                <Sparkles className="h-4 w-4" />
+                {fillSentences.isPending ? 'AI đang viết câu...' : 'Sinh câu ví dụ'}
+              </Button>
               <Button variant="outline" size="sm" onClick={() => setCharacterRebuildOpen(true)}>
                 <Scissors className="h-4 w-4" /> Hán Việt từng chữ
               </Button>
@@ -198,6 +215,15 @@ export function AdminKanjiPage() {
           </p>
         )}
         {generateQuestions.isError && <Alert className="mb-4">{extractErrorMessage(generateQuestions.error)}</Alert>}
+        {fillSentences.isSuccess && (
+          <p className="mb-4 rounded-2xl border-2 border-primary/30 bg-primary-soft px-4 py-3 text-sm font-semibold text-primary-dark">
+            AI đã viết {fillSentences.data.saved} câu ví dụ ({fillSentences.data.requests} request) - còn{' '}
+            {fillSentences.data.stillMissing} từ chưa có câu.
+            {fillSentences.data.stopped && ` Dừng sớm: ${fillSentences.data.stopped}.`} Câu thi sinh từ câu do AI viết sẽ
+            chờ duyệt.
+          </p>
+        )}
+        {fillSentences.isError && <Alert className="mb-4">{extractErrorMessage(fillSentences.error)}</Alert>}
 
         <CardButton onClick={() => openBook('all')} className="mb-6 flex w-full items-center gap-4 p-4">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border-b-4 border-secondary-edge bg-secondary text-white">

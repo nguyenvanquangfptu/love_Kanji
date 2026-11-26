@@ -511,6 +511,15 @@ export interface StrokeFixResult {
   changed: number
 }
 
+/** Một lượt AI viết câu ví dụ cho từ còn thiếu câu. */
+export interface ExampleSentenceResult {
+  requests: number
+  saved: number
+  stillMissing: number
+  /** Lý do dừng sớm (chưa cấu hình AI, hết hạn mức...); null nếu chạy đủ. */
+  stopped: string | null
+}
+
 /** Kết quả nhập một bài từ vựng; có lỗi thì không ghi gì. */
 export interface VocabularyImportResult {
   lesson: string

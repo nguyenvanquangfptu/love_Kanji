@@ -4,8 +4,11 @@ import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.model.QuizDirection;
 import com.kanjimastery.backend.model.ExamQuestion;
 import com.kanjimastery.backend.model.ExamQuestionSource;
+import com.kanjimastery.backend.model.ExamQuestionStatus;
+import com.kanjimastery.backend.model.ExampleSentenceSource;
 import com.kanjimastery.backend.model.JlptQuestionType;
 import com.kanjimastery.backend.model.Kanji;
+import com.kanjimastery.backend.model.ReviewState;
 import com.kanjimastery.backend.repository.ExamQuestionRepository;
 import com.kanjimastery.backend.repository.KanjiRepository;
 import com.kanjimastery.backend.service.QuestionBuilder.BuiltQuestion;
@@ -66,6 +69,7 @@ public class ExamQuestionGenerator {
     private static final Set<PartOfSpeech> CONTEXT_CLASSES = EnumSet.of(PartOfSpeech.NOUN, PartOfSpeech.VERB);
     /** Đề có câu 表記 viết bằng katakana: chỉ N5. */
     private static final Set<JlptLevel> KATAKANA_ORTHOGRAPHY_LEVELS = EnumSet.of(JlptLevel.N5);
+    static final String AI_SENTENCE_NOTE = "Câu ví dụ do AI viết - đọc lại câu và đáp án trước khi duyệt";
     static final String KATAKANA_ORTHOGRAPHY_TEXT = "Chọn cách viết bằng katakana của từ được gạch chân.";
 
     private final KanjiRepository kanjiRepository;
@@ -181,6 +185,7 @@ public class ExamQuestionGenerator {
         };
         return Optional.of(question(level, word, questionText, choices, question.correctIndex())
                 .sentence(question.sentence())
+                .review(review(word, question.sentence() != null))
                 .highlight(question.sentence() == null ? null : question.prompt())
                 .skill(question.direction())
                 .questionType(questionType)
@@ -224,6 +229,7 @@ public class ExamQuestionGenerator {
             questions.add(question(level, word, BLANK + "に 入る ことばを えらんで ください。", choices,
                     choices.indexOf(word.getCharacter()))
                     .sentence(sentence)
+                    .review(review(word, true))
                     .skill(MEANING)
                     .questionType(JlptQuestionType.CONTEXT)
                     .build());
@@ -248,6 +254,7 @@ public class ExamQuestionGenerator {
             String hiragana = KatakanaSpelling.toHiragana(katakana);
             questions.add(question(level, word, KATAKANA_ORTHOGRAPHY_TEXT, choices, choices.indexOf(katakana))
                     .sentence(word.getExampleSentence().replace(katakana, hiragana))
+                    .review(review(word, true))
                     .highlight(hiragana)
                     .skill(READING_TO_KANJI)
                     .questionType(JlptQuestionType.ORTHOGRAPHY)
@@ -315,6 +322,17 @@ public class ExamQuestionGenerator {
                 .explanation(word.getCharacter() + readingInBrackets(word) + ": " + word.getMeaning())
                 .source(ExamQuestionSource.GENERATED)
                 .kanjiIds(Set.of(word.getId()));
+    }
+
+    /**
+     * Câu thi dựng từ câu ví dụ do AI viết phải chờ người duyệt (câu AI có thể sai tự nhiên hay có hai đáp án); câu soạn
+     * tay hoặc câu hỏi nghĩa không dùng câu ví dụ thì vào đề ngay như trước.
+     */
+    static ReviewState review(Kanji word, boolean usesSentence) {
+        if (usesSentence && ExampleSentenceSource.AI.equals(word.getExampleSentenceSource())) {
+            return new ReviewState(ExamQuestionStatus.DRAFT, null, AI_SENTENCE_NOTE, null);
+        }
+        return new ReviewState(ExamQuestionStatus.APPROVED);
     }
 
     private static String readingInBrackets(Kanji word) {

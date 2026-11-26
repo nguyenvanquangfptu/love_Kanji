@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
+import com.kanjimastery.backend.model.ExampleSentenceSource;
 import com.kanjimastery.backend.model.Kanji;
 import com.kanjimastery.backend.model.Tag;
 import com.kanjimastery.backend.repository.KanjiRepository;
@@ -24,6 +25,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -109,7 +111,12 @@ public class KanjiService {
         kanji.setStrokeCount(strokeCount(kanji.getCharacter(), request.getStrokeCount()));
         kanji.setJlptLevel(Levels.require(request.getJlptLevel()));
         kanji.setMeaning(request.getMeaning());
-        kanji.setExampleSentence(StringUtils.hasText(request.getExampleSentence()) ? request.getExampleSentence().trim() : null);
+        String sentence = StringUtils.hasText(request.getExampleSentence()) ? request.getExampleSentence().trim() : null;
+        // Người quản trị sửa câu thì câu là soạn tay; giữ nguyên câu (kể cả câu AI viết) thì giữ nguồn cũ.
+        if (!Objects.equals(sentence, kanji.getExampleSentence())) {
+            kanji.setExampleSentence(sentence);
+            kanji.setExampleSentenceSource(sentence == null ? null : ExampleSentenceSource.MANUAL);
+        }
         if (!CollectionUtils.isEmpty(request.getTagIds())) {
             Set<Tag> tags = new HashSet<>(tagRepository.findAllById(request.getTagIds()));
             kanji.setTags(tags);
