@@ -7,7 +7,7 @@ import { extractErrorMessage } from '@/api/client'
 import type { ProgressResponse, QuizDirection } from '@/api/types'
 import { formatDay } from '@/lib/dates'
 import { cn } from '@/lib/utils'
-import { answersWithMeaning } from '@/lib/quizStart'
+import { answersWithMeaning, useQuizStart } from '@/lib/quizStart'
 import { ChartLegend, ColumnChart, type ChartColumn, type ColumnSeries } from '@/components/ColumnChart'
 import { PageHeader } from '@/components/PageHeader'
 import { StatTile } from '@/components/StatTile'
@@ -296,9 +296,25 @@ function DirectionCard({ directions }: { directions: ProgressResponse['direction
   )
 }
 
+/**
+ * Đáp án sai hay chọn nhất, và nút luyện riêng các từ đó cùng với từ bị nhầm sang (nếu có trong kho) - đặt các từ hay
+ * lẫn cạnh nhau để phân biệt.
+ */
 function ConfusionCard({ confusions }: { confusions: ProgressResponse['confusions'] }) {
+  const quiz = useQuizStart()
+  const wordIds = [
+    ...new Set(confusions.flatMap((c) => (c.chosenKanjiId === null ? [c.kanjiId] : [c.kanjiId, c.chosenKanjiId]))),
+  ]
   return (
     <ChartCard title="Hay nhầm nhất" subtitle="Đáp án sai bạn chọn nhiều lần nhất trong trắc nghiệm, 90 ngày gần nhất.">
+      {quiz.dialog}
+      <Button
+        variant="secondary"
+        className="mb-3 w-full sm:w-auto"
+        onClick={() => quiz.start(`/study/quiz?kanjiIds=${wordIds.join(',')}&from=progress`)}
+      >
+        <Target className="h-5 w-5" /> Luyện các cặp này ({wordIds.length} từ)
+      </Button>
       <div className="flex flex-col divide-y-2 divide-border">
         {confusions.map((confusion) => (
           <div key={`${confusion.kanjiId}-${confusion.direction}-${confusion.chosenAnswer}`} className="flex items-center gap-3 py-2">

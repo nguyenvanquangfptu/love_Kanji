@@ -17,10 +17,13 @@ import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -37,6 +40,8 @@ public class ProgressService {
     static final int CONFUSION_DAYS = 90;
     static final int MAX_CONFUSIONS = 8;
     static final int CALIBRATION_DAYS = 30;
+    /** Đuôi okurigana của cách viết: 見る -> 見 (cột character của từ chữ Hán đơn chỉ có chữ Hán). */
+    private static final Pattern TRAILING_HIRAGANA = Pattern.compile("\\p{IsHiragana}+$");
     /** Lịch nhiệt: 12 tuần gần nhất. */
     static final int CALENDAR_DAYS = 84;
     /** Ít lượt ôn hơn thì tỉ lệ nhớ thật dao động quá nhiều để so với dự đoán. */
@@ -143,14 +148,76 @@ public class ProgressService {
         Map<Long, Kanji> words = kanjiRepository.findAllById(mistakes.stream().map(QuizMistake::getKanjiId).toList())
                 .stream()
                 .collect(Collectors.toMap(Kanji::getId, Function.identity()));
+        Map<QuizMistake, Long> chosenWords = chosenWords(mistakes);
         List<ProgressResponse.Confusion> result = new ArrayList<>();
         for (QuizMistake mistake : mistakes) {
             Kanji word = words.get(mistake.getKanjiId());
             if (word != null) {
                 result.add(new ProgressResponse.Confusion(word.getId(), word.getCharacter(), word.getReading(),
-                        word.getMeaning(), mistake.getDirection(), mistake.getChosenAnswer(), mistake.getTimes()));
+                        word.getMeaning(), mistake.getDirection(), mistake.getChosenAnswer(), mistake.getTimes(),
+                        chosenWords.get(mistake)));
             }
         }
         return result;
+    }
+
+    /**
+     * Từ trong kho của đáp án chọn nhầm, để luyện cặp hay nhầm cùng nhau: cách viết (chọn cách viết, điền từ), cách đọc
+     * (chọn / gõ cách đọc) hay nghĩa (chọn nghĩa, nghe). Chỉ nhận khi đúng một từ khớp và không phải chính từ được hỏi;
+     * mỗi loại một truy vấn.
+     */
+    private Map<QuizMistake, Long> chosenWords(List<QuizMistake> mistakes) {
+        Map<String, List<Kanji>> bySpelling = new HashMap<>();
+        Map<String, List<Kanji>> byReading = new HashMap<>();
+        Map<String, List<Kanji>> byMeaning = new HashMap<>();
+        Set<String> spellings = new HashSet<>();
+        Set<String> readings = new HashSet<>();
+        Set<String> meanings = new HashSet<>();
+        for (QuizMistake mistake : mistakes) {
+            String chosen = mistake.getChosenAnswer();
+            switch (mistake.getDirection()) {
+                case READING_TO_KANJI, CLOZE -> {
+                    spellings.add(chosen);
+                    spellings.add(TRAILING_HIRAGANA.matcher(chosen).replaceFirst(""));
+                }
+                case KANJI_TO_READING, TYPE_READING -> readings.add(chosen);
+                case MEANING, LISTENING -> meanings.add(chosen);
+                case RECALL_WORD -> {
+                }
+            }
+        }
+        spellings.remove("");
+        if (!spellings.isEmpty()) {
+            kanjiRepository.findAllByCharacterIn(spellings).forEach(word -> bySpelling
+                    .computeIfAbsent(ReadingMatcher.writtenForm(word.getCharacter(), word.getReading()),
+                            key -> new ArrayList<>()).add(word));
+        }
+        if (!readings.isEmpty()) {
+            kanjiRepository.findAllByDisplayReadingIn(readings).forEach(word -> byReading
+                    .computeIfAbsent(ReadingMatcher.displayReading(word.getReading()), key -> new ArrayList<>())
+                    .add(word));
+        }
+        if (!meanings.isEmpty()) {
+            kanjiRepository.findAllByMeaningIn(meanings).forEach(word -> byMeaning
+                    .computeIfAbsent(word.getMeaning(), key -> new ArrayList<>()).add(word));
+        }
+        Map<QuizMistake, Long> chosenWords = new HashMap<>();
+        for (QuizMistake mistake : mistakes) {
+            Map<String, List<Kanji>> index = switch (mistake.getDirection()) {
+                case READING_TO_KANJI, CLOZE -> bySpelling;
+                case KANJI_TO_READING, TYPE_READING -> byReading;
+                case MEANING, LISTENING -> byMeaning;
+                case RECALL_WORD -> Map.of();
+            };
+            List<Long> ids = index.getOrDefault(mistake.getChosenAnswer(), List.of()).stream()
+                    .map(Kanji::getId)
+                    .filter(id -> !id.equals(mistake.getKanjiId()))
+                    .distinct()
+                    .toList();
+            if (ids.size() == 1) {
+                chosenWords.put(mistake, ids.get(0));
+            }
+        }
+        return chosenWords;
     }
 }

@@ -222,6 +222,8 @@ export interface ProgressResponse {
     direction: QuizDirection
     chosenAnswer: string
     times: number
+    /** Từ trong kho mà đáp án chọn nhầm thuộc về; null nếu không rõ (không có, hoặc nhiều từ cùng khớp). */
+    chosenKanjiId: number | null
   }[]
   /**
    * 30 ngày gần nhất: lúc đến lượt ôn, FSRS đoán còn nhớ bao nhiêu (predicted) và thật sự nhớ được bao nhiêu (actual),

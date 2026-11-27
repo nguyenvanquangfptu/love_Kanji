@@ -85,5 +85,7 @@ public class ProgressResponse {
         private QuizDirection direction;
         private String chosenAnswer;
         private long times;
+        /** Từ trong kho mà đáp án chọn nhầm thuộc về (cách viết, cách đọc hay nghĩa của đúng một từ); null nếu không rõ. */
+        private Long chosenKanjiId;
     }
 }

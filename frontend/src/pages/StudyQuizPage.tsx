@@ -78,6 +78,12 @@ const CHOICE_TEXT: Record<QuizDirection, string> = {
   LISTENING: 'text-base',
 }
 
+/** Trang mở trắc nghiệm (?from=...) để quay về khi xong. */
+const FROM_PAGES: Record<string, { to: string; label: string } | undefined> = {
+  today: { to: '/today', label: 'Về Học hôm nay' },
+  progress: { to: '/progress', label: 'Về trang Tiến bộ' },
+}
+
 const PRAISES = ['Chính xác!', 'Tuyệt vời!', 'Giỏi lắm!', 'Xuất sắc!', 'Quá đỉnh!']
 
 export function StudyQuizPage() {
@@ -266,10 +272,10 @@ export function StudyQuizPage() {
 
   if (!wordsQuiz && !hardWordsQuiz && tagId === null && levelQuiz === null) return <Navigate to="/study" replace />
 
-  // ?from=today: mở từ trang Học hôm nay - xong thì quay về đó.
-  const fromToday = searchParams.get('from') === 'today'
-  const exitTo = fromToday
-    ? '/today'
+  // ?from=today / ?from=progress: mở từ trang Học hôm nay / Tiến bộ - xong thì quay về đó.
+  const from = FROM_PAGES[searchParams.get('from') ?? '']
+  const exitTo = from
+    ? from.to
     : wordsQuiz
     ? examId
       ? `/exam/${examId}/result`
@@ -332,8 +338,8 @@ export function StudyQuizPage() {
             }
             exitTo={exitTo}
             exitLabel={
-              fromToday
-                ? 'Về Học hôm nay'
+              from
+                ? from.label
                 : wordsQuiz
                 ? 'Về kết quả bài thi'
                 : hardWordsQuiz

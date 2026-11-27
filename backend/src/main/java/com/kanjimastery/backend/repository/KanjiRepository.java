@@ -36,6 +36,9 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
 
     List<Kanji> findAllByCharacterIn(Collection<String> characters);
 
+    /** Các từ có nghĩa đúng bằng một trong {@code meanings} - để biết đáp án nghĩa người học chọn nhầm là của từ nào. */
+    List<Kanji> findAllByMeaningIn(Collection<String> meanings);
+
     long countByIdIn(Collection<Long> ids);
 
     long countByTags_Id(Long tagId);

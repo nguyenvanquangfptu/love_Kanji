@@ -27,6 +27,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -94,6 +95,9 @@ class ProgressServiceTest {
         // Từ 99 đã bị xoá khỏi kho: bỏ qua.
         when(kanjiRepository.findAllById(anyList())).thenReturn(List.of(
                 Kanji.builder().id(60L).character("待つ").reading("まつ").meaning("Đợi").build()));
+        // Cách viết chọn nhầm là một từ có thật trong kho: luyện cặp này cùng nhau.
+        when(kanjiRepository.findAllByCharacterIn(anyCollection())).thenReturn(List.of(
+                Kanji.builder().id(61L).character("持つ").reading("もつ").meaning("Cầm").build()));
         givenCalibration(0, null, null);
 
         ProgressResponse progress = service.get(USER_ID);
@@ -107,7 +111,33 @@ class ProgressServiceTest {
             assertThat(confusion.getCharacter()).isEqualTo("待つ");
             assertThat(confusion.getChosenAnswer()).isEqualTo("持つ");
             assertThat(confusion.getTimes()).isEqualTo(3);
+            assertThat(confusion.getChosenKanjiId()).isEqualTo(61L);
         });
+    }
+
+    @Test
+    void confusions_shouldNameTheWordChosenByMistake_onlyWhenExactlyOneWordFits() {
+        when(reviewLogRepository.activitySince(eq(USER_ID), any())).thenReturn(List.of());
+        when(reviewLogRepository.quizDirectionStats(eq(USER_ID), any())).thenReturn(List.of());
+        when(reviewLogRepository.topQuizMistakes(eq(USER_ID), any(), anyInt())).thenReturn(List.of(
+                mistake(60L, QuizDirection.MEANING, "Cầm", 2),
+                mistake(60L, QuizDirection.KANJI_TO_READING, "かう", 2),
+                mistake(60L, QuizDirection.CLOZE, "見る", 1)));
+        when(kanjiRepository.findAllById(anyList())).thenReturn(List.of(
+                Kanji.builder().id(60L).character("待つ").reading("まつ").meaning("Đợi").build()));
+        when(kanjiRepository.findAllByMeaningIn(anyCollection())).thenReturn(List.of(
+                Kanji.builder().id(61L).character("持つ").reading("もつ").meaning("Cầm").build()));
+        // かう: 買う và 飼う - không biết là từ nào.
+        when(kanjiRepository.findAllByDisplayReadingIn(anyCollection())).thenReturn(List.of(
+                Kanji.builder().id(62L).character("買う").reading("かう").build(),
+                Kanji.builder().id(63L).character("飼う").reading("かう").build()));
+        // 見る điền từ: cột character chỉ có 見, cách đọc み(る).
+        when(kanjiRepository.findAllByCharacterIn(anyCollection())).thenReturn(List.of(
+                Kanji.builder().id(64L).character("見").reading("み(る)").build()));
+        givenCalibration(0, null, null);
+
+        assertThat(service.get(USER_ID).getConfusions()).extracting(ProgressResponse.Confusion::getChosenKanjiId)
+                .containsExactly(61L, null, 64L);
     }
 
     @Test
@@ -196,6 +226,10 @@ class ProgressServiceTest {
     }
 
     private static QuizMistake mistake(Long kanjiId, String chosenAnswer, long times) {
+        return mistake(kanjiId, QuizDirection.READING_TO_KANJI, chosenAnswer, times);
+    }
+
+    private static QuizMistake mistake(Long kanjiId, QuizDirection direction, String chosenAnswer, long times) {
         return new QuizMistake() {
             @Override
             public Long getKanjiId() {
@@ -204,7 +238,7 @@ class ProgressServiceTest {
 
             @Override
             public QuizDirection getDirection() {
-                return QuizDirection.READING_TO_KANJI;
+                return direction;
             }
 
             @Override
