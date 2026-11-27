@@ -41,6 +41,7 @@ import java.util.random.RandomGenerator;
 
 import static com.kanjimastery.backend.model.QuizDirection.CLOZE;
 import static com.kanjimastery.backend.model.QuizDirection.KANJI_TO_READING;
+import static com.kanjimastery.backend.model.QuizDirection.LISTENING;
 import static com.kanjimastery.backend.model.QuizDirection.MEANING;
 import static com.kanjimastery.backend.model.QuizDirection.READING_TO_KANJI;
 import static com.kanjimastery.backend.model.QuizDirection.TYPE_READING;
@@ -64,6 +65,8 @@ public class QuizService {
     public static final String ANSWER_CHOICE = "choice";
     public static final String ANSWER_TYPING = "typing";
     public static final String ANSWER_CLOZE = "cloze";
+    /** Nghe cách đọc (giọng đọc của trình duyệt), chọn nghĩa - không hiện chữ, không có câu ví dụ. */
+    public static final String ANSWER_LISTENING = "listening";
     /** Ô trống thay cho từ trong câu điền từ - giao diện vẽ thành ô trống. */
     static final String BLANK = "（　　）";
     private static final int DEFAULT_QUESTIONS = 10;
@@ -107,7 +110,8 @@ public class QuizService {
 
     /**
      * @param answer {@link #ANSWER_TYPING}: mọi câu hỏi gõ cách đọc, chỉ lấy từ có chữ Hán và cách đọc;
-     *               {@link #ANSWER_CLOZE}: mọi câu hỏi điền từ vào câu ví dụ, chỉ lấy từ đã có câu ví dụ
+     *               {@link #ANSWER_CLOZE}: mọi câu hỏi điền từ vào câu ví dụ, chỉ lấy từ đã có câu ví dụ;
+     *               {@link #ANSWER_LISTENING}: mọi câu hỏi nghe rồi chọn nghĩa
      */
     @Transactional(readOnly = true)
     public List<QuizQuestionResponse> generate(String username, Long tagId, String level, Integer size, String mode,
@@ -117,8 +121,9 @@ public class QuizService {
             case ANSWER_CHOICE -> null;
             case ANSWER_TYPING -> TYPE_READING;
             case ANSWER_CLOZE -> CLOZE;
-            default -> throw new BadRequestException("answer phải là " + ANSWER_CHOICE + ", " + ANSWER_TYPING + " hoặc "
-                    + ANSWER_CLOZE);
+            case ANSWER_LISTENING -> LISTENING;
+            default -> throw new BadRequestException("answer phải là " + ANSWER_CHOICE + ", " + ANSWER_TYPING + ", "
+                    + ANSWER_CLOZE + " hoặc " + ANSWER_LISTENING);
         };
         boolean typing = fixedDirection == TYPE_READING;
         boolean adaptive = switch (mode == null ? MODE_ADAPTIVE : mode) {
@@ -201,7 +206,10 @@ public class QuizService {
             selected = shuffledPool.subList(0, Math.min(toSelect, shuffledPool.size()));
         }
 
-        Map<Long, String> sentences = fixedDirection == CLOZE ? clozeSentences(selected) : contextSentences(selected, pool);
+        // Nghe: không có câu (câu có chữ là lộ đáp án), nên cũng không nhờ AI sinh câu.
+        Map<Long, String> sentences = fixedDirection == CLOZE ? clozeSentences(selected)
+                : fixedDirection == LISTENING ? Map.of()
+                : contextSentences(selected, pool);
         if (fixedDirection == CLOZE) {
             selected = selected.stream().filter(kanji -> sentences.containsKey(kanji.getId())).limit(requested).toList();
             if (selected.isEmpty()) {

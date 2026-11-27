@@ -1,19 +1,34 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Check, CheckCircle2, Flame, Keyboard, Layers, ListChecks, Plus, RotateCcw, Target, Trophy, X } from 'lucide-react'
+import {
+  Check,
+  CheckCircle2,
+  Flame,
+  Keyboard,
+  Layers,
+  ListChecks,
+  Plus,
+  RotateCcw,
+  Snail,
+  Target,
+  Trophy,
+  Volume2,
+  X,
+} from 'lucide-react'
 import { quizApi } from '@/api/quiz'
 import { extractErrorMessage } from '@/api/client'
 import type { QuizAnswerKind, QuizAnswerResponse, QuizDirection, QuizMode, QuizQuestionResponse } from '@/api/types'
 import { useLessonParams, useLevelQuizParams } from '@/lib/lesson'
 import { describeAddResult, useAddToReview } from '@/lib/review'
 import { cn } from '@/lib/utils'
-import { parseQuizAnswerKind } from '@/lib/quizStart'
+import { answersWithMeaning, parseQuizAnswerKind } from '@/lib/quizStart'
 import { SessionHeader } from '@/components/SessionHeader'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
 import { FuriganaToggle } from '@/components/FuriganaToggle'
 import { TypedReadingFeedback, TypedReadingInput } from '@/components/TypedReadingAnswer'
 import { SpeakButton } from '@/components/SpeakButton'
+import { speakJapanese } from '@/lib/speech'
 import { StatTile } from '@/components/StatTile'
 import { EmptyState } from '@/components/EmptyState'
 import { Button } from '@/components/ui/button'
@@ -352,6 +367,8 @@ export function StudyQuizPage() {
                     <FuriganaToggle segments={current.sentenceRuby} />
                   </div>
                 </Card>
+              ) : current.direction === 'LISTENING' ? (
+                <ListenPrompt key={index} text={current.reading ?? current.character} />
               ) : (
                 <div className="flex justify-center rounded-3xl border-2 border-dashed border-border py-8">
                   <span className="font-jp text-5xl font-bold sm:text-6xl">{current.prompt}</span>
@@ -432,6 +449,36 @@ export function StudyQuizPage() {
   )
 }
 
+/**
+ * Câu nghe: không hiện chữ, tự đọc một lần khi hiện câu; nghe lại hoặc nghe chậm tuỳ ý. Đặt `key` theo câu để mỗi câu
+ * tự đọc lại từ đầu.
+ */
+function ListenPrompt({ text }: { text: string }) {
+  useEffect(() => {
+    speakJapanese(text)
+  }, [text])
+
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-3xl border-2 border-dashed border-border py-8">
+      <button
+        type="button"
+        onClick={() => speakJapanese(text)}
+        aria-label="Nghe lại"
+        className="flex h-24 w-24 items-center justify-center rounded-full border-b-4 border-secondary-dark bg-secondary text-secondary-foreground transition-all hover:brightness-105 active:translate-y-[2px] active:border-b-2"
+      >
+        <Volume2 className="h-12 w-12" strokeWidth={2.5} />
+      </button>
+      <button
+        type="button"
+        onClick={() => speakJapanese(text, 0.55)}
+        className="flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-extrabold text-secondary-dark hover:bg-secondary-soft"
+      >
+        <Snail className="h-4 w-4" strokeWidth={2.5} /> Nghe chậm
+      </button>
+    </div>
+  )
+}
+
 function FeedbackBar({
   correct,
   question,
@@ -471,7 +518,7 @@ function FeedbackBar({
             </p>
             {!correct && (
               <p className="font-bold text-destructive-dark">
-                Đáp án: <span className={cn(question.direction !== 'MEANING' && 'font-jp')}>{correctAnswer}</span>
+                Đáp án: <span className={cn(!answersWithMeaning(question.direction) && 'font-jp')}>{correctAnswer}</span>
               </p>
             )}
             <p className="mt-0.5 text-sm font-semibold text-foreground/80">
@@ -502,7 +549,7 @@ function PersonalTrapNote({
 }) {
   const { personalTrap, personalTrapCount, personalTrapReading, personalTrapMeaning } = question
   const trap =
-    question.direction === 'MEANING' ? (
+    answersWithMeaning(question.direction) ? (
       <span className="font-bold">“{personalTrap}”</span>
     ) : (
       <span className="font-jp font-bold">「{personalTrap}」</span>

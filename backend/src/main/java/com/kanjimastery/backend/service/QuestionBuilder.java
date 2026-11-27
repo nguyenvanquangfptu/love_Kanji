@@ -160,8 +160,9 @@ public class QuestionBuilder {
         String prompt = READING_TO_KANJI.equals(direction) ? reading
                 : direction == QuizDirection.CLOZE ? QuizService.BLANK
                 : kanji.getCharacter();
-        // Câu điền từ đã được che sẵn từ được hỏi.
+        // Câu điền từ đã được che sẵn từ được hỏi; câu nghe không có câu (thấy chữ là lộ đáp án).
         String sentence = direction == QuizDirection.CLOZE ? exampleSentence
+                : direction == QuizDirection.LISTENING ? null
                 : sentenceForQuestion(exampleSentence, kanji, direction);
 
         return new BuiltQuestion(kanji, direction, prompt, sentence, choices, choices.indexOf(correctAnswer), shownTrap,

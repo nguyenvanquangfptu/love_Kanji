@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import type { QuizAnswerKind } from '@/api/types'
+import type { QuizAnswerKind, QuizDirection } from '@/api/types'
 import { QuizStartDialog } from '@/components/QuizStartDialog'
 
 const LAST_KIND_KEY = 'quiz.answerKind'
@@ -24,7 +24,7 @@ function rememberKind(kind: QuizAnswerKind) {
 
 /** Kiểu trắc nghiệm từ tham số URL / bộ nhớ trình duyệt; không nhận ra thì là chọn đáp án. */
 export function parseQuizAnswerKind(value: string | null): QuizAnswerKind {
-  return value === 'typing' || value === 'cloze' ? value : 'choice'
+  return value === 'typing' || value === 'cloze' || value === 'listening' ? value : 'choice'
 }
 
 /** Đường dẫn trang làm bài cho một kiểu: kiểu khác "chọn đáp án" thêm {@code answer=<kiểu>}. */
@@ -53,4 +53,9 @@ export function useQuizStart(): { start: (path: string) => void; dialog: ReactNo
       <QuizStartDialog open={pendingPath !== null} preselected={lastKind()} onChoose={choose} onClose={close} />
     ),
   }
+}
+
+/** Đáp án của hướng hỏi này là nghĩa tiếng Việt (không phải chữ Nhật) - để chọn font. */
+export function answersWithMeaning(direction: QuizDirection) {
+  return direction === 'MEANING' || direction === 'LISTENING'
 }

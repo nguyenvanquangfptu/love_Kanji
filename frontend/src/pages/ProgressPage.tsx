@@ -7,6 +7,7 @@ import { extractErrorMessage } from '@/api/client'
 import type { ProgressResponse, QuizDirection } from '@/api/types'
 import { formatDay } from '@/lib/dates'
 import { cn } from '@/lib/utils'
+import { answersWithMeaning } from '@/lib/quizStart'
 import { ChartLegend, ColumnChart, type ChartColumn, type ColumnSeries } from '@/components/ColumnChart'
 import { PageHeader } from '@/components/PageHeader'
 import { StatTile } from '@/components/StatTile'
@@ -309,7 +310,7 @@ function ConfusionCard({ confusions }: { confusions: ProgressResponse['confusion
             </div>
             <div className="min-w-0 flex-1 text-sm">
               <p className="font-semibold text-muted-foreground">{DIRECTION_LABELS[confusion.direction]} · bạn chọn</p>
-              <p className={cn('font-bold', confusion.direction !== 'MEANING' && 'font-jp text-base')}>
+              <p className={cn('font-bold', !answersWithMeaning(confusion.direction) && 'font-jp text-base')}>
                 {confusion.chosenAnswer}
               </p>
             </div>

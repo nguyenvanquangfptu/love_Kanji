@@ -30,7 +30,8 @@ public class QuizController {
                     + "hardWords=true: chỉ lấy từ khó của người học (bỏ qua tagId/level). "
                     + "kanjiIds=1,2,3: hỏi đúng các từ này, vd. các từ làm sai trong một bài thi (bỏ qua các bộ lọc khác). "
                     + "answer=typing: hiện chữ Hán, người học tự gõ cách đọc (chỉ từ có chữ Hán; không gửi cách đọc trước). "
-                    + "answer=cloze: câu ví dụ che mất từ, chọn từ điền vào (chỉ từ đã có câu ví dụ).")
+                    + "answer=cloze: câu ví dụ che mất từ, chọn từ điền vào (chỉ từ đã có câu ví dụ). "
+                    + "answer=listening: nghe cách đọc (giọng đọc trình duyệt) rồi chọn nghĩa, không có câu ví dụ.")
     @GetMapping("/generate")
     public ResponseEntity<List<QuizQuestionResponse>> generate(
             Authentication authentication,

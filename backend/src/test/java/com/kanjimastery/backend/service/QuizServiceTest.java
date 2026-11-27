@@ -215,6 +215,23 @@ class QuizServiceTest {
     }
 
     @Test
+    void generate_shouldAskMeaningsWithoutAnySentence_forListeningQuestions() {
+        givenQuizAllowed();
+        when(kanjiRepository.findAllByFilters(null, TAG_ID))
+                .thenReturn(List.of(readyWord, missingWord, kanaWord(5L, "テレビ", "Ti vi"), failedWord));
+
+        List<QuizQuestionResponse> questions = quizService.generate("taro", TAG_ID, null, 10, QuizService.MODE_RANDOM,
+                false, null, QuizService.ANSWER_LISTENING);
+
+        assertThat(questions).hasSize(4).allSatisfy(question -> {
+            assertThat(question.getDirection()).isEqualTo(QuizDirection.LISTENING);
+            assertThat(question.getSentence()).isNull();
+            assertThat(question.getChoices().get(question.getCorrectIndex())).isEqualTo(question.getMeaning());
+        });
+        verifyNoInteractions(sentenceGenerationService);
+    }
+
+    @Test
     void generate_shouldRefuseClozeQuiz_whenNoWordHasASentence() {
         givenQuizAllowed();
         when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(failedWord, missingWord));
