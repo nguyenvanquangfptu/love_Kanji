@@ -504,6 +504,8 @@ export interface VocabularyQualityReport {
   /** Chữ Hán được ghi nhiều âm Hán Việt; âm ít từ dùng nhất đứng đầu. */
   hanVietConflicts: { character: string; variants: { hanViet: string; words: QualityWordRef[] }[] }[]
   missingHanViet: QualityWordRef[]
+  /** Từ trong bài học còn thiếu câu ví dụ theo cấp độ; inReview = đang có người học ôn (được viết câu trước). */
+  missingSentences: { level: string; missing: number; inReview: number }[]
 }
 
 /** Kết quả gắn lại câu từ vựng với kho từ (POST /admin/exam-questions/relink-words). */

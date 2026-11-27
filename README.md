@@ -356,7 +356,7 @@ Lệnh thứ 4 xoá cache từ vựng cũ trong Redis. Chuyển sang máy mới:
 | Request Gemini, cả hệ thống | 100 request/ngày (UTC) | `GEMINI_DAILY_LIMIT` trong `.env` |
 | Nhờ AI viết nháp câu thi / đoạn văn (quản trị) | Tối đa 8 câu hoặc 1 đoạn mỗi lần, mỗi lần 2 request (viết + giải lại) | `QuestionDraftService`, `PassageDraftService` |
 | Từ sinh câu ví dụ thất bại | Thất bại 2 lần thì bỏ qua từ đó 24 giờ | `QuizService` |
-| AI viết câu ví dụ mỗi đêm cho từ trong bài còn thiếu câu (4:45, trước khi sinh câu thi) | 20 request/đêm, mỗi request 40 từ; từ thất bại 2 lần bỏ qua 7 ngày | `SENTENCE_JOB_REQUESTS` trong `.env` (0 = tắt) |
+| AI viết câu ví dụ mỗi đêm cho từ trong bài còn thiếu câu (4:45, trước khi sinh câu thi; từ đang có người ôn trước, rồi N5 → N2) | 20 request/đêm, mỗi request 40 từ; từ thất bại 2 lần bỏ qua 7 ngày | `SENTENCE_JOB_REQUESTS` trong `.env` (0 = tắt) |
 | Nút "Sinh câu ví dụ" ở trang quản trị từ vựng | 1 request mỗi lần bấm (endpoint nhận tối đa 5) | `AdminCharacterController` |
 
 - **IP người dùng do nginx xác định.** nginx ghi đè header `X-Forwarded-For`, Spring (`server.forward-headers-strategy: native`) chỉ tin header này khi request đến từ mạng nội bộ, và backend chỉ mở cổng trên `127.0.0.1`. Vì vậy client không thể tự đặt IP giả để vượt giới hạn đăng nhập.

@@ -11,9 +11,15 @@ import java.util.List;
  * @param hanVietConflicts   chữ Hán được ghi nhiều âm Hán Việt ở các từ khác nhau (込 VÀO / NHẬP) - có thể đúng
  *                           (行 HÀNG / HÀNH) hoặc là ghi chưa thống nhất
  * @param missingHanViet     từ có chữ Hán mà chưa có âm Hán Việt
+ * @param missingSentences   số từ trong bài học còn thiếu câu ví dụ theo cấp độ (job đêm điền dần)
  */
 public record VocabularyQualityReport(int words, List<StrokeMismatch> strokeMismatches, List<String> unknownCharacters,
-                                      List<HanVietConflict> hanVietConflicts, List<WordRef> missingHanViet) {
+                                      List<HanVietConflict> hanVietConflicts, List<WordRef> missingHanViet,
+                                      List<MissingSentences> missingSentences) {
+
+    /** @param inReview trong số đó, bao nhiêu từ đang có người học ôn - được viết câu trước */
+    public record MissingSentences(String level, long missing, long inReview) {
+    }
 
     public record StrokeMismatch(Long id, String character, int stored, int computed) {
     }

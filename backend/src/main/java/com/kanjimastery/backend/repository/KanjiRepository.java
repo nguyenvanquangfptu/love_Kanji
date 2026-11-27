@@ -70,17 +70,39 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
     int saveExampleSentenceIfAbsent(@Param("id") Long id, @Param("sentence") String sentence);
 
     /**
-     * Từ trong các bài học chưa có câu ví dụ, cấp độ dễ trước (N5 → N1) - để AI viết câu dần mỗi đêm. Từ chưa gắn bài
-     * nào không cần câu (không vào quiz, không sinh câu thi).
+     * Từ trong các bài học chưa có câu ví dụ - để AI viết câu dần mỗi đêm. Từ đã có người học đang ôn trước (họ gặp
+     * thẻ thiếu câu ngay), rồi cấp độ dễ trước (N5 → N1). Từ chưa gắn bài nào không cần câu (không vào quiz, không sinh
+     * câu thi).
      */
     @Query(value = """
             SELECT k.* FROM kanji k
             WHERE k.example_sentence IS NULL
               AND EXISTS (SELECT 1 FROM kanji_tags kt WHERE kt.kanji_id = k.id)
-            ORDER BY CASE k.jlpt_level WHEN 'N5' THEN 1 WHEN 'N4' THEN 2 WHEN 'N3' THEN 3 WHEN 'N2' THEN 4 ELSE 5 END, k.id
+            ORDER BY EXISTS (SELECT 1 FROM user_kanji_srs s WHERE s.kanji_id = k.id) DESC,
+                     CASE k.jlpt_level WHEN 'N5' THEN 1 WHEN 'N4' THEN 2 WHEN 'N3' THEN 3 WHEN 'N2' THEN 4 ELSE 5 END,
+                     k.id
             LIMIT :limit
             """, nativeQuery = true)
     List<Kanji> findWithoutExampleSentence(@Param("limit") int limit);
+
+    /** Số từ trong bài học còn thiếu câu ví dụ theo cấp độ, và bao nhiêu trong số đó đang có người học ôn. */
+    interface MissingSentenceCount {
+        String getLevel();
+
+        long getMissing();
+
+        long getInReview();
+    }
+
+    @Query(value = """
+            SELECT k.jlpt_level AS "level", COUNT(*) AS "missing",
+                   COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM user_kanji_srs s WHERE s.kanji_id = k.id)) AS "inReview"
+            FROM kanji k
+            WHERE k.example_sentence IS NULL AND EXISTS (SELECT 1 FROM kanji_tags kt WHERE kt.kanji_id = k.id)
+            GROUP BY k.jlpt_level
+            ORDER BY k.jlpt_level DESC
+            """, nativeQuery = true)
+    List<MissingSentenceCount> countWithoutExampleSentenceByLevel();
 
     @Query(value = """
             SELECT COUNT(*) FROM kanji k

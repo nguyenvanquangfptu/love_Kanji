@@ -54,8 +54,13 @@ public class VocabularyQualityService {
                 missingHanViet.add(new WordRef(word.getId(), word.getCharacter(), word.getHanViet()));
             }
         }
+        List<VocabularyQualityReport.MissingSentences> missingSentences = kanjiRepository
+                .countWithoutExampleSentenceByLevel().stream()
+                .map(row -> new VocabularyQualityReport.MissingSentences(row.getLevel(), row.getMissing(),
+                        row.getInReview()))
+                .toList();
         return new VocabularyQualityReport(words.size(), mismatches, List.copyOf(unknown), hanVietConflicts(),
-                missingHanViet);
+                missingHanViet, missingSentences);
     }
 
     /**

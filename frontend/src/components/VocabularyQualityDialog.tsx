@@ -33,7 +33,7 @@ export function VocabularyQualityDialog({ open, onClose }: { open: boolean; onCl
       open={open}
       onClose={onClose}
       title="Kiểm tra kho từ"
-      description="Số nét sai, chữ Hán ghi nhiều âm Hán Việt và từ chưa có Hán Việt."
+      description="Số nét sai, chữ Hán ghi nhiều âm Hán Việt, từ chưa có Hán Việt hoặc câu ví dụ."
       className="sm:max-w-2xl"
     >
       {report.isError && <Alert className="mb-3">{extractErrorMessage(report.error)}</Alert>}
@@ -116,6 +116,27 @@ export function VocabularyQualityDialog({ open, onClose }: { open: boolean; onCl
             {data.missingHanViet.slice(0, SHOWN).map((word) => (
               <HanVietEditor key={word.id} word={word} />
             ))}
+          </section>
+
+          <section className="flex flex-col gap-2">
+            <h3 className="font-black">
+              Từ chưa có câu ví dụ ({data.missingSentences.reduce((sum, row) => sum + row.missing, 0)} từ trong bài học)
+            </h3>
+            <p className="text-xs font-semibold text-muted-foreground">
+              Job đêm nhờ AI viết dần: từ đang có người học ôn trước, rồi N5 → N2. Câu thi dựng từ câu AI phải chờ duyệt.
+            </p>
+            {data.missingSentences.length > 0 && (
+              <ul className="flex flex-wrap gap-2">
+                {data.missingSentences.map((row) => (
+                  <li key={row.level} className="rounded-xl border-2 border-border px-2.5 py-1">
+                    <span className="font-bold">{row.level}</span>: {row.missing} từ
+                    {row.inReview > 0 && (
+                      <span className="text-muted-foreground"> ({row.inReview} từ đang có người ôn)</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         </div>
       )}
