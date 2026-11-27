@@ -10,6 +10,7 @@ import type {
   JlptQuestionType,
   Page,
   PassageDraftResult,
+  WordRelinkResult,
   PendingSummary,
   QuestionBankStats,
   QuestionDraftResult,
@@ -84,6 +85,12 @@ export const examAdminApi = {
       .then((r) => r.data),
 
   stats: () => apiClient.get<QuestionBankStats[]>('/admin/exam-questions/stats').then((r) => r.data),
+
+  /** Gắn lại câu từ vựng chưa gắn từ nào với kho từ (sau khi nhập thêm từ); dryRun = chỉ đếm. */
+  relinkWords: (dryRun: boolean) =>
+    apiClient
+      .post<WordRelinkResult>('/admin/exam-questions/relink-words', null, { params: { dryRun }, timeout: 60_000 })
+      .then((r) => r.data),
 
   /** Nhập một đề tự soạn (nội dung file JSON); dryRun = chỉ kiểm tra. Có lỗi thì không ghi gì. */
   importTest: (test: unknown, dryRun: boolean) =>

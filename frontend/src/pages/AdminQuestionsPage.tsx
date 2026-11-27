@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileUp,
+  Link2,
   Pencil,
   RotateCcw,
   ShieldCheck,
@@ -47,6 +48,7 @@ import { QuestionReports } from '@/components/QuestionReports'
 import { QuestionStats } from '@/components/QuestionStats'
 import { VocabularyDraftPanel } from '@/components/VocabularyDraftPanel'
 import { ExamImportPanel } from '@/components/ExamImportPanel'
+import { WordRelinkDialog } from '@/components/WordRelinkDialog'
 
 const STATUS_TABS: { value: ExamQuestionStatus | ''; label: string }[] = [
   { value: 'DRAFT', label: 'Chờ duyệt' },
@@ -97,6 +99,7 @@ export function AdminQuestionsPage() {
   const test = params.get('test') ?? undefined
   const page = Number(params.get('page') ?? 0)
   const [showImport, setShowImport] = useState(false)
+  const [showRelink, setShowRelink] = useState(false)
 
   const [editing, setEditing] = useState<AdminExamQuestion | null>(null)
   const [editKey, setEditKey] = useState(0)
@@ -274,15 +277,25 @@ export function AdminQuestionsPage() {
         <Card className="mb-4 overflow-x-auto p-4">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-black">Ngân hàng câu {level}</h2>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={analysisMutation.isPending}
-              onClick={() => analysisMutation.mutate()}
-              title="Tính thống kê từng câu từ kết quả thi, gắn cờ câu người làm tốt lại hay sai (tự chạy mỗi thứ Hai)"
-            >
-              <BarChart3 className="h-4 w-4" /> {analysisMutation.isPending ? 'Đang phân tích...' : 'Phân tích câu hỏi'}
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setShowRelink(true)}
+                title="Gắn câu từ vựng chưa gắn từ nào với kho từ (sau khi nhập thêm từ vựng)"
+              >
+                <Link2 className="h-4 w-4" /> Gắn lại từ vựng
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={analysisMutation.isPending}
+                onClick={() => analysisMutation.mutate()}
+                title="Tính thống kê từng câu từ kết quả thi, gắn cờ câu người làm tốt lại hay sai (tự chạy mỗi thứ Hai)"
+              >
+                <BarChart3 className="h-4 w-4" /> {analysisMutation.isPending ? 'Đang phân tích...' : 'Phân tích câu hỏi'}
+              </Button>
+            </div>
           </div>
           {analysisMutation.data && (
             <p className="mb-2 text-sm font-bold text-secondary-dark">
@@ -680,6 +693,7 @@ export function AdminQuestionsPage() {
         }
         onCancel={() => setPendingNote(null)}
       />
+      <WordRelinkDialog open={showRelink} onClose={() => setShowRelink(false)} />
     </div>
   )
 }

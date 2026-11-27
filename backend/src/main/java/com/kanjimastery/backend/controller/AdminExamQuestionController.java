@@ -15,6 +15,7 @@ import com.kanjimastery.backend.dto.QuestionDraftRequest;
 import com.kanjimastery.backend.dto.VocabularyDraftRequest;
 import com.kanjimastery.backend.service.ExamImportService;
 import com.kanjimastery.backend.service.ExamQuestionReviewService;
+import com.kanjimastery.backend.service.ExamWordLinkService;
 import com.kanjimastery.backend.service.ItemAnalysisService;
 import com.kanjimastery.backend.service.QuestionDraftService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,6 +41,7 @@ public class AdminExamQuestionController {
     private final QuestionDraftService draftService;
     private final ItemAnalysisService itemAnalysisService;
     private final ExamImportService importService;
+    private final ExamWordLinkService wordLinkService;
 
     @Operation(summary = "Lọc câu thi đề JLPT",
             description = "Mới nhất trước; lọc theo mã đề tự soạn (test, vd. N3-05) thì theo thứ tự câu trong đề. "
@@ -191,5 +193,13 @@ public class AdminExamQuestionController {
                                                                    @RequestParam JlptQuestionType type,
                                                                    @RequestParam(defaultValue = "true") boolean dryRun) {
         return ResponseEntity.ok(importService.importPassage(type, request, dryRun));
+    }
+
+    @Operation(summary = "Gắn lại câu từ vựng với kho từ",
+            description = "Câu từ vựng chưa gắn với từ nào (lúc nhập đề từ chưa có trong kho) được tìm từ lại như khi "
+                    + "nhập đề. Mặc định dryRun=true: chỉ đếm số câu gắn được và liệt kê từ vẫn chưa có trong kho.")
+    @PostMapping("/relink-words")
+    public ResponseEntity<ExamWordLinkService.Result> relinkWords(@RequestParam(defaultValue = "true") boolean dryRun) {
+        return ResponseEntity.ok(wordLinkService.relink(dryRun));
     }
 }

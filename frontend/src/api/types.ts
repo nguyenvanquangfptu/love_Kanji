@@ -506,6 +506,19 @@ export interface VocabularyQualityReport {
   missingHanViet: QualityWordRef[]
 }
 
+/** Kết quả gắn lại câu từ vựng với kho từ (POST /admin/exam-questions/relink-words). */
+export interface WordRelinkResult {
+  dryRun: boolean
+  /** Số câu từ vựng chưa gắn từ trước lượt này. */
+  checked: number
+  /** Số câu gắn được (khi chạy thử: sẽ gắn được). */
+  linked: number
+  /** Số cách viết khác nhau vẫn chưa có trong kho. */
+  missingWords: number
+  /** Các cách viết đó, câu hỏi nhiều nhất trước (tối đa 30). */
+  missing: { written: string; questions: number }[]
+}
+
 export interface StrokeFixResult {
   dryRun: boolean
   changed: number

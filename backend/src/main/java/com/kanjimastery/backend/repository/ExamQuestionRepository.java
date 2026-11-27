@@ -193,6 +193,10 @@ public interface ExamQuestionRepository
         return withGrammarPoints(findAllWithWordsByPassageIdIn(passageIds));
     }
 
+    /** Câu thuộc các dạng {@code types} chưa gắn với từ vựng nào - để gắn lại khi kho có thêm từ. */
+    @Query("SELECT q FROM ExamQuestion q WHERE q.questionType IN :types AND q.kanjiIds IS EMPTY ORDER BY q.id")
+    List<ExamQuestion> findWithoutWords(@Param("types") Collection<JlptQuestionType> types);
+
     /** Các mã câu đề gốc (cột source_ref) trong {@code refs} đã có trong kho - để nhập lại một đề không tạo câu trùng. */
     @Query("SELECT q.sourceRef FROM ExamQuestion q WHERE q.sourceRef IN :refs")
     List<String> findExistingSourceRefs(@Param("refs") Collection<String> refs);

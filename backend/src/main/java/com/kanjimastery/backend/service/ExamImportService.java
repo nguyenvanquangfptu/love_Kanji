@@ -67,8 +67,6 @@ public class ExamImportService {
     private static final Pattern TEST_CODE = Pattern.compile("[A-Za-z0-9-]{1,30}");
     /** Số thứ tự đứng đầu lựa chọn khi chép từ đề giấy: "1 こわして", "2. ...", "３、...". */
     private static final Pattern OPTION_NUMBER = Pattern.compile("^([1-4１-４])[\\s　.．、)）]+");
-    /** Đuôi okurigana của cách viết: 許す -> 許 (cột character của động từ chỉ có phần chữ Hán). */
-    private static final Pattern TRAILING_HIRAGANA = Pattern.compile("\\p{IsHiragana}+$");
     private static final Set<JlptQuestionType> GRAMMAR_TYPES = Set.of(JlptQuestionType.GRAMMAR_FORM,
             JlptQuestionType.SENTENCE_ORDER, JlptQuestionType.TEXT_GRAMMAR);
     private static final int MAX_TITLE_LENGTH = 200;
@@ -223,38 +221,18 @@ public class ExamImportService {
      * từ có cách đọc khớp, nếu biết cách đọc. Không tìm thấy thì chỉ cảnh báo.
      */
     private void linkWords(List<Built> questions, List<String> warnings) {
-        Set<String> keys = new HashSet<>();
-        for (Built built : questions) {
-            if (built.word() != null) {
-                keys.add(built.word().written());
-                keys.add(stem(built.word().written()));
-            }
-        }
-        keys.remove("");
+        Set<String> keys = ExamWordMatcher.keys(questions.stream().map(Built::word).filter(Objects::nonNull).toList());
         if (keys.isEmpty()) {
             return;
         }
         Map<String, List<Kanji>> byCharacter = kanjiRepository.findAllByCharacterIn(keys).stream()
                 .collect(Collectors.groupingBy(Kanji::getCharacter));
         for (Built built : questions) {
-            WordHint word = built.word();
+            ExamWordMatcher.Hint word = built.word();
             if (word == null) {
                 continue;
             }
-            Set<Kanji> candidates = new HashSet<>(byCharacter.getOrDefault(word.written(), List.of()));
-            byCharacter.getOrDefault(stem(word.written()), List.of()).stream()
-                    .filter(kanji -> word.written().equals(ReadingMatcher.writtenForm(kanji.getCharacter(), kanji.getReading())))
-                    .forEach(candidates::add);
-            List<Kanji> matches = new ArrayList<>(candidates);
-            if (word.reading() != null) {
-                List<Kanji> sameReading = matches.stream()
-                        .filter(kanji -> kanji.getReading() != null
-                                && word.reading().equals(ReadingMatcher.displayReading(kanji.getReading())))
-                        .toList();
-                if (!sameReading.isEmpty()) {
-                    matches = sameReading;
-                }
-            }
+            List<Kanji> matches = ExamWordMatcher.match(word, byCharacter);
             if (matches.isEmpty()) {
                 warnings.add(built.label() + ": chưa gắn được với từ vựng nào (「" + word.written()
                         + "」 không có trong kho từ) - thêm \"tu\" (dạng từ điển) nếu muốn câu làm sai được đưa vào ôn tập");
@@ -441,10 +419,6 @@ public class ExamImportService {
                 : line.substring(0, line.offsetByCodePoints(0, QUOTE_LENGTH)) + "…";
     }
 
-    private static String stem(String written) {
-        return TRAILING_HIRAGANA.matcher(written).replaceFirst("");
-    }
-
     private static <T> List<T> orEmpty(List<T> list) {
         return list == null ? List.of() : list;
     }
@@ -453,12 +427,8 @@ public class ExamImportService {
      * Một câu đã dựng từ file: mã câu đề gốc (null với bài đọc lẻ không có mã), nhãn để báo lỗi ("NP câu 15"), từ và mẫu
      * ngữ pháp để gắn với kho, đoạn văn chứa câu (null với câu đứng riêng).
      */
-    private record Built(String ref, String label, ExamQuestion question, WordHint word, String grammarPattern,
-                         ExamPassage passage) {
-    }
-
-    /** Từ câu hỏi kiểm tra: cách viết, và cách đọc nếu biết (để chọn đúng từ khi kho có nhiều từ cùng chữ). */
-    private record WordHint(String written, String reading) {
+    private record Built(String ref, String label, ExamQuestion question, ExamWordMatcher.Hint word,
+                         String grammarPattern, ExamPassage passage) {
     }
 
     /** Một đoạn văn đã dựng từ file, kèm nhãn để báo ("NP đoạn văn", "DH bài câu 28-30"). */
@@ -691,7 +661,7 @@ public class ExamImportService {
             String explanation = strip(item.explanation());
             String text;
             QuizDirection skill = null;
-            WordHint word = null;
+            ExamWordMatcher.Hint word = null;
             switch (type) {
                 case KANJI_READING -> {
                     text = KANJI_READING_TEXT;
@@ -823,12 +793,12 @@ public class ExamImportService {
             return new Order(atStar, (before + " " + slots + " " + after).strip(), explanation);
         }
 
-        private static WordHint hint(String word, String written, String reading) {
+        private static ExamWordMatcher.Hint hint(String word, String written, String reading) {
             String explicit = strip(word);
             if (explicit != null) {
-                return new WordHint(explicit, null);
+                return new ExamWordMatcher.Hint(explicit, null);
             }
-            return written == null ? null : new WordHint(written, reading);
+            return written == null ? null : new ExamWordMatcher.Hint(written, reading);
         }
 
         /** Lựa chọn đúng (để gắn với kho từ), null nếu "dung" không hợp lệ. */
