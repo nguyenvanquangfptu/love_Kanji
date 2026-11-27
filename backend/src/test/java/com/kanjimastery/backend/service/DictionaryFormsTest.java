@@ -34,12 +34,20 @@ class DictionaryFormsTest {
             "奪われた, 奪う, VERB",
             "行って, 行く, VERB",
             "こいで, こぐ, VERB",
+            "行われる, 行う, VERB",
+            "おそれなくても, おそれる, VERB",
+            "あわてないで, あわてる, VERB",
             // danh từ する
             "外出して, 外出する, SURU",
             "外出して, 外出, SURU",
             "手配しました, 手配, SURU",
             "にこにこしている, にこにこ, SURU",
             "見学する, 見学, SURU",
+            "気にしないで, 気にする, SURU",
+            // 〜にする / 〜をする
+            "留守にして, 留守, COPULA",
+            "ないしょにして, ないしょ, COPULA",
+            "よそ見をして, よそ見, COPULA",
             // tính từ đuôi い
             "貧しかった, 貧しい, I_ADJECTIVE",
             "くどくて, くどい, I_ADJECTIVE",
@@ -52,6 +60,7 @@ class DictionaryFormsTest {
             "あいまいだった, あいまい, COPULA",
             "くたくたになる, くたくた, COPULA",
             "連絡, 連絡する, SURU",
+            "がっかり, がっかりする, SURU",
             "丁寧, 丁寧な, COPULA",
     })
     void of_shouldOfferTheDictionaryForm_inItsTier(String surface, String dictionaryForm, Tier tier) {

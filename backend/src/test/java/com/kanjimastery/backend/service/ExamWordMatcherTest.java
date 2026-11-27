@@ -100,6 +100,33 @@ class ExamWordMatcherTest {
     }
 
     @Test
+    void inferredVerbs_shouldOnlyMatchVerbsByReading_notANounReadTheSame() {
+        Kanji death = word(1L, "死亡", "しぼう");
+        Kanji squeeze = word(2L, "絞る", "しぼる");
+
+        assertThat(match("しぼって", null, bank(death, squeeze)).words()).as("しぼう - 死亡 không phải động từ")
+                .containsExactly(squeeze);
+    }
+
+    @Test
+    void match_shouldFindPassiveDictionaryForms_andNounsBeforeNiSuruOrWoSuru() {
+        Kanji conduct = word(1L, "行う", "おこなう");
+        Kanji go = word(2L, "行", "い(く)");
+        Kanji mind = word(3L, "気", "き");
+        Kanji care = word(4L, "気にする", "きにする");
+        Kanji away = word(5L, "留守", "るす");
+        Kanji secret = word(6L, "内緒", "ないしょ");
+        Kanji lookAway = word(7L, "よそ見", "よそみ");
+        ExamWordMatcher.Bank bank = bank(conduct, go, mind, care, away, secret, lookAway);
+
+        assertThat(match("行われる", "おこなわれる", bank).words()).containsExactly(conduct);
+        assertThat(match("気にしないで", null, bank).words()).as("気にする trước danh từ 気").containsExactly(care);
+        assertThat(match("留守にして", null, bank).words()).containsExactly(away);
+        assertThat(match("ないしょにして", null, bank).words()).containsExactly(secret);
+        assertThat(match("よそ見をして", null, bank).words()).containsExactly(lookAway);
+    }
+
+    @Test
     void match_shouldGuessNothing_whenTwoFormsOfOneTierAreInTheBank() {
         Kanji go = word(1L, "行", "い(く)");
         Kanji conduct = word(2L, "行う", "おこなう");

@@ -207,8 +207,11 @@ final class ExamWordMatcher {
         if (!words.isEmpty()) {
             return new Lookup(List.copyOf(words), false);
         }
+        // Động từ / tính từ đuôi い đoán ra phải là động từ / tính từ trong kho: しぼる -> 絞る, không tính danh từ 死亡 cùng
+        // cách đọc với ứng viên しぼう.
+        boolean sameEnding = form.tier() == DictionaryForms.Tier.VERB || form.tier() == DictionaryForms.Tier.I_ADJECTIVE;
         for (String spelling : form.spellings()) {
-            Lookup kana = byReading(spelling, bank);
+            Lookup kana = byReading(spelling, bank, sameEnding);
             if (kana.ambiguous() || !kana.words().isEmpty()) {
                 return kana;
             }
@@ -216,12 +219,22 @@ final class ExamWordMatcher {
         return Lookup.NOTHING;
     }
 
-    /** Từ viết bằng chữ Hán có cách đọc là {@code kana}; nhiều từ khác cách viết cùng cách đọc thì là nhập nhằng. */
     private static Lookup byReading(String kana, Bank bank) {
+        return byReading(kana, bank, false);
+    }
+
+    /**
+     * Từ viết bằng chữ Hán có cách đọc là {@code kana}; nhiều từ khác cách viết cùng cách đọc thì là nhập nhằng.
+     * {@code sameEnding}: chỉ tính từ có cách viết cùng chữ kana cuối với {@code kana} (okurigana của động từ, tính từ).
+     */
+    private static Lookup byReading(String kana, Bank bank, boolean sameEnding) {
         if (!KANA.matcher(kana).matches()) {
             return Lookup.NOTHING;
         }
-        List<Kanji> words = bank.byReading().getOrDefault(kana, List.of());
+        String ending = kana.substring(kana.length() - 1);
+        List<Kanji> words = bank.byReading().getOrDefault(kana, List.of()).stream()
+                .filter(kanji -> !sameEnding || writtenForm(kanji).endsWith(ending))
+                .toList();
         long spellings = words.stream().map(ExamWordMatcher::writtenForm).distinct().count();
         if (spellings > 1) {
             return Lookup.AMBIGUOUS;

@@ -27,8 +27,8 @@ final class DictionaryForms {
     }
 
     private static final List<String> SURU_ENDINGS = List.of("していました", "していた", "している", "していて", "しています",
-            "しなかった", "しました", "しません", "しない", "します", "される", "された", "させる", "させた", "しよう", "して",
-            "した", "する");
+            "しなくても", "しなかった", "しないで", "しなくて", "しました", "しません", "しない", "します", "される", "された",
+            "させる", "させた", "しよう", "して", "した", "する");
     private static final List<String> I_ADJECTIVE_ENDINGS = List.of("くなかった", "くない", "かった", "くて", "ければ", "く",
             "さ");
     private static final List<String> COPULA_ENDINGS = List.of("になった", "になって", "になる", "だった", "でした", "です",
@@ -47,7 +47,8 @@ final class DictionaryForms {
             Map.entry("いて", List.of("く")), Map.entry("いた", List.of("く")),
             Map.entry("いで", List.of("ぐ")), Map.entry("いだ", List.of("ぐ")),
             Map.entry("して", List.of("す")), Map.entry("した", List.of("す")));
-    private static final List<String> NEGATIVE_ENDINGS = List.of("なかった", "なくて", "なければ", "ない");
+    private static final List<String> NEGATIVE_ENDINGS = List.of("なかった", "なくても", "なくて", "なければ", "ないで",
+            "ない");
     private static final List<String> POLITE_ENDINGS = List.of("ませんでした", "ました", "ません", "ましょう", "ます");
     /** Cột あ / い -> cột う của động từ nhóm I (守ら -> 守る, 省き -> 省く). */
     private static final Map<Character, Character> A_TO_U = Map.of('わ', 'う', 'か', 'く', 'が', 'ぐ', 'さ', 'す', 'た', 'つ',
@@ -73,11 +74,18 @@ final class DictionaryForms {
             // Danh từ する có từ hai chữ (外出, にこにこ): 話して là 話す chứ không phải 話 + する.
             if (base != null && base.length() >= 2) {
                 add(forms, seen, Tier.SURU, base + "する", base);
+                // 〜にする / 〜をする: 留守にして -> 留守, よそ見をして -> よそ見. Xét sau tầng SURU để 気にしないで vẫn là
+                // 気にする chứ không phải danh từ 気.
+                if (base.endsWith("に") || base.endsWith("を")) {
+                    String noun = base.substring(0, base.length() - 1);
+                    add(forms, seen, Tier.COPULA, noun, noun + "な", noun + "する");
+                }
             }
         }
+        // Từ trần mà kho lưu kèm する / な: 連絡 - 連絡する, がっかり - がっかりする, 丁寧 - 丁寧な (な chỉ với từ tận cùng
+        // bằng chữ Hán: おかし không phải おかしな)
+        add(forms, seen, Tier.SURU, word + "する");
         if (!isKana(word.charAt(word.length() - 1))) {
-            // Danh từ trần mà kho lưu kèm する / な: 連絡 - 連絡する, 丁寧 - 丁寧な
-            add(forms, seen, Tier.SURU, word + "する");
             add(forms, seen, Tier.COPULA, word + "な");
         }
         for (String ending : I_ADJECTIVE_ENDINGS) {
@@ -116,8 +124,11 @@ final class DictionaryForms {
             verbs.addAll(fromStem(form, NEGATIVE_ENDINGS, A_TO_U));
             verbs.addAll(fromStem(form, POLITE_ENDINGS, I_TO_U));
         }
-        // 叱られた -> 叱られる -> 叱る; すべらせて -> すべらせる -> すべる; 信じられない -> 信じられる -> 信じる
-        for (String verb : List.copyOf(verbs)) {
+        // 叱られた -> 叱られる -> 叱る; すべらせて -> すべらせる -> すべる; 信じられない -> 信じられる -> 信じる; và cả từ đã ở
+        // thể từ điển: 行われる -> 行う
+        List<String> plain = new ArrayList<>(verbs);
+        plain.add(word);
+        for (String verb : plain) {
             verbs.addAll(withoutPassiveOrCausative(verb));
         }
         verbs.remove(word);
