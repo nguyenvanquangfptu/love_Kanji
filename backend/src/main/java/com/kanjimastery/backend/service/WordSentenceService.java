@@ -35,6 +35,8 @@ public class WordSentenceService {
             JlptQuestionType.ORTHOGRAPHY);
     /** Ô trống của câu điền từ: （　　）. */
     private static final Pattern BLANK = Pattern.compile("（[\\s　]*）");
+    /** Bỏ khi so câu trùng: 今月から給料が… và 今月から、給料が… là một câu. */
+    private static final Pattern PUNCTUATION = Pattern.compile("[\\s　、。，．,.!?！？「」]");
 
     private final KanjiRepository kanjiRepository;
     private final ExamQuestionRepository questionRepository;
@@ -66,7 +68,7 @@ public class WordSentenceService {
 
     private void add(List<WordSentenceResponse> sentences, Set<String> seen, Kanji word, String sentence,
                      String fallbackTarget, String source) {
-        if (!StringUtils.hasText(sentence) || !seen.add(sentence.strip())) {
+        if (!StringUtils.hasText(sentence) || !seen.add(PUNCTUATION.matcher(sentence).replaceAll(""))) {
             return;
         }
         String text = sentence.strip();

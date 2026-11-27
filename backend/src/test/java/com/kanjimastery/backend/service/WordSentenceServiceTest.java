@@ -71,11 +71,12 @@ class WordSentenceServiceTest {
     }
 
     @Test
-    void sentences_shouldSkipRepeatedSentences_andStopAtThree() {
+    void sentences_shouldSkipRepeatedSentences_evenWithDifferentPunctuation_andStopAtThree() {
         when(kanjiRepository.findById(1L)).thenReturn(Optional.of(angry));
         when(questionRepository.findApprovedByWord(eq(1L), anyCollection(), anyInt())).thenReturn(List.of(
                 question(JlptQuestionType.KANJI_READING, "母はとても怒っている。", "怒って", "おこって"),
                 question(JlptQuestionType.KANJI_READING, "兄が怒った。", "怒った", "おこった"),
+                question(JlptQuestionType.KANJI_READING, "兄が、怒った。", "怒った", "おこった"),
                 question(JlptQuestionType.KANJI_READING, "姉が怒った。", "怒った", "おこった"),
                 question(JlptQuestionType.KANJI_READING, "弟が怒った。", "怒った", "おこった")));
 
