@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { BackToToday } from '@/components/BackToToday'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Lightbulb, ScrollText, Trophy, X } from 'lucide-react'
 import { GRAMMAR_POINTS_KEY, GRAMMAR_SESSION_KEY, grammarSrsApi } from '@/api/grammarSrs'
@@ -162,6 +163,7 @@ export function GrammarReviewPage() {
                 ? 'Đã học đủ điểm mới hôm nay - mai học tiếp nhé.'
                 : 'Các điểm đã ôn sẽ quay lại khi đến hạn. Muốn học thêm thì thêm điểm mới ở trang Ngữ pháp.'
             }
+            action={<BackToToday />}
           />
         )}
 
@@ -181,7 +183,8 @@ export function GrammarReviewPage() {
                 icon={Check}
               />
             </div>
-            <div className="mt-8 flex w-full flex-col gap-3 sm:flex-row">
+            <BackToToday className="mt-8 w-full" />
+            <div className="mt-3 flex w-full flex-col gap-3 sm:flex-row">
               <Link to="/flashcards" className={cn(buttonVariants({ size: 'lg' }), 'flex-1')}>
                 Ôn từ vựng
               </Link>

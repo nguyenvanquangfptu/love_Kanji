@@ -1,6 +1,15 @@
 import { Suspense } from 'react'
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { BookOpen, ClipboardCheck, LogOut, RotateCcw, ShieldCheck, TrendingUp, type LucideIcon } from 'lucide-react'
+import {
+  BookOpen,
+  CalendarCheck,
+  ClipboardCheck,
+  LogOut,
+  RotateCcw,
+  ShieldCheck,
+  TrendingUp,
+  type LucideIcon,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
 import { authApi } from '@/api/auth'
@@ -20,6 +29,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { to: '/today', label: 'Hôm nay', icon: CalendarCheck, iconColor: 'text-accent-dark' },
   { to: '/study', label: 'Học bài', icon: BookOpen, iconColor: 'text-primary' },
   { to: '/flashcards', label: 'Ôn tập', icon: RotateCcw, iconColor: 'text-secondary' },
   { to: '/exam', label: 'Thi thử', icon: ClipboardCheck, iconColor: 'text-orange' },
@@ -27,7 +37,7 @@ const NAV_ITEMS: NavItem[] = [
 ]
 
 /** Số cột của thanh tab dưới đáy theo số mục (thêm mục Quản trị cho admin). */
-const TAB_COLUMNS: Record<number, string> = { 4: 'grid-cols-4', 5: 'grid-cols-5' }
+const TAB_COLUMNS: Record<number, string> = { 4: 'grid-cols-4', 5: 'grid-cols-5', 6: 'grid-cols-6' }
 
 const ADMIN_ITEM: NavItem = { to: '/admin', label: 'Quản trị', icon: ShieldCheck, iconColor: 'text-purple' }
 
@@ -68,7 +78,7 @@ export function AppLayout() {
     <div className="min-h-screen bg-background lg:pl-64">
       {/* Máy tính: thanh bên trái */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r-2 border-border bg-card px-4 py-6 lg:flex">
-        <Link to="/study" className="px-3">
+        <Link to="/today" className="px-3">
           <Logo />
         </Link>
         <SearchLauncher className="mt-6" />
@@ -116,7 +126,7 @@ export function AppLayout() {
 
       {/* Điện thoại: thanh trên cùng */}
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b-2 border-border bg-card/95 px-4 backdrop-blur lg:hidden">
-        <Link to="/study">
+        <Link to="/today">
           <Logo />
         </Link>
         <div className="flex items-center gap-2">

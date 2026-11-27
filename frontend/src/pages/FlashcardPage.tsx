@@ -30,6 +30,7 @@ import { StatTile } from '@/components/StatTile'
 import { EmptyState } from '@/components/EmptyState'
 import { SpeakButton } from '@/components/SpeakButton'
 import { MemoryAidPanel } from '@/components/MemoryAidPanel'
+import { BackToToday } from '@/components/BackToToday'
 import { WordSentences } from '@/components/WordSentences'
 import { wordSentencesQuery } from '@/lib/wordSentences'
 import { CharacterChips } from '@/components/CharacterChips'
@@ -279,6 +280,7 @@ export function FlashcardPage() {
           }
           action={
             <div className="flex flex-col gap-3 sm:flex-row">
+              <BackToToday />
               {leftForLater > 0 && (
                 <Button size="lg" onClick={studyExtra}>
                   <RotateCcw className="h-5 w-5" /> Ôn thêm

@@ -9,6 +9,7 @@ import type {
   ReviewResponse,
   SrsStatsResponse,
   SrsTagStatusResponse,
+  TodayProgressResponse,
 } from './types'
 
 export const srsApi = {
@@ -25,6 +26,9 @@ export const srsApi = {
   getStats: () => apiClient.get<SrsStatsResponse>('/srs/stats').then((r) => r.data),
 
   getDailyPlan: () => apiClient.get<DailyPlanResponse>('/srs/daily-plan').then((r) => r.data),
+
+  /** Hôm nay đã học gì: số thẻ đã chấm, các từ vừa ôn (gần nhất trước), số câu trắc nghiệm. */
+  getToday: () => apiClient.get<TodayProgressResponse>('/srs/today').then((r) => r.data),
 
   getHardWords: () => apiClient.get<HardWordsResponse>('/srs/hard-words').then((r) => r.data),
 

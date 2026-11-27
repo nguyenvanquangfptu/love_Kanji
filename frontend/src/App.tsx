@@ -11,6 +11,7 @@ import { StudyBrowsePage } from '@/pages/StudyBrowsePage'
 import { StudyVocabListPage } from '@/pages/StudyVocabListPage'
 import { StudyFlashcardPage } from '@/pages/StudyFlashcardPage'
 import { StudyQuizPage } from '@/pages/StudyQuizPage'
+import { TodayPage } from '@/pages/TodayPage'
 import { useThemeSync } from '@/lib/theme'
 
 // Trang học và ôn hằng ngày nằm trong bundle chính; các trang ít mở hơn (thi, tiến bộ, quản trị...) tải riêng khi cần,
@@ -48,7 +49,8 @@ export default function App() {
 
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
-          <Route index element={<Navigate to="/study" replace />} />
+          <Route index element={<Navigate to="/today" replace />} />
+          <Route path="today" element={<TodayPage />} />
           <Route path="study" element={<StudyBrowsePage />} />
           <Route path="study/vocab" element={<StudyVocabListPage />} />
           <Route path="flashcards" element={<FlashcardPage />} />

@@ -127,6 +127,16 @@ export interface DailyCardResponse {
 }
 
 /** Kế hoạch ôn hôm nay - số thẻ ôn và từ mới vừa với thời gian ôn mỗi ngày. */
+/** Những gì người học đã làm trong ngày học hôm nay (trang Học hôm nay). */
+export interface TodayProgressResponse {
+  /** Số lượt chấm thẻ ôn hôm nay. */
+  cardsAnswered: number
+  /** Các từ đã ôn bằng thẻ hôm nay, từ ôn gần nhất trước. */
+  recentWords: number[]
+  /** Số câu trắc nghiệm đã trả lời hôm nay. */
+  quizAnswers: number
+}
+
 export interface DailyPlanResponse {
   dailyMinutes: number
   /** Đo từ nhịp ôn thật của người học (chưa đủ dữ liệu thì lấy mặc định). */

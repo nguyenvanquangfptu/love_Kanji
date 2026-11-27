@@ -234,7 +234,11 @@ export function StudyQuizPage() {
 
   if (!wordsQuiz && !hardWordsQuiz && tagId === null && levelQuiz === null) return <Navigate to="/study" replace />
 
-  const exitTo = wordsQuiz
+  // ?from=today: mở từ trang Học hôm nay - xong thì quay về đó.
+  const fromToday = searchParams.get('from') === 'today'
+  const exitTo = fromToday
+    ? '/today'
+    : wordsQuiz
     ? examId
       ? `/exam/${examId}/result`
       : '/exam'
@@ -296,7 +300,9 @@ export function StudyQuizPage() {
             }
             exitTo={exitTo}
             exitLabel={
-              wordsQuiz
+              fromToday
+                ? 'Về Học hôm nay'
+                : wordsQuiz
                 ? 'Về kết quả bài thi'
                 : hardWordsQuiz
                   ? 'Về danh sách từ khó'

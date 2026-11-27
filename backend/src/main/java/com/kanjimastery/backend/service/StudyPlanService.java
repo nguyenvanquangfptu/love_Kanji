@@ -3,6 +3,8 @@ package com.kanjimastery.backend.service;
 import com.kanjimastery.backend.model.JlptLevel;
 import com.kanjimastery.backend.config.SrsProperties;
 import com.kanjimastery.backend.dto.DailyPlanResponse;
+import com.kanjimastery.backend.dto.TodayProgressResponse;
+import com.kanjimastery.backend.model.ReviewSource;
 import com.kanjimastery.backend.model.LearningProfile;
 import com.kanjimastery.backend.repository.LearningProfileRepository;
 import com.kanjimastery.backend.repository.ReviewLogRepository;
@@ -54,6 +56,20 @@ public class StudyPlanService {
     private final TagRepository tagRepository;
     private final SrsProperties srsProperties;
     private final StudyCalendar calendar;
+
+    /** Số từ đã ôn hôm nay đưa sang trắc nghiệm của trang "Học hôm nay" - đủ để chọn ra vài câu. */
+    static final int RECENT_WORDS = 30;
+
+    /** Những gì người học đã làm hôm nay: thẻ đã chấm, các từ vừa ôn (để luyện trắc nghiệm), số câu trắc nghiệm. */
+    @Transactional(readOnly = true)
+    public TodayProgressResponse progressToday(Long userId) {
+        LocalDateTime since = calendar.startOfToday();
+        String flashcard = ReviewSource.FLASHCARD.name();
+        return new TodayProgressResponse(
+                reviewLogRepository.countAnswersSince(userId, flashcard, since),
+                reviewLogRepository.wordsAnsweredSince(userId, flashcard, since, RECENT_WORDS),
+                reviewLogRepository.countAnswersSince(userId, ReviewSource.QUIZ.name(), since));
+    }
 
     @Transactional(readOnly = true)
     public DailyPlanResponse today(Long userId) {

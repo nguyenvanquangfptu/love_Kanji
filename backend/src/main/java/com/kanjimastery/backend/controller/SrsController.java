@@ -4,6 +4,7 @@ import com.kanjimastery.backend.dto.AddSrsCardsRequest;
 import com.kanjimastery.backend.dto.AddSrsCardsResponse;
 import com.kanjimastery.backend.dto.DailyCardResponse;
 import com.kanjimastery.backend.dto.DailyPlanResponse;
+import com.kanjimastery.backend.dto.TodayProgressResponse;
 import com.kanjimastery.backend.dto.HardWordsResponse;
 import com.kanjimastery.backend.dto.NoteRequest;
 import com.kanjimastery.backend.dto.ReviewRequest;
@@ -51,6 +52,14 @@ public class SrsController {
     @GetMapping("/daily-plan")
     public ResponseEntity<DailyPlanResponse> getDailyPlan(Authentication authentication) {
         return ResponseEntity.ok(studyPlanService.today(currentUserId(authentication)));
+    }
+
+    @Operation(summary = "Hôm nay đã học gì",
+            description = "Số lượt chấm thẻ ôn, các từ vừa ôn bằng thẻ (gần nhất trước) và số câu trắc nghiệm đã làm "
+                    + "trong ngày học hôm nay - cho trang Học hôm nay.")
+    @GetMapping("/today")
+    public ResponseEntity<TodayProgressResponse> getToday(Authentication authentication) {
+        return ResponseEntity.ok(studyPlanService.progressToday(currentUserId(authentication)));
     }
 
     @Operation(summary = "Chấm điểm ôn tập (SM-2)",

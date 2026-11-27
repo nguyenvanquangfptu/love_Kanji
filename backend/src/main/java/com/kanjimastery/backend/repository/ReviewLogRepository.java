@@ -112,6 +112,24 @@ public interface ReviewLogRepository extends JpaRepository<ReviewLog, Long> {
             """, nativeQuery = true)
     long countReviewsSince(@Param("userId") Long userId, @Param("since") LocalDateTime since);
 
+    /** Các từ người học đã trả lời ở nguồn {@code source} từ {@code since}, từ trả lời gần nhất trước. */
+    @Query(value = """
+            SELECT kanji_id FROM review_logs
+            WHERE user_id = :userId AND source = :source AND reviewed_at >= :since
+            GROUP BY kanji_id
+            ORDER BY MAX(reviewed_at) DESC
+            LIMIT :count
+            """, nativeQuery = true)
+    List<Long> wordsAnsweredSince(@Param("userId") Long userId, @Param("source") String source,
+                                  @Param("since") LocalDateTime since, @Param("count") int count);
+
+    /** Số lượt trả lời ở nguồn {@code source} từ {@code since}. */
+    @Query(value = """
+            SELECT COUNT(*) FROM review_logs WHERE user_id = :userId AND source = :source AND reviewed_at >= :since
+            """, nativeQuery = true)
+    long countAnswersSince(@Param("userId") Long userId, @Param("source") String source,
+                           @Param("since") LocalDateTime since);
+
     /** Lượt trả lời một từ theo một hướng hỏi ({@code direction} null = thẻ ôn tập). */
     interface WordDirectionStats {
         Long getKanjiId();

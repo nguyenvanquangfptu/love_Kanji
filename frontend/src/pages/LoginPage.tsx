@@ -40,7 +40,7 @@ export function LoginPage() {
         mustChangePassword: data.mustChangePassword,
       })
       // Còn mật khẩu tạm do quản trị viên cấp thì đặt mật khẩu mới trước đã.
-      const from = data.mustChangePassword ? '/account' : (state?.from?.pathname ?? '/study')
+      const from = data.mustChangePassword ? '/account' : (state?.from?.pathname ?? '/today')
       navigate(from, { replace: true })
     },
   })

@@ -310,4 +310,15 @@ class StudyPlanServiceTest {
         when(reviewLogRepository.countNewWordsLearnedSince(USER_ID, START_OF_TODAY)).thenReturn(newLearnedToday);
         when(srsRepository.countByUserIdAndLastReviewedAtIsNull(USER_ID)).thenReturn(newWaiting);
     }
+
+    @Test
+    void progressToday_shouldCountFromTheStartOfTheStudyDay() {
+        when(reviewLogRepository.countAnswersSince(USER_ID, "FLASHCARD", START_OF_TODAY)).thenReturn(12L);
+        when(reviewLogRepository.wordsAnsweredSince(USER_ID, "FLASHCARD", START_OF_TODAY, StudyPlanService.RECENT_WORDS))
+                .thenReturn(List.of(5L, 3L));
+        when(reviewLogRepository.countAnswersSince(USER_ID, "QUIZ", START_OF_TODAY)).thenReturn(4L);
+
+        assertThat(service.progressToday(USER_ID))
+                .isEqualTo(new com.kanjimastery.backend.dto.TodayProgressResponse(12L, List.of(5L, 3L), 4L));
+    }
 }
