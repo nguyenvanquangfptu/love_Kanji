@@ -56,6 +56,30 @@ class QuestionBuilderTest {
         assertThat(sentence(tooth, KANJI_TO_READING, "私は歯を磨く。")).isEqualTo("私は歯を磨く。");
     }
 
+    @Test
+    void build_shouldOfferWrittenWordsOfTheSameKind_forCloze_andKeepTheBlankedSentence() {
+        Kanji angry = word(1L, "怒る", "おこる", "Giận");
+        List<Kanji> lesson = List.of(angry, word(2L, "泣く", "なく", "Khóc"), word(3L, "見", "み(る)", "Nhìn"),
+                word(4L, "走る", "はしる", "Chạy"), word(5L, "学校", "がっこう", "Trường học"),
+                word(6L, "図書館", "としょかん", "Thư viện"));
+
+        QuestionBuilder.BuiltQuestion question = builder.build(builder.plan(angry, QuizDirection.CLOZE, List.of()),
+                "母は（　　）。", lesson, Map.of());
+
+        assertThat(question.sentence()).isEqualTo("母は（　　）。");
+        assertThat(question.choices().get(question.correctIndex())).isEqualTo("怒る");
+        assertThat(question.choices()).as("động từ trước danh từ; chữ đơn kèm đuôi (見る)")
+                .containsExactlyInAnyOrder("怒る", "泣く", "見る", "走る");
+    }
+
+    @Test
+    void wordKind_shouldTellVerbsAdjectivesAndNounsApart() {
+        assertThat(QuestionBuilder.wordKind("怒る")).isEqualTo('V');
+        assertThat(QuestionBuilder.wordKind("高い")).isEqualTo('A');
+        assertThat(QuestionBuilder.wordKind("学校")).isEqualTo('N');
+        assertThat(QuestionBuilder.wordKind("テレビ")).isEqualTo('K');
+    }
+
     private String sentence(Kanji word, QuizDirection direction, String exampleSentence) {
         QuestionBuilder.BuiltQuestion question = builder.build(builder.plan(word, direction, List.of()),
                 exampleSentence, pool, Map.of());

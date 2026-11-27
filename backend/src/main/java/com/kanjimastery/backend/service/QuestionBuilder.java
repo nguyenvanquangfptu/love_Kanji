@@ -129,6 +129,12 @@ public class QuestionBuilder {
                 alsoCorrect = answer -> otherRows.stream().anyMatch(row -> answer.equals(row.getReading()));
                 fallback = readingFallback(kanji, pool);
             }
+            case CLOZE -> {
+                correctAnswer = ReadingMatcher.writtenForm(kanji.getCharacter(), reading);
+                alsoCorrect = answer -> otherRows.stream()
+                        .anyMatch(row -> answer.equals(ReadingMatcher.writtenForm(row.getCharacter(), row.getReading())));
+                fallback = clozeFallback(kanji, correctAnswer, pool);
+            }
             default -> {
                 correctAnswer = kanji.getMeaning();
                 alsoCorrect = answer -> otherRows.stream().anyMatch(row -> answer.equals(row.getMeaning()));
@@ -151,10 +157,15 @@ public class QuestionBuilder {
         Kanji trapWord = shownTrap != null && READING_TO_KANJI.equals(direction)
                 ? existingWords.getOrDefault(shownTrap.answer(), List.of()).stream().findFirst().orElse(null)
                 : null;
-        String prompt = READING_TO_KANJI.equals(direction) ? reading : kanji.getCharacter();
+        String prompt = READING_TO_KANJI.equals(direction) ? reading
+                : direction == QuizDirection.CLOZE ? QuizService.BLANK
+                : kanji.getCharacter();
+        // Câu điền từ đã được che sẵn từ được hỏi.
+        String sentence = direction == QuizDirection.CLOZE ? exampleSentence
+                : sentenceForQuestion(exampleSentence, kanji, direction);
 
-        return new BuiltQuestion(kanji, direction, prompt, sentenceForQuestion(exampleSentence, kanji, direction),
-                choices, choices.indexOf(correctAnswer), shownTrap, trapWord);
+        return new BuiltQuestion(kanji, direction, prompt, sentence, choices, choices.indexOf(correctAnswer), shownTrap,
+                trapWord);
     }
 
     /**
@@ -229,6 +240,32 @@ public class QuestionBuilder {
                 word,
                 other -> other.codePoints().anyMatch(wordKanji::contains)
                         || kanaEnding && other.codePointBefore(other.length()) == lastChar);
+    }
+
+    /**
+     * Bù cho câu điền từ: từ khác trong bài, ưu tiên cùng loại theo đuôi (động từ 〜う, tính từ 〜い, danh từ chữ Hán)
+     * để đáp án nhiễu điền vào câu cũng có vẻ hợp ngữ pháp.
+     */
+    private static List<String> clozeFallback(Kanji kanji, String correctAnswer, List<Kanji> pool) {
+        char kind = wordKind(correctAnswer);
+        return rankBySimilarity(otherWords(kanji, pool).stream()
+                        .map(other -> ReadingMatcher.writtenForm(other.getCharacter(), other.getReading()))
+                        .filter(other -> !other.equals(correctAnswer))
+                        .toList(),
+                correctAnswer,
+                other -> wordKind(other) == kind);
+    }
+
+    /** Loại từ đoán theo chữ cuối: V động từ (cột う), A tính từ đuôi い, N tận cùng chữ Hán, K còn lại. */
+    static char wordKind(String word) {
+        int last = word.codePointBefore(word.length());
+        if (QuizDistractorGenerator.isKanji(last)) {
+            return 'N';
+        }
+        if (last == 'い') {
+            return 'A';
+        }
+        return "うくぐすつぬぶむる".indexOf(last) >= 0 ? 'V' : 'K';
     }
 
     /** Bù cho câu hỏi chọn cách đọc: ưu tiên cách đọc cùng độ dài và cùng đuôi (動詞 〜める với 〜める). */

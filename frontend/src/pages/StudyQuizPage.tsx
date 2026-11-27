@@ -8,6 +8,7 @@ import type { QuizAnswerKind, QuizAnswerResponse, QuizDirection, QuizMode, QuizQ
 import { useLessonParams, useLevelQuizParams } from '@/lib/lesson'
 import { describeAddResult, useAddToReview } from '@/lib/review'
 import { cn } from '@/lib/utils'
+import { parseQuizAnswerKind } from '@/lib/quizStart'
 import { SessionHeader } from '@/components/SessionHeader'
 import { SentenceWithTarget } from '@/components/SentenceWithTarget'
 import { FuriganaToggle } from '@/components/FuriganaToggle'
@@ -43,7 +44,7 @@ const INSTRUCTIONS: Record<QuizDirection, { withSentence: string; standalone: st
     standalone: 'Nhớ ra từ có nghĩa này',
   },
   CLOZE: {
-    withSentence: 'Chọn từ điền vào chỗ trống',
+    withSentence: 'Chọn từ điền vào chỗ trống (đáp án ghi ở dạng từ điển)',
     standalone: 'Chọn từ điền vào chỗ trống',
   },
   LISTENING: {
@@ -83,7 +84,7 @@ export function StudyQuizPage() {
   // Mặc định ưu tiên từ người học hay sai; ?mode=random để kiểm tra đều cả bài.
   const mode: QuizMode = searchParams.get('mode') === 'random' ? 'random' : 'adaptive'
   // ?answer=typing: hiện chữ Hán, người học tự gõ cách đọc - chọn ở hộp "Chọn kiểu trắc nghiệm" trước khi vào trang.
-  const answerKind: QuizAnswerKind = searchParams.get('answer') === 'typing' ? 'typing' : 'choice'
+  const answerKind: QuizAnswerKind = parseQuizAnswerKind(searchParams.get('answer'))
 
   const [index, setIndex] = useState(0)
   const [selected, setSelected] = useState<number | null>(null)
@@ -239,8 +240,8 @@ export function StudyQuizPage() {
     if (next === answerKind) return
     setSearchParams(
       (params) => {
-        if (next === 'typing') params.set('answer', 'typing')
-        else params.delete('answer')
+        if (next === 'choice') params.delete('answer')
+        else params.set('answer', next)
         return params
       },
       { replace: true },

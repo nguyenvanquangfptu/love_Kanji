@@ -8,7 +8,7 @@ const LAST_KIND_KEY = 'quiz.answerKind'
 /** Kiểu đã chọn lần trước - chỉ để chọn sẵn; trình duyệt chặn bộ nhớ thì coi như chưa chọn. */
 function lastKind(): QuizAnswerKind {
   try {
-    return localStorage.getItem(LAST_KIND_KEY) === 'typing' ? 'typing' : 'choice'
+    return parseQuizAnswerKind(localStorage.getItem(LAST_KIND_KEY))
   } catch {
     return 'choice'
   }
@@ -22,9 +22,14 @@ function rememberKind(kind: QuizAnswerKind) {
   }
 }
 
-/** Đường dẫn trang làm bài cho một kiểu: gõ romaji thêm {@code answer=typing}. */
+/** Kiểu trắc nghiệm từ tham số URL / bộ nhớ trình duyệt; không nhận ra thì là chọn đáp án. */
+export function parseQuizAnswerKind(value: string | null): QuizAnswerKind {
+  return value === 'typing' || value === 'cloze' ? value : 'choice'
+}
+
+/** Đường dẫn trang làm bài cho một kiểu: kiểu khác "chọn đáp án" thêm {@code answer=<kiểu>}. */
 export function quizPath(path: string, kind: QuizAnswerKind) {
-  return kind === 'typing' ? `${path}${path.includes('?') ? '&' : '?'}answer=typing` : path
+  return kind === 'choice' ? path : `${path}${path.includes('?') ? '&' : '?'}answer=${kind}`
 }
 
 /**

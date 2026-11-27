@@ -21,6 +21,7 @@ import org.springframework.util.StringUtils;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -38,6 +39,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.random.RandomGenerator;
 
+import static com.kanjimastery.backend.model.QuizDirection.CLOZE;
 import static com.kanjimastery.backend.model.QuizDirection.KANJI_TO_READING;
 import static com.kanjimastery.backend.model.QuizDirection.MEANING;
 import static com.kanjimastery.backend.model.QuizDirection.READING_TO_KANJI;
@@ -58,9 +60,12 @@ public class QuizService {
 
     public static final String MODE_ADAPTIVE = "adaptive";
     public static final String MODE_RANDOM = "random";
-    /** Kiểu trả lời: chọn trong 4 đáp án, hoặc tự gõ cách đọc. */
+    /** Kiểu trả lời: chọn trong 4 đáp án, tự gõ cách đọc, hoặc chọn từ điền vào chỗ trống của câu ví dụ. */
     public static final String ANSWER_CHOICE = "choice";
     public static final String ANSWER_TYPING = "typing";
+    public static final String ANSWER_CLOZE = "cloze";
+    /** Ô trống thay cho từ trong câu điền từ - giao diện vẽ thành ô trống. */
+    static final String BLANK = "（　　）";
     private static final int DEFAULT_QUESTIONS = 10;
     /** Trắc nghiệm cả cấp độ có hàng nghìn từ - chặn số câu mỗi lượt để một request không dựng quá nhiều câu hỏi. */
     private static final int MAX_QUESTIONS = 50;
@@ -101,16 +106,21 @@ public class QuizService {
     }
 
     /**
-     * @param answer {@link #ANSWER_TYPING}: mọi câu hỏi gõ cách đọc, chỉ lấy từ có chữ Hán và cách đọc
+     * @param answer {@link #ANSWER_TYPING}: mọi câu hỏi gõ cách đọc, chỉ lấy từ có chữ Hán và cách đọc;
+     *               {@link #ANSWER_CLOZE}: mọi câu hỏi điền từ vào câu ví dụ, chỉ lấy từ đã có câu ví dụ
      */
     @Transactional(readOnly = true)
     public List<QuizQuestionResponse> generate(String username, Long tagId, String level, Integer size, String mode,
                                                boolean hardWords, List<Long> kanjiIds, String answer) {
-        boolean typing = switch (answer == null ? ANSWER_CHOICE : answer) {
-            case ANSWER_CHOICE -> false;
-            case ANSWER_TYPING -> true;
-            default -> throw new BadRequestException("answer phải là " + ANSWER_CHOICE + " hoặc " + ANSWER_TYPING);
+        // Hướng hỏi cố định cho mọi câu; null = chọn theo điểm yếu (đọc / viết / nghĩa).
+        QuizDirection fixedDirection = switch (answer == null ? ANSWER_CHOICE : answer) {
+            case ANSWER_CHOICE -> null;
+            case ANSWER_TYPING -> TYPE_READING;
+            case ANSWER_CLOZE -> CLOZE;
+            default -> throw new BadRequestException("answer phải là " + ANSWER_CHOICE + ", " + ANSWER_TYPING + " hoặc "
+                    + ANSWER_CLOZE);
         };
+        boolean typing = fixedDirection == TYPE_READING;
         boolean adaptive = switch (mode == null ? MODE_ADAPTIVE : mode) {
             case MODE_ADAPTIVE -> true;
             case MODE_RANDOM -> false;
@@ -158,45 +168,99 @@ public class QuizService {
             }
         }
 
+        // Từ được hỏi; đáp án nhiễu vẫn lấy trong cả pool. Điền từ: chỉ từ đã có câu ví dụ (không nhờ AI sinh câu).
+        List<Kanji> candidates = pool;
+        if (fixedDirection == CLOZE) {
+            candidates = pool.stream().filter(kanji -> StringUtils.hasText(kanji.getExampleSentence())).toList();
+            if (givenWords != null) {
+                givenWords = givenWords.stream().filter(kanji -> StringUtils.hasText(kanji.getExampleSentence())).toList();
+            }
+            if (candidates.isEmpty() || givenWords != null && givenWords.isEmpty()) {
+                throw new BadRequestException("Các từ này chưa có câu ví dụ để điền từ - hãy chọn kiểu trắc nghiệm khác");
+            }
+        }
+
         int requested = size == null || size < 1 ? DEFAULT_QUESTIONS : Math.min(size, MAX_QUESTIONS);
+        // Điền từ: chọn dư vì có câu không tìm được từ trong câu (bỏ câu đó).
+        int toSelect = fixedDirection == CLOZE ? requested * 2 : requested;
         RandomGenerator random = ThreadLocalRandom.current();
         // Chế độ ngẫu nhiên không cần lịch sử học: null = chọn từ và hướng hỏi ngẫu nhiên đều.
         LearnerHistory history = adaptive
-                ? learnerHistoryService.load(userId, pool.stream().map(Kanji::getId).toList())
+                ? learnerHistoryService.load(userId, candidates.stream().map(Kanji::getId).toList())
                 : null;
         List<Kanji> selected;
         if (givenWords != null) {
             List<Kanji> shuffledWords = new ArrayList<>(givenWords);
             Collections.shuffle(shuffledWords, random);
-            selected = shuffledWords.subList(0, Math.min(requested, shuffledWords.size()));
+            selected = shuffledWords.subList(0, Math.min(toSelect, shuffledWords.size()));
         } else if (history != null) {
-            selected = AdaptiveQuizPlanner.selectWords(pool, requested, history, random);
+            selected = AdaptiveQuizPlanner.selectWords(candidates, toSelect, history, random);
         } else {
-            List<Kanji> shuffledPool = new ArrayList<>(pool);
+            List<Kanji> shuffledPool = new ArrayList<>(candidates);
             Collections.shuffle(shuffledPool, random);
-            selected = shuffledPool.subList(0, Math.min(requested, shuffledPool.size()));
+            selected = shuffledPool.subList(0, Math.min(toSelect, shuffledPool.size()));
         }
 
-        Map<Long, String> newSentences = generateMissingSentences(selected, pool);
+        Map<Long, String> sentences = fixedDirection == CLOZE ? clozeSentences(selected) : contextSentences(selected, pool);
+        if (fixedDirection == CLOZE) {
+            selected = selected.stream().filter(kanji -> sentences.containsKey(kanji.getId())).limit(requested).toList();
+            if (selected.isEmpty()) {
+                throw new BadRequestException("Không tìm thấy từ trong câu ví dụ của các từ này - hãy chọn kiểu khác");
+            }
+        }
 
         Map<Long, Map<QuizDirection, List<PastMistake>>> pastMistakes =
                 learnerHistoryService.pastMistakes(userId, selected.stream().map(Kanji::getId).toList());
         List<PlannedQuestion> plans = selected.stream()
                 .map(kanji -> typing
                         ? questionBuilder.plan(kanji, TYPE_READING, List.of())
+                        : fixedDirection != null
+                        ? questionBuilder.plan(kanji, fixedDirection, pastMistakes.getOrDefault(kanji.getId(), Map.of())
+                                .getOrDefault(fixedDirection, List.of()))
                         : plan(kanji, history, pastMistakes.getOrDefault(kanji.getId(), Map.of()), random))
                 .toList();
         Map<String, List<Kanji>> existingWords = questionBuilder.existingWords(plans);
 
         List<QuizQuestionResponse> questions = new ArrayList<>();
         for (PlannedQuestion plan : plans) {
-            Kanji kanji = plan.kanji();
+            questions.add(toResponse(questionBuilder.build(plan, sentences.get(plan.kanji().getId()), pool,
+                    existingWords)));
+        }
+        return questions;
+    }
+
+    /** Câu ví dụ làm ngữ cảnh cho câu hỏi, theo id từ: câu có sẵn, thiếu thì nhờ AI sinh (chờ có hạn). */
+    private Map<Long, String> contextSentences(List<Kanji> selected, List<Kanji> pool) {
+        Map<Long, String> newSentences = generateMissingSentences(selected, pool);
+        Map<Long, String> sentences = new HashMap<>();
+        for (Kanji kanji : selected) {
             String sentence = StringUtils.hasText(kanji.getExampleSentence())
                     ? kanji.getExampleSentence()
                     : newSentences.get(kanji.getId());
-            questions.add(toResponse(questionBuilder.build(plan, sentence, pool, existingWords)));
+            if (sentence != null) {
+                sentences.put(kanji.getId(), sentence);
+            }
         }
-        return questions;
+        return sentences;
+    }
+
+    /**
+     * Câu ví dụ đã che từ được hỏi (cả phần chia đi kèm: 怒っていた → （　　）), theo id từ. Bỏ từ không tìm thấy trong
+     * câu, hay xuất hiện thêm lần nữa sau khi che (nhìn là ra đáp án).
+     */
+    private Map<Long, String> clozeSentences(List<Kanji> words) {
+        Map<Long, String> sentences = new HashMap<>();
+        for (Kanji kanji : words) {
+            String sentence = kanji.getExampleSentence().strip();
+            String written = ReadingMatcher.writtenForm(kanji.getCharacter(), kanji.getReading());
+            furiganaService.locate(sentence, written).ifPresent(span -> {
+                String blanked = sentence.substring(0, span.start()) + BLANK + sentence.substring(span.extendedEnd());
+                if (!blanked.contains(span.core(sentence))) {
+                    sentences.put(kanji.getId(), blanked);
+                }
+            });
+        }
+        return sentences;
     }
 
     /** {@code words} cùng các từ học chung bài với chúng - đủ để lấy đáp án nhiễu khi chỉ hỏi vài từ. */
@@ -315,7 +379,9 @@ public class QuizService {
                 .direction(question.direction())
                 .prompt(question.prompt())
                 .sentence(question.sentence())
-                .sentenceRuby(furiganaService.annotate(question.sentence(), question.prompt(),
+                // Câu điền từ: ô trống không phải từ được hỏi, chỉ cần furigana cho phần còn lại.
+                .sentenceRuby(question.direction() == CLOZE ? furiganaService.annotate(question.sentence())
+                        : furiganaService.annotate(question.sentence(), question.prompt(),
                         asksReading ? null : kanji.getReading(), asksReading))
                 .choices(question.choices())
                 .correctIndex(question.correctIndex())

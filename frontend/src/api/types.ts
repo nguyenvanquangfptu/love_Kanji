@@ -713,7 +713,8 @@ export type QuizDirection =
 export type QuizMode = 'adaptive' | 'random'
 
 /** choice: chọn 1 trong 4 đáp án (mặc định); typing: hiện chữ Hán, tự gõ cách đọc. */
-export type QuizAnswerKind = 'choice' | 'typing'
+/** choice: 4 đáp án; typing: gõ cách đọc; cloze: chọn từ điền vào câu ví dụ. */
+export type QuizAnswerKind = 'choice' | 'typing' | 'cloze'
 
 export interface QuizQuestionResponse {
   kanjiId: number

@@ -1,4 +1,4 @@
-import { Keyboard, ListChecks } from 'lucide-react'
+import { Keyboard, ListChecks, TextCursorInput } from 'lucide-react'
 import type { QuizAnswerKind } from '@/api/types'
 import { cn } from '@/lib/utils'
 import { Modal } from '@/components/ui/modal'
@@ -16,9 +16,15 @@ const KINDS: { value: QuizAnswerKind; title: string; description: string; icon: 
     description: 'Hiện chữ Hán, bạn tự gõ cách đọc (vd. shusshin). Chỉ hỏi từ có chữ Hán.',
     icon: Keyboard,
   },
+  {
+    value: 'cloze',
+    title: 'Điền vào câu',
+    description: 'Câu ví dụ bị che mất một từ, chọn từ đúng để điền - như dạng 文脈規定 của đề JLPT.',
+    icon: TextCursorInput,
+  },
 ]
 
-/** Hỏi kiểu trắc nghiệm trước khi bắt đầu: chọn đáp án, hay gõ romaji. Bấm một kiểu là bắt đầu luôn. */
+/** Hỏi kiểu trắc nghiệm trước khi bắt đầu: chọn đáp án, gõ romaji hay điền vào câu. Bấm một kiểu là bắt đầu luôn. */
 export function QuizStartDialog({
   open,
   preselected,

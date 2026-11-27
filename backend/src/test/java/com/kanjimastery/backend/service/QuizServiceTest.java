@@ -191,6 +191,39 @@ class QuizServiceTest {
     }
 
     @Test
+    void generate_shouldBlankTheWordOutOfItsSentence_forClozeQuestions_offeringWordsAsChoices() {
+        givenQuizAllowed();
+        Kanji angry = word(10L, "怒る", "おこる", "母はとても怒っていた。");
+        Kanji cry = word(11L, "泣く", "なく", "子どもが泣いている。");
+        Kanji laugh = word(12L, "笑う", "わらう", null);
+        Kanji run = word(13L, "走る", "はしる", null);
+        when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(angry, cry, laugh, run));
+
+        List<QuizQuestionResponse> questions = quizService.generate("taro", TAG_ID, null, 10, QuizService.MODE_RANDOM,
+                false, null, QuizService.ANSWER_CLOZE);
+
+        assertThat(questions).extracting(QuizQuestionResponse::getKanjiId).as("chỉ từ có câu ví dụ")
+                .containsExactlyInAnyOrder(10L, 11L);
+        QuizQuestionResponse question = questions.stream().filter(q -> q.getKanjiId() == 10L).findFirst().orElseThrow();
+        assertThat(question.getDirection()).isEqualTo(QuizDirection.CLOZE);
+        assertThat(question.getSentence()).as("che cả phần chia đi kèm").isEqualTo("母はとても（　　）。");
+        assertThat(question.getChoices()).hasSize(4).contains("怒る", "泣く", "笑う", "走る");
+        assertThat(question.getChoices().get(question.getCorrectIndex())).isEqualTo("怒る");
+        assertThat(question.getSentenceRuby()).noneMatch(RubySegment::target)
+                .extracting(RubySegment::text).doesNotContain("怒");
+        verifyNoInteractions(sentenceGenerationService);
+    }
+
+    @Test
+    void generate_shouldRefuseClozeQuiz_whenNoWordHasASentence() {
+        givenQuizAllowed();
+        when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(failedWord, missingWord));
+
+        assertThatThrownBy(() -> quizService.generate("taro", TAG_ID, null, 10, ADAPTIVE, false, null,
+                QuizService.ANSWER_CLOZE)).isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
     void generate_shouldRefuseTypingQuiz_whenNoWordHasKanji_andUnknownAnswerKinds() {
         givenQuizAllowed();
         when(kanjiRepository.findAllByFilters(null, TAG_ID)).thenReturn(List.of(kanaWord(5L, "テレビ", "Ti vi")));

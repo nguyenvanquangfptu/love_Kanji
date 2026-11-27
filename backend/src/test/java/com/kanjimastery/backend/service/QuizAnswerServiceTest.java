@@ -124,6 +124,25 @@ class QuizAnswerServiceTest {
     }
 
     @Test
+    void correctAnswer_shouldBeTheWrittenWord_forCloze_theMeaning_forListening_andNothing_forReverseCards() {
+        Kanji see = Kanji.builder().id(3L).character("見").reading("み(る)").meaning("nhìn").build();
+
+        assertThat(QuizAnswerService.correctAnswer(see, QuizDirection.CLOZE)).isEqualTo("見る");
+        assertThat(QuizAnswerService.correctAnswer(see, QuizDirection.LISTENING)).isEqualTo("nhìn");
+        assertThat(QuizAnswerService.correctAnswer(see, QuizDirection.RECALL_WORD)).isNull();
+    }
+
+    @Test
+    void submit_shouldRefuseReverseCards_whichAreGradedAsFlashcards() {
+        when(rateLimiter.tryAcquire(anyString(), anyInt(), any())).thenReturn(true);
+        when(kanjiRepository.findById(1L)).thenReturn(Optional.of(aku));
+
+        assertThatThrownBy(() -> quizAnswerService.submit("taro", request(1L, QuizDirection.RECALL_WORD, "開く", null)))
+                .isInstanceOf(BadRequestException.class);
+        verifyNoInteractions(srsService);
+    }
+
+    @Test
     void submit_shouldDropImplausibleResponseTime() {
         givenAllowed();
         when(kanjiRepository.findById(1L)).thenReturn(Optional.of(aku));
