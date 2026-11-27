@@ -51,6 +51,9 @@ public class QuizAnswerService {
         if (direction == QuizDirection.TYPE_READING) {
             return submitTyped(username, kanji, request);
         }
+        if (direction == QuizDirection.RECALL_WORD) {
+            throw new BadRequestException("Thẻ hỏi ngược được chấm ở phần ôn thẻ, không phải trắc nghiệm");
+        }
         if (!StringUtils.hasText(request.getChosenAnswer())) {
             throw new BadRequestException("chosenAnswer không được để trống");
         }
@@ -130,6 +133,10 @@ public class QuizAnswerService {
             case READING_TO_KANJI -> StringUtils.hasText(kanji.getReading()) ? kanji.getCharacter() : null;
             case MEANING -> kanji.getMeaning();
             case TYPE_READING -> typeable(kanji) ? ReadingMatcher.displayReading(kanji.getReading()) : null;
+            case CLOZE -> ReadingMatcher.writtenForm(kanji.getCharacter(), kanji.getReading());
+            case LISTENING -> kanji.getMeaning();
+            // Thẻ ôn hỏi ngược chấm qua /srs/review, không phải câu trắc nghiệm.
+            case RECALL_WORD -> null;
         };
     }
 }

@@ -7,6 +7,7 @@ import { authApi } from '@/api/auth'
 import { extractErrorMessage } from '@/api/client'
 import { useAuthStore } from '@/store/authStore'
 import { PageHeader } from '@/components/PageHeader'
+import { StudySettingsCard } from '@/components/StudySettingsCard'
 import { PasswordInput } from '@/components/AuthShell'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -87,6 +88,8 @@ export function AccountPage() {
         </span>
         <Badge variant={isAdmin ? 'purple' : 'secondary'}>{isAdmin ? 'Quản trị viên' : 'Người học'}</Badge>
       </Card>
+
+      <StudySettingsCard className="mb-5" />
 
       <Card className="p-4 sm:p-5">
         <h2 className="mb-1 flex items-center gap-2 text-lg font-black">

@@ -37,6 +37,19 @@ const INSTRUCTIONS: Record<QuizDirection, { withSentence: string; standalone: st
     withSentence: 'Gõ cách đọc của từ được gạch chân',
     standalone: 'Gõ cách đọc của từ này',
   },
+  // Chấm ở phần ôn thẻ, không có trong trắc nghiệm - chỉ để đủ kiểu.
+  RECALL_WORD: {
+    withSentence: 'Nhớ ra từ có nghĩa này',
+    standalone: 'Nhớ ra từ có nghĩa này',
+  },
+  CLOZE: {
+    withSentence: 'Chọn từ điền vào chỗ trống',
+    standalone: 'Chọn từ điền vào chỗ trống',
+  },
+  LISTENING: {
+    withSentence: 'Nghe rồi chọn nghĩa của từ',
+    standalone: 'Nghe rồi chọn nghĩa của từ',
+  },
 }
 
 const CHOICE_TEXT: Record<QuizDirection, string> = {
@@ -44,6 +57,9 @@ const CHOICE_TEXT: Record<QuizDirection, string> = {
   READING_TO_KANJI: 'font-jp text-2xl',
   MEANING: 'text-base',
   TYPE_READING: 'font-jp text-lg',
+  RECALL_WORD: 'text-base',
+  CLOZE: 'font-jp text-xl',
+  LISTENING: 'text-base',
 }
 
 const PRAISES = ['Chính xác!', 'Tuyệt vời!', 'Giỏi lắm!', 'Xuất sắc!', 'Quá đỉnh!']

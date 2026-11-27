@@ -19,6 +19,8 @@ import { srsApi } from '@/api/srs'
 import type { DailyCardResponse, DailyPlanResponse, Page, ReviewRating, ReviewRequest } from '@/api/types'
 import { extractErrorMessage, isConflict } from '@/api/client'
 import { cn, wordSizeClass } from '@/lib/utils'
+import { isReverseCard } from '@/lib/reverseCard'
+import { usePreferencesStore } from '@/store/preferencesStore'
 import { addDays, formatDay, formatInterval } from '@/lib/dates'
 import { RATING_OPTIONS } from '@/lib/ratings'
 import { lessonQuery } from '@/lib/lesson'
@@ -173,12 +175,21 @@ export function FlashcardPage() {
     else setExtra(true)
   }
 
+  // Thẻ đã thuộc chắc thỉnh thoảng hỏi ngược: hiện nghĩa, tự nhớ ra từ (tắt được ở trang Tài khoản).
+  const reverseCards = usePreferencesStore((state) => state.reverseCards)
+  const reverse = current ? isReverseCard(current, reverseCards) : false
+
   const rate = useMemo(
     () => (rating: ReviewRating) => {
       if (!current || reviewMutation.isPending || undoMutation.isPending) return
-      reviewMutation.mutate({ kanjiId: current.kanji.id, rating, responseMs: recallMs.current ?? undefined })
+      reviewMutation.mutate({
+        kanjiId: current.kanji.id,
+        rating,
+        responseMs: recallMs.current ?? undefined,
+        ...(reverse ? { reverse: true } : {}),
+      })
     },
-    [current, reviewMutation, undoMutation.isPending],
+    [current, reverse, reviewMutation, undoMutation.isPending],
   )
 
   useEffect(() => {
@@ -355,15 +366,24 @@ export function FlashcardPage() {
             onClick={toggleFlip}
             front={
               <>
-                <span className={cn('font-jp font-bold leading-none', wordSizeClass(current.kanji.character))}>
-                  {current.kanji.character}
-                </span>
+                {reverse ? (
+                  <span className="max-w-full px-6 text-center text-3xl font-black leading-snug sm:text-4xl">
+                    {current.kanji.meaning}
+                  </span>
+                ) : (
+                  <span className={cn('font-jp font-bold leading-none', wordSizeClass(current.kanji.character))}>
+                    {current.kanji.character}
+                  </span>
+                )}
                 <div className="mt-6 flex flex-wrap justify-center gap-2">
                   <Badge variant="secondary">{current.kanji.jlptLevel}</Badge>
+                  {reverse && <Badge variant="purple">Hỏi ngược</Badge>}
                   {current.newCard && <Badge variant="accent">Từ mới</Badge>}
                   {current.hardWord && <Badge variant="destructive">Từ khó · quên {current.lapseCount} lần</Badge>}
                 </div>
-                <p className="absolute bottom-5 text-xs font-bold text-muted-foreground">Nhớ nghĩa rồi thì chạm để lật</p>
+                <p className="absolute bottom-5 text-xs font-bold text-muted-foreground">
+                  {reverse ? 'Nhớ ra từ tiếng Nhật và cách đọc rồi chạm để lật' : 'Nhớ nghĩa rồi thì chạm để lật'}
+                </p>
               </>
             }
             back={

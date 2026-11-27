@@ -42,6 +42,9 @@ const SKILL_LABELS: Record<QuizDirection, string> = {
   MEANING: 'Hiểu nghĩa',
   // Không phải kỹ năng câu thi - chỉ để đủ kiểu.
   TYPE_READING: 'Gõ cách đọc',
+  RECALL_WORD: 'Nhớ ra từ',
+  CLOZE: 'Điền vào câu',
+  LISTENING: 'Nghe',
 }
 
 const STATUS_LABEL: Record<string, string> = {

@@ -21,4 +21,7 @@ public class ReviewRequest {
 
     /** Thời gian từ lúc hiện thẻ tới lúc lật thẻ (mili giây), không bắt buộc. */
     private Integer responseMs;
+
+    /** Thẻ hỏi ngược: hiện nghĩa, người học tự nhớ ra từ - ghi hướng hỏi RECALL_WORD để thống kê riêng. */
+    private boolean reverse;
 }

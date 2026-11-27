@@ -188,7 +188,8 @@ public class SrsService {
         }
 
         ReviewRating rating = ReviewRating.fromValue(request.getRating());
-        Answer answer = new Answer(ReviewSource.FLASHCARD, null, rating != ReviewRating.AGAIN, rating,
+        QuizDirection direction = request.isReverse() ? QuizDirection.RECALL_WORD : null;
+        Answer answer = new Answer(ReviewSource.FLASHCARD, direction, rating != ReviewRating.AGAIN, rating,
                 ResponseTimeRater.normalize(request.getResponseMs()), null);
         UserKanjiSrs card = srsRepository.findByUserIdAndKanjiId(userId, request.getKanjiId()).orElse(null);
         UserKanjiSrs saved = schedule(userId, request.getKanjiId(), card, answer, calendar.now(),

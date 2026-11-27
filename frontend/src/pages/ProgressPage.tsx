@@ -34,6 +34,9 @@ const DIRECTION_LABELS: Record<QuizDirection, string> = {
   READING_TO_KANJI: 'Chọn cách viết',
   MEANING: 'Chọn nghĩa',
   TYPE_READING: 'Gõ cách đọc',
+  RECALL_WORD: 'Thẻ hỏi ngược',
+  CLOZE: 'Điền vào câu',
+  LISTENING: 'Nghe chọn nghĩa',
 }
 
 const percent = (part: number, whole: number) => Math.round((part / whole) * 100)

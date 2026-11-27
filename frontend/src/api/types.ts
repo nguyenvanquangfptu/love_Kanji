@@ -249,6 +249,8 @@ export interface ReviewRequest {
   rating: ReviewRating
   /** Thời gian từ lúc hiện thẻ tới lúc lật thẻ (ms). */
   responseMs?: number
+  /** Thẻ hỏi ngược (hiện nghĩa, tự nhớ ra từ). */
+  reverse?: boolean
 }
 
 export interface ReviewResponse {
@@ -698,7 +700,14 @@ export const JLPT_LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'] as const
 export type JlptLevel = (typeof JLPT_LEVELS)[number]
 
 /** TYPE_READING: cho chữ Hán, người học tự gõ cách đọc (chỉ có ở phần học, không có câu thi). */
-export type QuizDirection = 'KANJI_TO_READING' | 'READING_TO_KANJI' | 'MEANING' | 'TYPE_READING'
+export type QuizDirection =
+  | 'KANJI_TO_READING'
+  | 'READING_TO_KANJI'
+  | 'MEANING'
+  | 'TYPE_READING'
+  | 'RECALL_WORD'
+  | 'CLOZE'
+  | 'LISTENING'
 
 /** adaptive: ưu tiên từ người học hay sai (mặc định); random: chọn đều trong cả bài. */
 export type QuizMode = 'adaptive' | 'random'

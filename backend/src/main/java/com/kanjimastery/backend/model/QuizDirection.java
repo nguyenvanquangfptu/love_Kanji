@@ -12,7 +12,13 @@ public enum QuizDirection {
     /** Cho từ, chọn nghĩa (từ không có chữ Hán thì chỉ hỏi được kiểu này). */
     MEANING(true),
     /** Cho chữ Hán, tự gõ cách đọc (romaji hoặc kana) - chỉ có ở phần học, không có câu thi. */
-    TYPE_READING(false);
+    TYPE_READING(false),
+    /** Thẻ ôn hỏi ngược: cho nghĩa, người học tự nhớ ra từ rồi tự chấm (nguồn FLASHCARD, không có đáp án để chọn). */
+    RECALL_WORD(false),
+    /** Câu ví dụ che mất từ, chọn từ điền vào chỗ trống. */
+    CLOZE(false),
+    /** Nghe cách đọc (giọng đọc của trình duyệt), chọn nghĩa - không thấy chữ. */
+    LISTENING(false);
 
     private final boolean examSkill;
 

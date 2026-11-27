@@ -9,6 +9,9 @@ interface PreferencesState {
   /** Hiện furigana trên câu tiếng Nhật (mặc định bật). */
   showFurigana: boolean
   toggleFurigana: () => void
+  /** Thỉnh thoảng hỏi ngược thẻ đã thuộc: hiện nghĩa, tự nhớ ra từ (mặc định bật). */
+  reverseCards: boolean
+  toggleReverseCards: () => void
   /** public/theme-init.js đọc thẳng giá trị này từ localStorage - đổi tên thì sửa cả ở đó. */
   theme: ThemePreference
   setTheme: (theme: ThemePreference) => void
@@ -19,6 +22,8 @@ export const usePreferencesStore = create<PreferencesState>()(
     (set) => ({
       showFurigana: true,
       toggleFurigana: () => set((state) => ({ showFurigana: !state.showFurigana })),
+      reverseCards: true,
+      toggleReverseCards: () => set((state) => ({ reverseCards: !state.reverseCards })),
       theme: 'system',
       setTheme: (theme) => set({ theme }),
     }),

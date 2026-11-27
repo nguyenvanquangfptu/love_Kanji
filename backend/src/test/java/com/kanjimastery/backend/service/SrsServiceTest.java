@@ -157,6 +157,22 @@ class SrsServiceTest {
     }
 
     @Test
+    void submitReview_shouldLogAReverseCard_asRecallWord() {
+        when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
+        when(srsRepository.findByUserIdAndKanjiId(USER_ID, KANJI_ID)).thenReturn(Optional.empty());
+        givenSaveReturnsCard();
+        ReviewRequest request = reviewRequest(ReviewRating.GOOD, 4_000);
+        request.setReverse(true);
+
+        srsService.submitReview(USER_ID, request);
+
+        ReviewLog log = savedLog();
+        assertThat(log.getSource()).isEqualTo(ReviewSource.FLASHCARD);
+        assertThat(log.getDirection()).isEqualTo(QuizDirection.RECALL_WORD);
+        assertThat(savedCard().getRepetitionCount()).as("chấm như thẻ thường").isEqualTo(1);
+    }
+
+    @Test
     void submitReview_shouldResetCardOnAgainAndLogStateBeforeTheLapse() {
         UserKanjiSrs card = card(3, "2.50", 15, LocalDateTime.now().minusHours(1));
         when(kanjiRepository.existsById(KANJI_ID)).thenReturn(true);
