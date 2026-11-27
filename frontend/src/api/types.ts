@@ -519,6 +519,10 @@ export interface WordRelinkResult {
   missingWords: number
   /** Các cách viết đó, câu hỏi nhiều nhất trước (tối đa 30). */
   missing: { written: string; questions: number }[]
+  /** Số câu (trong linked) gắn nhờ suy ra dạng từ điển / cách đọc. */
+  inferredQuestions: number
+  /** Các cách gắn suy ra (怒って → 「怒る」), câu nhiều nhất trước - xem lại trước khi ghi. */
+  inferred: { written: string; words: string; questions: number }[]
 }
 
 export interface StrokeFixResult {

@@ -85,6 +85,13 @@ public interface KanjiRepository extends JpaRepository<Kanji, Long> {
             """, nativeQuery = true)
     List<Kanji> findWithoutExampleSentence(@Param("limit") int limit);
 
+    /**
+     * Từ có cách đọc (bỏ ngoặc okurigana: やさ(しい) -> やさしい) nằm trong {@code readings} - để gắn câu thi viết bằng kana
+     * (やさしい) với từ kho viết bằng chữ Hán (優しい).
+     */
+    @Query(value = "SELECT * FROM kanji WHERE translate(reading, '()（）', '') IN (:readings)", nativeQuery = true)
+    List<Kanji> findAllByDisplayReadingIn(@Param("readings") Collection<String> readings);
+
     /** Số từ trong bài học còn thiếu câu ví dụ theo cấp độ, và bao nhiêu trong số đó đang có người học ôn. */
     interface MissingSentenceCount {
         String getLevel();

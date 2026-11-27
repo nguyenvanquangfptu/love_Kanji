@@ -63,6 +63,26 @@ export function WordRelinkDialog({ open, onClose }: { open: boolean; onClose: ()
             </>
           )}
 
+          {result.inferred.length > 0 && (
+            <section className="flex flex-col gap-2">
+              <h3 className="font-black">Gắn theo dạng suy ra ({result.inferredQuestions} câu)</h3>
+              <p className="text-xs font-semibold text-muted-foreground">
+                Từ trong câu ở dạng đã chia hoặc viết bằng kana, được đưa về từ trong kho (怒って → 怒る, やさしい → 優しい).
+                Xem lại trước khi bấm Gắn: chỗ nào sai thì sửa từ trong câu ở trang duyệt.
+              </p>
+              <ul className="max-h-64 overflow-y-auto rounded-xl border-2 border-border p-2">
+                {result.inferred.map((link) => (
+                  <li key={`${link.written}-${link.words}`} className="flex gap-2 py-0.5 font-jp">
+                    <span className="font-bold">{link.written}</span>
+                    <span className="text-muted-foreground">→</span>
+                    <span>{link.words}</span>
+                    {link.questions > 1 && <span className="text-muted-foreground">×{link.questions}</span>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           {result.missingWords > 0 && (
             <section className="flex flex-col gap-2">
               <h3 className="font-black">Từ chưa có trong kho ({result.missingWords} từ)</h3>

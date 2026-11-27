@@ -418,6 +418,21 @@ class ExamImportServiceTest {
     }
 
     @Test
+    void conjugatedUnderlinedWords_shouldBeLinkedToTheDictionaryForm_withANoteToCheck() {
+        ExamImportRequest test = n3Test("N3-05");
+        test.vocabulary().kanjiReading().set(0, item(1, "彼は、とても怒っている。", "怒って", null,
+                List.of("おこって", "いかって", "はしって", "まって"), 1, null, null));
+        when(kanjiRepository.findAllByCharacterIn(anyCollection())).thenReturn(List.of(
+                Kanji.builder().id(601L).character("怒る").reading("おこる").build()));
+
+        ExamImportResponse report = service.importTest(test, false);
+
+        assertThat(byRef(savedQuestions(), "N3-05/TV/1").getKanjiIds()).containsExactly(601L);
+        assertThat(report.warnings()).contains("TV câu 1: gắn 「怒って」 với 「怒る」 (suy ra dạng từ điển / cách đọc)"
+                + " - sửa \"tu\" nếu không đúng");
+    }
+
+    @Test
     void grammarQuestions_shouldBeLinkedToTheGrammarPointNamed() {
         ExamImportRequest test = n3Test("N3-05");
         test.grammar().grammarForm().set(7, item(8, "1人で10人分の仕事をするなんて（  ）。", null, null,

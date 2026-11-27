@@ -221,23 +221,26 @@ public class ExamImportService {
      * từ có cách đọc khớp, nếu biết cách đọc. Không tìm thấy thì chỉ cảnh báo.
      */
     private void linkWords(List<Built> questions, List<String> warnings) {
-        Set<String> keys = ExamWordMatcher.keys(questions.stream().map(Built::word).filter(Objects::nonNull).toList());
-        if (keys.isEmpty()) {
+        List<ExamWordMatcher.Hint> hints = questions.stream().map(Built::word).filter(Objects::nonNull).toList();
+        if (hints.isEmpty()) {
             return;
         }
-        Map<String, List<Kanji>> byCharacter = kanjiRepository.findAllByCharacterIn(keys).stream()
-                .collect(Collectors.groupingBy(Kanji::getCharacter));
+        ExamWordMatcher.Bank bank = ExamWordMatcher.bank(hints, kanjiRepository);
         for (Built built : questions) {
             ExamWordMatcher.Hint word = built.word();
             if (word == null) {
                 continue;
             }
-            List<Kanji> matches = ExamWordMatcher.match(word, byCharacter);
-            if (matches.isEmpty()) {
+            ExamWordMatcher.Match match = ExamWordMatcher.match(word, bank);
+            if (!match.found()) {
                 warnings.add(built.label() + ": chưa gắn được với từ vựng nào (「" + word.written()
                         + "」 không có trong kho từ) - thêm \"tu\" (dạng từ điển) nếu muốn câu làm sai được đưa vào ôn tập");
-            } else {
-                matches.forEach(kanji -> built.question().getKanjiIds().add(kanji.getId()));
+                continue;
+            }
+            match.words().forEach(kanji -> built.question().getKanjiIds().add(kanji.getId()));
+            if (match.inferred()) {
+                warnings.add(built.label() + ": gắn 「" + word.written() + "」 với " + ExamWordMatcher.describe(match)
+                        + " (suy ra dạng từ điển / cách đọc) - sửa \"tu\" nếu không đúng");
             }
         }
     }

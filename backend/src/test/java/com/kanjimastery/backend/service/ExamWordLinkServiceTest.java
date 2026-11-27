@@ -63,6 +63,27 @@ class ExamWordLinkServiceTest {
     }
 
     @Test
+    void conjugatedWords_shouldBeLinkedToTheirDictionaryForm_andListedForReview() {
+        ExamQuestion angry = reading("怒って", "おこって");
+        ExamQuestion angryAgain = reading("怒って", "おこって");
+        Kanji angryWord = Kanji.builder().id(9L).character("怒る").reading("おこる").build();
+        when(questionRepository.findWithoutWords(anyCollection())).thenReturn(List.of(delay, angry, angryAgain));
+        when(kanjiRepository.findAllByCharacterIn(anyCollection())).thenReturn(List.of(delayWord, angryWord));
+
+        ExamWordLinkService.Result result = service.relink(true);
+
+        assertThat(result.linked()).isEqualTo(3);
+        assertThat(result.inferredQuestions()).isEqualTo(2);
+        assertThat(result.inferred()).containsExactly(new ExamWordLinkService.InferredLink("怒って", "「怒る」", 2));
+        assertThat(angry.getKanjiIds()).as("chạy thử").isEmpty();
+
+        service.relink(false);
+
+        assertThat(angry.getKanjiIds()).containsExactly(9L);
+        assertThat(delay.getKanjiIds()).containsExactly(7L);
+    }
+
+    @Test
     void relink_shouldNotSearchTheBank_whenNoQuestionIsWaiting() {
         when(questionRepository.findWithoutWords(anyCollection())).thenReturn(List.of());
 
