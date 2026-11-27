@@ -1,11 +1,21 @@
 import { apiClient } from './client'
-import type { KanjiRequest, KanjiResponse, MnemonicResponse, Page, VocabularyImportResult } from './types'
+import type {
+  KanjiRequest,
+  KanjiResponse,
+  MnemonicResponse,
+  Page,
+  VocabularyImportResult,
+  WordSentence,
+} from './types'
 
 export const kanjiApi = {
   search: (params: { level?: string; keyword?: string; tagId?: number; page?: number; size?: number }) =>
     apiClient.get<Page<KanjiResponse>>('/kanji', { params }).then((r) => r.data),
 
   getById: (id: number) => apiClient.get<KanjiResponse>(`/kanji/${id}`).then((r) => r.data),
+
+  /** Câu dùng từ này (câu ví dụ, rồi câu trong ngân hàng đề), tối đa 3 câu. */
+  getSentences: (id: number) => apiClient.get<WordSentence[]>(`/kanji/${id}/sentences`).then((r) => r.data),
 
   create: (payload: KanjiRequest) => apiClient.post<KanjiResponse>('/kanji', payload).then((r) => r.data),
 

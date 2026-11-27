@@ -20,6 +20,10 @@ import org.springframework.web.bind.annotation.*;
 import com.kanjimastery.backend.service.KanjiService;
 import com.kanjimastery.backend.service.MnemonicService;
 import com.kanjimastery.backend.service.VocabularyImportService;
+import com.kanjimastery.backend.service.WordSentenceService;
+import com.kanjimastery.backend.dto.WordSentenceResponse;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/kanji")
@@ -30,6 +34,7 @@ public class KanjiController {
     private final KanjiService kanjiService;
     private final MnemonicService mnemonicService;
     private final VocabularyImportService vocabularyImportService;
+    private final WordSentenceService wordSentenceService;
 
     @GetMapping
     public ResponseEntity<Page<KanjiResponse>> search(
@@ -43,6 +48,14 @@ public class KanjiController {
     @GetMapping("/{id}")
     public ResponseEntity<KanjiResponse> getById(@PathVariable Long id) {
         return ResponseEntity.ok(kanjiService.getById(id));
+    }
+
+    @Operation(summary = "Câu dùng từ này (tối đa 3)",
+            description = "Câu ví dụ của từ trước, rồi câu trong ngân hàng đề đã duyệt có gắn từ đó; kèm furigana và "
+                    + "đánh dấu chỗ có từ (kể cả khi từ đã chia).")
+    @GetMapping("/{id}/sentences")
+    public ResponseEntity<List<WordSentenceResponse>> sentences(@PathVariable Long id) {
+        return ResponseEntity.ok(wordSentenceService.sentences(id));
     }
 
     @Operation(summary = "Tạo Kanji mới (chỉ ADMIN)")

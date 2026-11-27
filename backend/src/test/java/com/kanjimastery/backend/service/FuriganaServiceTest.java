@@ -127,6 +127,36 @@ class FuriganaServiceTest {
                 new RubySegment("る", null, false));
     }
 
+    @Test
+    void locate_shouldFindAConjugatedWord_andTheEndingThatGoesWithIt() {
+        String sentence = "彼はずっと怒っていた。";
+
+        FuriganaService.Span span = furigana.locate(sentence, "怒る").orElseThrow();
+
+        assertThat(span.core(sentence)).isEqualTo("怒っ");
+        assertThat(span.extended(sentence)).isEqualTo("怒っていた");
+    }
+
+    @Test
+    void locate_shouldFindSuruNounsAndNaAdjectives_withoutTheirSuruOrNa() {
+        String contact = "昨日、先生に連絡した。";
+        FuriganaService.Span suru = furigana.locate(contact, "連絡する").orElseThrow();
+        assertThat(suru.core(contact)).isEqualTo("連絡");
+        assertThat(suru.extended(contact)).isEqualTo("連絡した");
+
+        String easy = "試験に楽に合格した。";
+        assertThat(furigana.locate(easy, "楽な").orElseThrow().core(easy)).isEqualTo("楽");
+    }
+
+    @Test
+    void locate_shouldFindNounsAsTheyAre_andNothingWhenTheWordIsMissing() {
+        String sentence = "会議は来週に延期された。";
+
+        assertThat(furigana.locate(sentence, "延期").orElseThrow().core(sentence)).isEqualTo("延期");
+        assertThat(furigana.locate(sentence, "中止")).isEmpty();
+        assertThat(furigana.locate(null, "延期")).isEmpty();
+    }
+
     private static String text(List<RubySegment> segments) {
         return segments.stream().map(RubySegment::text).collect(Collectors.joining());
     }

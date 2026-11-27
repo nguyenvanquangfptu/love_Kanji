@@ -30,6 +30,8 @@ import { StatTile } from '@/components/StatTile'
 import { EmptyState } from '@/components/EmptyState'
 import { SpeakButton } from '@/components/SpeakButton'
 import { MemoryAidPanel } from '@/components/MemoryAidPanel'
+import { WordSentences } from '@/components/WordSentences'
+import { wordSentencesQuery } from '@/lib/wordSentences'
 import { CharacterChips } from '@/components/CharacterChips'
 import { UndoReviewBar } from '@/components/UndoReviewBar'
 import { useCharacterParts } from '@/lib/characters'
@@ -99,6 +101,14 @@ export function FlashcardPage() {
     shownAt.current = performance.now()
     recallMs.current = null
   }, [currentId])
+
+  // Tải sẵn câu ví dụ của thẻ đang xem và thẻ kế tiếp, để lật thẻ là có ngay.
+  const nextId = queue[1]?.kanji.id
+  useEffect(() => {
+    for (const id of [currentId, nextId]) {
+      if (id !== undefined) queryClient.prefetchQuery(wordSentencesQuery(id))
+    }
+  }, [currentId, nextId, queryClient])
 
   const toggleFlip = useCallback(() => {
     if (recallMs.current === null) recallMs.current = Math.round(performance.now() - shownAt.current)
@@ -374,6 +384,7 @@ export function FlashcardPage() {
 
           {flipped ? (
             <div className="animate-pop-in">
+              <WordSentences kanjiId={current.kanji.id} className="mb-4" />
               {(current.hardWord || current.kanji.mnemonic || current.personalNote) && (
                 <MemoryAidPanel
                   key={current.kanji.id}

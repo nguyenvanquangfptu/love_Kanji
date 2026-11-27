@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ListChecks, PartyPopper, RotateCcw, Shuffle } from 'lucide-react'
 import { kanjiApi } from '@/api/kanji'
 import { extractErrorMessage } from '@/api/client'
@@ -10,6 +10,8 @@ import { cn, wordSizeClass } from '@/lib/utils'
 import { FlipCard } from '@/components/FlipCard'
 import { SessionHeader } from '@/components/SessionHeader'
 import { SpeakButton } from '@/components/SpeakButton'
+import { WordSentences } from '@/components/WordSentences'
+import { wordSentencesQuery } from '@/lib/wordSentences'
 import { CharacterChips } from '@/components/CharacterChips'
 import { useCharacterParts } from '@/lib/characters'
 import { useCharacterSheetStore } from '@/store/characterSheetStore'
@@ -50,6 +52,15 @@ export function StudyFlashcardPage() {
   const order = shuffledOrder ?? words.map((_, i) => i)
   const current = words[order[index]]
   const total = words.length
+  // Tải sẵn câu ví dụ của thẻ đang xem và thẻ kế tiếp, để lật thẻ là có ngay.
+  const queryClient = useQueryClient()
+  const currentId = current?.id
+  const nextId = words[order[index + 1]]?.id
+  useEffect(() => {
+    for (const id of [currentId, nextId]) {
+      if (id !== undefined) queryClient.prefetchQuery(wordSentencesQuery(id))
+    }
+  }, [currentId, nextId, queryClient])
   const isLast = index === total - 1
 
   const goTo = useCallback(
@@ -169,6 +180,8 @@ export function StudyFlashcardPage() {
                 </div>
               }
             />
+
+            {flipped && <WordSentences kanjiId={current.id} className="mt-4 animate-pop-in" />}
 
             <div className="mt-6 flex items-center gap-3">
               <Button

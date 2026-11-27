@@ -9,6 +9,7 @@ import org.springframework.util.StringUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -29,6 +30,8 @@ public class FuriganaService {
     private static final Pattern OKURIGANA_READING = Pattern.compile("^(.*?)[(（](.+?)[)）]$");
     /** Từ IPADIC đọc khác cách người học gặp trong sách: 日本 đứng riêng bị đọc にっぽん (日本語 thì vẫn にほんご). */
     private static final Map<String, String> READING_FIXES = Map.of("日本", "にほん");
+    /** Một từ trong kho tách ra tối đa chừng này từ của Kuromoji (落ち + 着く, 一生 + 懸命). */
+    private static final int MAX_TOKENS_PER_WORD = 4;
 
     private final Tokenizer tokenizer = new Tokenizer();
 
@@ -73,6 +76,85 @@ public class FuriganaService {
         } else {
             addTokens(segments, target, underline);
         }
+    }
+
+    /**
+     * Vị trí của một từ trong câu.
+     *
+     * @param start       chữ đầu tiên của từ
+     * @param end         ngay sau phần là chính từ đó (怒っていた: hết 怒っ)
+     * @param extendedEnd ngay sau cả phần chia đi kèm - trợ động từ, て/で, いる/しまう, する của danh từ する (怒っていた:
+     *                    hết た) - để che cả cụm khi hỏi điền từ
+     */
+    public record Span(int start, int end, int extendedEnd) {
+
+        public String core(String sentence) {
+            return sentence.substring(start, end);
+        }
+
+        public String extended(String sentence) {
+            return sentence.substring(start, extendedEnd);
+        }
+    }
+
+    /**
+     * Tìm từ {@code word} (dạng từ điển, vd. 怒る, 連絡する, 楽な) trong câu, kể cả khi đã chia (怒って, 連絡した, 楽に):
+     * so dạng từ điển Kuromoji đoán cho từng từ trong câu, một từ trong kho có thể là vài từ của Kuromoji (取り + 消す).
+     * Không thấy thì tìm nguyên văn.
+     */
+    public Optional<Span> locate(String sentence, String word) {
+        if (!StringUtils.hasText(sentence) || !StringUtils.hasText(word)) {
+            return Optional.empty();
+        }
+        List<String> spellings = new ArrayList<>(List.of(word));
+        if (word.endsWith("する") && word.length() > 2) {
+            spellings.add(word.substring(0, word.length() - 2));
+        }
+        if (word.endsWith("な") && word.length() > 1 && isKanjiLike(word.codePointBefore(word.length() - 1))) {
+            spellings.add(word.substring(0, word.length() - 1));
+        }
+        List<Token> tokens = tokenizer.tokenize(sentence);
+        for (int i = 0; i < tokens.size(); i++) {
+            StringBuilder surfaces = new StringBuilder();
+            for (int j = i; j < Math.min(tokens.size(), i + MAX_TOKENS_PER_WORD); j++) {
+                Token last = tokens.get(j);
+                String base = "*".equals(last.getBaseForm()) || last.getBaseForm() == null
+                        ? last.getSurface() : last.getBaseForm();
+                String asWord = surfaces + base;
+                surfaces.append(last.getSurface());
+                if (spellings.contains(asWord)) {
+                    int start = tokens.get(i).getPosition();
+                    int end = last.getPosition() + last.getSurface().length();
+                    return Optional.of(new Span(start, end, extend(tokens, j, end, !asWord.equals(word))));
+                }
+            }
+        }
+        for (String spelling : spellings) {
+            int at = sentence.indexOf(spelling);
+            if (at >= 0) {
+                return Optional.of(new Span(at, at + spelling.length(), at + spelling.length()));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Kéo dài sau từ thứ {@code last}: trợ động từ (た, ない, ます), て/で, động từ phụ (いる, しまう), する của danh từ する. */
+    private static int extend(List<Token> tokens, int last, int end, boolean suruNoun) {
+        for (int k = last + 1; k < tokens.size(); k++) {
+            Token token = tokens.get(k);
+            String pos = token.getPartOfSpeechLevel1();
+            String pos2 = token.getPartOfSpeechLevel2();
+            boolean attached = "助動詞".equals(pos)
+                    || "助詞".equals(pos) && "接続助詞".equals(pos2) && ("て".equals(token.getSurface())
+                    || "で".equals(token.getSurface()))
+                    || "動詞".equals(pos) && ("非自立".equals(pos2) || "接尾".equals(pos2))
+                    || suruNoun && k == last + 1 && "する".equals(token.getBaseForm());
+            if (!attached) {
+                break;
+            }
+            end = token.getPosition() + token.getSurface().length();
+        }
+        return end;
     }
 
     /** Phân tích {@code text} bằng Kuromoji; chỗ nào Kuromoji bỏ qua (nếu có) vẫn giữ nguyên văn. */

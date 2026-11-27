@@ -193,6 +193,17 @@ public interface ExamQuestionRepository
         return withGrammarPoints(findAllWithWordsByPassageIdIn(passageIds));
     }
 
+    /** Câu từ vựng đã duyệt gắn với từ {@code kanjiId}, dạng nằm trong {@code types} - làm câu ví dụ cho từ đó. */
+    @Query(value = """
+            SELECT q.* FROM exam_questions q
+            JOIN exam_question_kanji k ON k.question_id = q.id
+            WHERE k.kanji_id = :kanjiId AND q.status = 'APPROVED' AND q.question_type IN (:types)
+            ORDER BY q.id
+            LIMIT :count
+            """, nativeQuery = true)
+    List<ExamQuestion> findApprovedByWord(@Param("kanjiId") Long kanjiId, @Param("types") Collection<String> types,
+                                          @Param("count") int count);
+
     /** Câu thuộc các dạng {@code types} chưa gắn với từ vựng nào - để gắn lại khi kho có thêm từ. */
     @Query("SELECT q FROM ExamQuestion q WHERE q.questionType IN :types AND q.kanjiIds IS EMPTY ORDER BY q.id")
     List<ExamQuestion> findWithoutWords(@Param("types") Collection<JlptQuestionType> types);

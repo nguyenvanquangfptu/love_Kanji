@@ -555,6 +555,15 @@ export interface VocabularyImportResult {
 }
 
 /** Một đoạn của câu tiếng Nhật đã chia để hiện furigana; ghép `text` các đoạn theo thứ tự ra lại đúng câu. */
+/** Một câu có dùng từ đang học, hiện ở mặt sau thẻ ôn. */
+export interface WordSentence {
+  sentence: string
+  /** Câu chia đoạn kèm furigana; đoạn `target` là chỗ có từ đó (kể cả khi đã chia). */
+  segments: RubySegment[] | null
+  /** EXAMPLE: câu ví dụ của từ; EXAM: câu trong ngân hàng đề có hỏi từ đó. */
+  source: 'EXAMPLE' | 'EXAM'
+}
+
 export interface RubySegment {
   text: string
   /** Furigana (hiragana) đặt trên `text`; null nếu đoạn không có chữ Hán hoặc không được hiện cách đọc. */
